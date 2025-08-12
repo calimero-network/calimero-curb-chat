@@ -23,7 +23,6 @@ import {
 import {
   type NodeEvent,
   type ResponseData,
-  getAppEndpointKey,
   getContextId,
   getExecutorPublicKey,
 } from "@calimero-network/calimero-client";
@@ -66,15 +65,6 @@ export default function Home() {
   useEffect(() => {
     currentOpenThreadRef.current = currentOpenThread;
   }, [currentOpenThread]);
-
-  useEffect(() => {
-    const contextID = getContextId();
-    const nodeURL = getAppEndpointKey();
-    const identity = getExecutorPublicKey();
-    if (!contextID || !nodeURL || !identity) {
-      window.location.href = "/login";
-    }
-  }, []);
 
   const getChannelUsers = async (channelId: string) => {
     const channelUsers: ResponseData<UserId[]> =

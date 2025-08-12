@@ -1,12 +1,11 @@
 import {
   type ApiResponse,
-  JsonRpcClient,
+  rpcClient,
   WsSubscriptionsClient,
-  type RpcError,
-  handleRpcError,
   getAppEndpointKey,
   getContextId,
   getExecutorPublicKey,
+  getAuthConfig,
 } from "@calimero-network/calimero-client";
 import {
   type AcceptInvitationProps,
@@ -40,14 +39,12 @@ import {
 } from "../clientApi";
 import { getDmContextId } from "../../utils/session";
 
-export function getJsonRpcClient() {
-  const appEndpointKey = getAppEndpointKey();
-  if (!appEndpointKey) {
-    throw new Error(
-      "Application endpoint key is missing. Please check your configuration."
-    );
-  }
-  return new JsonRpcClient(appEndpointKey, "/jsonrpc");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getErrorMessage(error: any): string {
+  if (typeof error === "string") return error;
+  if (error?.message) return error.message;
+  if (error?.data) return JSON.stringify(error.data);
+  return "An unexpected error occurred";
 }
 
 export function getWsSubscriptionsClient() {
@@ -61,28 +58,21 @@ export function getWsSubscriptionsClient() {
 }
 
 export class ClientApiDataSource implements ClientApi {
-  private async handleError(
-    error: RpcError,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    params: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    callbackFunction: any
-  ) {
-    if (error && error.code) {
-      const response = await handleRpcError(error, getAppEndpointKey);
-      if (response.code === 403) {
-        return await callbackFunction(params);
-      }
-      return {
-        error: await handleRpcError(error, getAppEndpointKey),
-      };
-    }
-  }
-
   async joinChat(props: JoinChatProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response = await rpcClient.execute<any, string>(
         {
           contextId: (props.isDM ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.JOIN_CHAT,
@@ -98,7 +88,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.joinChat);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -125,7 +120,18 @@ export class ClientApiDataSource implements ClientApi {
     props: CreateChannelProps
   ): ApiResponse<CreateChannelResponse> {
     try {
-      const response = await getJsonRpcClient().execute<
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
+      const response =  await rpcClient.execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         CreateChannelResponse
@@ -152,7 +158,12 @@ export class ClientApiDataSource implements ClientApi {
       );
 
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.createChannel);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
 
       return {
@@ -178,8 +189,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async getChannels(): ApiResponse<Channels> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Channels>(
+      const response =  await rpcClient.execute<any, Channels>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_CHANNELS,
@@ -194,7 +216,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.getChannels);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
 
       return {
@@ -220,8 +247,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async getAllChannelsSearch(): ApiResponse<Channels> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Channels>(
+      const response =  await rpcClient.execute<any, Channels>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_ALL_CHANNELS_SEARCH,
@@ -236,11 +274,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(
-          response.error,
-          {},
-          this.getAllChannelsSearch
-        );
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as Channels,
@@ -266,8 +305,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async getChannelInfo(props: GetChannelInfoProps): ApiResponse<ChannelInfo> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, ChannelInfo>(
+      const response =  await rpcClient.execute<any, ChannelInfo>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_CHANNEL_INFO,
@@ -284,7 +334,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.getChannelInfo);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
 
       return {
@@ -312,8 +367,19 @@ export class ClientApiDataSource implements ClientApi {
     props: GetChannelMembersProps
   ): ApiResponse<UserId[]> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, UserId[]>(
+      const response =  await rpcClient.execute<any, UserId[]>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_CHANNEL_MEMBERS,
@@ -330,11 +396,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(
-          response.error,
-          {},
-          this.getChannelMembers
-        );
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
 
       return {
@@ -361,8 +428,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async inviteToChannel(props: InviteToChannelProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.INVITE_TO_CHANNEL,
@@ -380,7 +458,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.inviteToChannel);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -407,8 +490,19 @@ export class ClientApiDataSource implements ClientApi {
     props: GetNonMemberUsersProps
   ): ApiResponse<UserId[]> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, UserId[]>(
+      const response =  await rpcClient.execute<any, UserId[]>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_INVITE_USERS,
@@ -425,11 +519,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(
-          response.error,
-          {},
-          this.getNonMemberUsers
-        );
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as UserId[],
@@ -455,8 +550,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async joinChannel(props: JoinChannelProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.JOIN_CHANNEL,
@@ -473,7 +579,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.joinChannel);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -498,8 +609,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async leaveChannel(props: LeaveChannelProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.LEAVE_CHANNEL,
@@ -516,7 +638,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.leaveChannel);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -541,7 +668,18 @@ export class ClientApiDataSource implements ClientApi {
 
   async getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse> {
     try {
-      const response = await getJsonRpcClient().execute<
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
+      const response =  await rpcClient.execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         FullMessageResponse
@@ -566,7 +704,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.getMessages);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
 
       return {
@@ -592,6 +735,18 @@ export class ClientApiDataSource implements ClientApi {
 
   async sendMessage(props: SendMessageProps): ApiResponse<Message> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
+
       if (!props.message) {
         return {
           error: {
@@ -600,7 +755,7 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
-      const response = await getJsonRpcClient().execute<
+      const response =  await rpcClient.execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         Message
@@ -626,7 +781,12 @@ export class ClientApiDataSource implements ClientApi {
       );
 
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.sendMessage);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
 
       return {
@@ -652,8 +812,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async getDms(): ApiResponse<DMChatInfo[]> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, DMChatInfo[]>(
+      const response =  await rpcClient.execute<any, DMChatInfo[]>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_DMS,
@@ -668,7 +839,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.getDms);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as DMChatInfo[],
@@ -693,8 +869,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async getChatMembers(props: GetChatMembersProps): ApiResponse<UserId[]> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, UserId[]>(
+      const response =  await rpcClient.execute<any, UserId[]>(
         {
           contextId: (props.isDM ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.GET_CHAT_MEMBERS,
@@ -710,7 +897,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.getChatMembers);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as UserId[],
@@ -735,8 +927,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async createDm(props: CreateDmProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.CREATE_DM,
@@ -757,7 +960,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.createDm);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -782,8 +990,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async updateReaction(props: UpdateReactionProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.UPDATE_REACTION,
@@ -803,7 +1022,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.updateReaction);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -828,8 +1052,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async deleteMessage(props: DeleteMessageProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.DELETE_MESSAGE,
@@ -847,7 +1082,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.deleteMessage);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -872,8 +1112,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async editMessage(props: EditMessageProps): ApiResponse<Message> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Message>(
+      const response =  await rpcClient.execute<any, Message>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.EDIT_MESSAGE,
@@ -893,7 +1144,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.editMessage);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as Message,
@@ -918,8 +1174,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async updateNewIdentity(props: UpdateNewIdentityProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.UPDATE_NEW_IDENTITY,
@@ -937,11 +1204,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(
-          response.error,
-          {},
-          this.updateNewIdentity
-        );
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -969,8 +1237,19 @@ export class ClientApiDataSource implements ClientApi {
     props: UpdateInvitationPayloadProps
   ): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.UPDATE_INVITATION_PAYLOAD,
@@ -988,11 +1267,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(
-          response.error,
-          {},
-          this.updateInvitationPayload
-        );
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -1018,8 +1298,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async acceptInvitation(props: AcceptInvitationProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.ACCEPT_INVITATION,
@@ -1036,11 +1327,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(
-          response.error,
-          {},
-          this.acceptInvitation
-        );
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
@@ -1065,8 +1357,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async deleteDM(props: DeleteDMProps): ApiResponse<string> {
     try {
+      const config = getAuthConfig();
+
+      if (!config || !config.contextId || !config.executorPublicKey) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "Authentication configuration not found",
+          },
+        };
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response =  await rpcClient.execute<any, string>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.DELETE_DM,
@@ -1083,7 +1386,12 @@ export class ClientApiDataSource implements ClientApi {
         }
       );
       if (response?.error) {
-        return await this.handleError(response.error, {}, this.deleteDM);
+        return {
+          error: {
+            code: response.error.code ?? 500,
+            message: getErrorMessage(response.error),
+          },
+        };
       }
       return {
         data: response?.result.output as string,
