@@ -1,13 +1,26 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/Home";
+import Login from "./pages/Login";
+import { useCalimero } from "@calimero-network/calimero-client";
+import ContextOperations from "./pages/Context/ContextOperations";
 
 function App() {
+  const { isAuthenticated } = useCalimero();
 
   return (
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="*" element={<Home />} />
-      </Routes>
+    <Routes>
+      {isAuthenticated ? (
+        <>
+          <Route path="/" element={<Home />} />
+          <Route path="/context" element={<ContextOperations />} />
+        </>
+      ) : (
+        <>
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </>
+      )}
+    </Routes>
   );
 }
 

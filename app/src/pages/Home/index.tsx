@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import AppContainer from "../../components/common/AppContainer";
 import {
   MessageStatus,
@@ -25,6 +26,9 @@ import {
   type ResponseData,
   getContextId,
   getExecutorPublicKey,
+  setContextId,
+  setExecutorPublicKey,
+  useCalimero,
 } from "@calimero-network/calimero-client";
 import {
   type Channels,
@@ -37,8 +41,12 @@ import type { MessageWithReactions } from "../../api/clientApi";
 import { type SubscriptionsClient } from "@calimero-network/calimero-client";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
+import { extractErrorMessage } from "../../utils/errorParser";
 
 export default function Home() {
+  const navigate = useNavigate();
+  const { isAuthenticated, logout, app } = useCalimero();
+
   const [isOpenSearchChannel, setIsOpenSearchChannel] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [channelUsers, setChannelUsers] = useState<UserId[]>([]);
@@ -60,6 +68,12 @@ export default function Home() {
   const [openThread, setOpenThread] = useState<CurbMessage | undefined>(
     undefined
   );
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate("/login", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   // Sync the ref with the state
   useEffect(() => {
@@ -358,6 +372,51 @@ export default function Home() {
   const fetchChannels = async () => {
     const channels: ResponseData<Channels> =
       await new ClientApiDataSource().getChannels();
+
+    const contexts = await app?.fetchContexts();
+
+    if (contexts) {
+      const context = contexts.find(
+        (context) => context.contextId === import.meta.env.VITE_CONTEXT_ID
+      );
+      if (context) {
+        setContextId(context.contextId);
+        setExecutorPublicKey(context.executorId);
+      } else {
+        // logout();
+        // navigate("/login?error=Error fetching identity for application", {
+        //   replace: true,
+        // });
+      }
+    }
+
+    if (
+      (channels.data && Object.entries(channels.data).length === 0) ||
+      channels.data === null
+    ) {
+      try {
+        const response: ResponseData<string> =
+          await new ClientApiDataSource().joinChat({
+            isDM: false,
+          });
+        if (response.error) {
+          const errorMessage = extractErrorMessage(response.error);
+          if (errorMessage.includes("Already a member")) {
+            updateSessionChat(defaultActiveChat);
+          } else {
+            // TODO
+          }
+        } else {
+          updateSessionChat(defaultActiveChat);
+        }
+      } catch (_err) {
+        //TODO
+      } finally {
+        updateSessionChat(defaultActiveChat);
+        window.location.reload();
+      }
+    }
+
     if (channels.data) {
       const channelsArray: ChannelMeta[] = Object.entries(channels.data).map(
         ([name, channelInfo]) => ({
@@ -409,7 +468,7 @@ export default function Home() {
     fetchChannels();
     fetchDms();
     fetchChatMembers();
-  }, []);
+  }, [app]);
 
   const onJoinedChat = async () => {
     let canJoin = false;
@@ -682,6 +741,7 @@ export default function Home() {
       openThread={openThread}
       setOpenThread={setOpenThread}
       currentOpenThreadRef={currentOpenThreadRef}
+      logout={logout}
     />
   );
 }

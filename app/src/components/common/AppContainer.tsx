@@ -49,6 +49,7 @@ interface AppContainerProps {
   openThread: CurbMessage | undefined;
   setOpenThread: (thread: CurbMessage | undefined) => void;
   currentOpenThreadRef: React.RefObject<CurbMessage | undefined>;
+  logout: () => void;
 }
 export default function AppContainer({
   activeChat,
@@ -77,7 +78,8 @@ export default function AppContainer({
   updateCurrentOpenThread,
   openThread,
   setOpenThread,
-  currentOpenThreadRef
+  currentOpenThreadRef,
+  logout
 }: AppContainerProps) {
   return (
     <>
@@ -92,6 +94,7 @@ export default function AppContainer({
         nonInvitedUserList={nonInvitedUserList}
         reFetchChannelMembers={reFetchChannelMembers}
         fetchChannels={fetchChannels}
+        logout={logout}
       />
       <ContentDivContainer>
         <ChannelsContainer
