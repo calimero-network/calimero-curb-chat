@@ -27,6 +27,8 @@ export function useChatHandlers(
 ) {
   // Track if we're already fetching messages to prevent concurrent calls
   const isFetchingMessagesRef = useRef(false);
+  const lastMessageCheckRef = useRef<number>(0);
+  const lastReadMessageRef = useRef<{ chatId: string; timestamp: number }>({ chatId: '', timestamp: 0 });
   
   /**
    * Handle message updates from websocket events
@@ -36,6 +38,13 @@ export function useChatHandlers(
     
     // Prevent concurrent message fetches
     if (isFetchingMessagesRef.current) return;
+    
+    // Throttle message checks to max once per 500ms (batching should handle most cases)
+    const now = Date.now();
+    if (now - lastMessageCheckRef.current < 500) {
+      return;
+    }
+    lastMessageCheckRef.current = now;
 
     try {
       isFetchingMessagesRef.current = true;
@@ -49,20 +58,30 @@ export function useChatHandlers(
         // Add incoming messages to trigger UI update
         mainMessages.addIncoming(newMessages);
         
-        // Mark messages as read (but don't await to prevent blocking)
-        if (activeChat?.type === "channel") {
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage?.timestamp) {
-            new ClientApiDataSource().readMessage({
-              channel: { name: activeChat?.name },
-              timestamp: lastMessage.timestamp,
-            }).catch((error) => log.error("ChatHandlers", "Failed to mark message as read", error));
+        // Throttle mark-as-read calls - only once per chat per 2 seconds
+        const chatId = activeChatRef.current.id || activeChatRef.current.name;
+        const shouldMarkAsRead = 
+          lastReadMessageRef.current.chatId !== chatId ||
+          now - lastReadMessageRef.current.timestamp > 2000;
+        
+        if (shouldMarkAsRead) {
+          lastReadMessageRef.current = { chatId, timestamp: now };
+          
+          // Mark messages as read (but don't await to prevent blocking)
+          if (activeChat?.type === "channel") {
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage?.timestamp) {
+              new ClientApiDataSource().readMessage({
+                channel: { name: activeChat?.name },
+                timestamp: lastMessage.timestamp,
+              }).catch((error) => log.error("ChatHandlers", "Failed to mark message as read", error));
+            }
+            playSoundForMessage(lastMessage.id, 'message', false);
+          } else {
+            new ClientApiDataSource().readDm({
+              other_user_id: activeChatRef.current?.name || "",
+            }).catch((error) => log.error("ChatHandlers", "Failed to mark DM as read", error));
           }
-          playSoundForMessage(lastMessage.id, 'message', false);
-        } else {
-          new ClientApiDataSource().readDm({
-            other_user_id: activeChatRef.current?.name || "",
-          }).catch((error) => log.error("ChatHandlers", "Failed to mark DM as read", error));
         }
       }
     } catch (error) {
@@ -119,23 +138,36 @@ export function useChatHandlers(
 
   /**
    * Handle execution events inside StateMutation
-   * These are the specific events (MessageSent, ChannelCreated, etc.)
+   * These are the specific events from the Rust backend
    */
   const handleExecutionEvents = useCallback((executionEvents: ExecutionEventData[]) => {
     // Track which actions we need to take to avoid duplicates
     let needsChannelRefresh = false;
+    let needsDMRefresh = false;
     
     for (const executionEvent of executionEvents) {
       switch (executionEvent.kind) {
         case "MessageSent":
-          // Skip - we handle this via optimistic updates and checkForNewMessages
+        case "MessageReceived":
+          // Skip - already handled by checkForNewMessages
           break;
         case "ChannelCreated":
+        case "ChannelJoined":
+        case "ChannelLeft":
+        case "ChannelInvited":
           needsChannelRefresh = true;
           break;
-        case "UserJoined":
-        case "UserLeft":
-          // These will be handled by the general state mutation refresh
+        case "DMCreated":
+        case "InvitationAccepted":
+        case "NewIdentityUpdated":
+        case "InvitationPayloadUpdated":
+          needsDMRefresh = true;
+          break;
+        case "ReactionUpdated":
+          // Already handled by message refresh
+          break;
+        case "ChatInitialized":
+          // Initial setup event
           break;
       }
     }
@@ -144,7 +176,10 @@ export function useChatHandlers(
     if (needsChannelRefresh) {
       debouncedFetchChannels();
     }
-  }, [debouncedFetchChannels]);
+    if (needsDMRefresh) {
+      debouncedFetchDms();
+    }
+  }, [debouncedFetchChannels, debouncedFetchDms]);
 
   /**
    * Handle state mutation events (most common websocket event)
@@ -157,23 +192,26 @@ export function useChatHandlers(
       !sessionChat?.canJoin &&
       sessionChat?.otherIdentityNew) as boolean;
 
-    // Only fetch messages for the current active chat - most common operation
-    await handleMessageUpdates(useDM);
+    // Check if this StateMutation has MessageSent or MessageReceived events
+    // Only fetch messages if there are actual message events
+    const hasMessageEvents = event.data?.events?.some(e => 
+      e.kind === 'MessageSent' || e.kind === 'MessageReceived'
+    );
+    
+    if (hasMessageEvents) {
+      // Only fetch messages if there were actual message events
+      await handleMessageUpdates(useDM);
+    }
 
     // Process specific execution events if present
     if (event.data?.events && event.data.events.length > 0) {
       handleExecutionEvents(event.data.events);
     }
 
-    // Handle DM updates (includes fetching DMs list)
-    // For DMs, don't call handleDMUpdates on every event - it triggers cascading updates
-    // Only refetch DM list (debounced)
-    if (sessionChat?.type === "direct_message") {
-      debouncedFetchDms();
-    } else {
-      // Only update DM list if not currently in a DM
-      debouncedFetchDms();
-      // Only refetch members for channel chats (debounced to prevent spam)
+    // Only refetch members for channel chats and only if relevant events occurred
+    if (sessionChat?.type === "channel" && event.data?.events?.some(e => 
+      e.kind === 'ChannelJoined' || e.kind === 'ChannelLeft' || e.kind === 'ChannelInvited'
+    )) {
       debouncedReFetchChannelMembers();
     }
   }, [handleMessageUpdates, handleExecutionEvents, debouncedFetchDms, debouncedReFetchChannelMembers]);

@@ -19,22 +19,34 @@ export function isEventRelevantForChat(
     return true;
   }
 
-  // ExecutionEvents - only some are relevant
-  if (event.type === 'ExecutionEvent' && event.data?.events) {
+  // Check if StateMutation has events we care about
+  if (event.data?.events) {
     const executionEvents = event.data.events;
     
     // Check if any of the execution events are relevant
     for (const execEvent of executionEvents) {
       switch (execEvent.kind) {
         case 'MessageSent':
-          // Only relevant if it's not from us (we handle optimistic updates)
-          return false;
-        case 'ChannelCreated':
-          // Always relevant - need to update channel list
+        case 'MessageReceived':
+          // Message events are always relevant
           return true;
-        case 'UserJoined':
-        case 'UserLeft':
-          // Only relevant for channels we're in
+        case 'ChannelCreated':
+        case 'ChannelJoined':
+        case 'ChannelLeft':
+        case 'ChannelInvited':
+          // Channel events are relevant
+          return true;
+        case 'DMCreated':
+        case 'InvitationAccepted':
+        case 'NewIdentityUpdated':
+        case 'InvitationPayloadUpdated':
+          // DM-related events are relevant
+          return true;
+        case 'ReactionUpdated':
+          // Reactions are relevant
+          return true;
+        case 'ChatInitialized':
+          // Initialization is relevant
           return true;
         default:
           return false;
@@ -50,30 +62,38 @@ export function isEventRelevantForChat(
  */
 export function getEventPriority(event: WebSocketEvent): number {
   // Lower number = higher priority
-
-  if (event.type === 'StateMutation') {
-    return 1; // Highest priority - contains message updates
+  
+  if (!event.data?.events || event.data.events.length === 0) {
+    return 10; // Empty events - lowest priority
   }
 
-  if (event.type === 'ExecutionEvent' && event.data?.events) {
-    const executionEvents = event.data.events;
-    
-    for (const execEvent of executionEvents) {
-      switch (execEvent.kind) {
-        case 'MessageSent':
-          return 2; // High priority
-        case 'ChannelCreated':
-          return 3; // Medium priority
-        case 'UserJoined':
-        case 'UserLeft':
-          return 4; // Lower priority
-        default:
-          return 5; // Lowest priority
-      }
+  // Check for high-priority events in the array
+  for (const execEvent of event.data.events) {
+    switch (execEvent.kind) {
+      case 'MessageSent':
+      case 'MessageReceived':
+        return 1; // Highest priority - user-visible messages
+      case 'ReactionUpdated':
+        return 2; // High priority - interactive feedback
+      case 'ChannelCreated':
+      case 'DMCreated':
+        return 3; // Medium-high priority - structural changes
+      case 'ChannelJoined':
+      case 'ChannelLeft':
+      case 'InvitationAccepted':
+        return 4; // Medium priority - membership changes
+      case 'ChannelInvited':
+      case 'NewIdentityUpdated':
+      case 'InvitationPayloadUpdated':
+        return 5; // Lower priority - metadata changes
+      case 'ChatInitialized':
+        return 6; // Low priority - initialization
+      default:
+        return 7; // Unknown events
     }
   }
 
-  return 10; // Unknown events - lowest priority
+  return 10; // Fallback
 }
 
 /**

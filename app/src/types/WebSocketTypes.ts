@@ -2,14 +2,22 @@
  * WebSocket event types for Calimero
  * 
  * Structure:
- * StateMutation event contains an array of specific events (MessageSent, ChannelCreated, etc.)
+ * StateMutation event contains an array of specific events from the Rust backend
  */
 
 export type ExecutionEventKind = 
-  | 'MessageSent' 
-  | 'ChannelCreated' 
-  | 'UserJoined' 
-  | 'UserLeft' 
+  | 'ChatInitialized'
+  | 'ChannelCreated'
+  | 'ChannelInvited'
+  | 'ChannelLeft'
+  | 'MessageSent'
+  | 'MessageReceived'
+  | 'ChannelJoined'
+  | 'DMCreated'
+  | 'ReactionUpdated'
+  | 'NewIdentityUpdated'
+  | 'InvitationPayloadUpdated'
+  | 'InvitationAccepted'
   | string;
 
 export interface ExecutionEventData {

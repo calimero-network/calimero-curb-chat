@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { getAuthConfig, useCalimero } from "@calimero-network/calimero-client";
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense, useRef } from "react";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { isSessionExpired, clearStoredSession, clearDmContextId, clearSessionActivity, updateSessionActivity } from "./utils/session";
 
@@ -15,8 +15,12 @@ function App() {
   const authConfig = getAuthConfig();
   const [isConfigSet, setIsConfigSet] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
+    // Only check config once to avoid repeated auth checks
+    if (hasInitializedRef.current) return;
+    
     const timer = setTimeout(() => {
       const hasRequiredConfig =
         authConfig?.appEndpointKey &&
@@ -26,10 +30,11 @@ function App() {
 
       setIsConfigSet(Boolean(hasRequiredConfig));
       setIsLoading(false);
+      hasInitializedRef.current = true;
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [authConfig, isAuthenticated]);
+  }, [authConfig]);
 
   // Check for expired session on app initialization and initialize session activity
   useEffect(() => {
