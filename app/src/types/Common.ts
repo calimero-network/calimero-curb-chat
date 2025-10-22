@@ -146,6 +146,7 @@ export interface CurbMessage {
   key: string;
   timestamp: number;
   sender: string;
+  senderUsername?: string;
   reactions: Option<HashMap<string, Array<string>>>;
   threadCount?: number;
   threadLastTimestamp?: number;

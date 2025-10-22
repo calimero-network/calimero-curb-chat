@@ -1,4 +1,12 @@
-import type { ApiResponse, ApiError } from "@calimero-network/calimero-client";
+import type { ApiResponse } from "@calimero-network/calimero-client";
+
+/**
+ * API Error type
+ */
+export interface ApiError {
+  code: number;
+  message: string;
+}
 
 /**
  * Options for handling API calls
@@ -34,7 +42,11 @@ export async function handleApiCall<T>(
       if (logErrors) {
         console.error('API call failed:', response.error);
       }
-      onError?.(response.error);
+      const apiError: ApiError = {
+        code: response.error.code || 500,
+        message: response.error.message || "Unknown error",
+      };
+      onError?.(apiError);
       return null;
     }
     

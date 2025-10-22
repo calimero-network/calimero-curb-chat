@@ -1,13 +1,13 @@
 import { useState, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
-import type { ResponseData, UserId } from "@calimero-network/calimero-client";
+import type { ResponseData } from "@calimero-network/calimero-client";
 
 /**
  * Custom hook for managing channel-specific members and non-invited users
  */
 export function useChannelMembers() {
   const [channelUsers, setChannelUsers] = useState<Map<string, string>>(new Map());
-  const [nonInvitedUsers, setNonInvitedUsers] = useState<UserId[]>([]);
+  const [nonInvitedUsers, setNonInvitedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
