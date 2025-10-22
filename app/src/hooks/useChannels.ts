@@ -1,15 +1,13 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { Channels } from "../api/clientApi";
 import type { ChannelMeta } from "../types/Common";
-import { DEBOUNCE_FETCH_DELAY_MS } from "../constants/app";
-import { debounce } from "../utils/debounce";
 import { log } from "../utils/logger";
 
 /**
- * Custom hook for managing channels
- * Handles fetching, caching, and debounced updates
+ * Simplified Channels hook - no debouncing, just direct fetching
+ * Debouncing is handled by the callers
  */
 export function useChannels() {
   const [channels, setChannels] = useState<ChannelMeta[]>([]);
@@ -57,25 +55,10 @@ export function useChannels() {
     }
   }, []);
 
-  // Memoized debounced version with cleanup
-  const debouncedFetch = useMemo(
-    () => debounce(fetchChannels, DEBOUNCE_FETCH_DELAY_MS),
-    [fetchChannels]
-  );
-  
-  // Cleanup debounced function on unmount
-  useEffect(() => {
-    return () => {
-      debouncedFetch.cancel();
-    };
-  }, [debouncedFetch]);
-
   return {
     channels,
     loading,
     error,
     fetchChannels,
-    debouncedFetchChannels: debouncedFetch,
   };
 }
-

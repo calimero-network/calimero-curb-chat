@@ -1,10 +1,8 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useState,
   useRef,
-  useMemo,
 } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
@@ -22,7 +20,6 @@ import {
   setDmContextId,
   updateSessionChat,
 } from "../../utils/session";
-import { defaultActiveChat } from "../../mock/mock";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import {
   type ResponseData,
@@ -41,17 +38,9 @@ import type { MessageWithReactions } from "../../api/clientApi";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
 import { generateDMParams } from "../../utils/dmSetupState";
 import useNotificationSound from "../../hooks/useNotificationSound";
-import { transformMessagesToUI, getNewMessages } from "../../utils/messageTransformers";
 import {
-  MESSAGE_PAGE_SIZE,
-  RECENT_MESSAGES_CHECK_SIZE,
-  DEBOUNCE_FETCH_DELAY_MS,
-  EVENT_RATE_LIMIT_MS,
-  EVENT_QUEUE_MAX_SIZE,
-  EVENT_QUEUE_CLEANUP_SIZE,
   SUBSCRIPTION_INIT_DELAY_MS,
 } from "../../constants/app";
-import { debounce } from "../../utils/debounce";
 import { log } from "../../utils/logger";
 import type { WebSocketEvent } from "../../types/WebSocketTypes";
 import { useChannels } from "../../hooks/useChannels";
@@ -84,9 +73,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const mainMessages = useMessages();
   const threadMessages = useThreadMessages();
 
+  // Simplified - no complex callback stabilization needed
   const { playSoundForMessage, playSound } = useNotificationSound(
     {
-      enabled: false, // Start disabled - user needs to enable in settings
+      enabled: false,
       volume: 0.5,
       respectFocus: true,
       respectMute: true,
@@ -94,9 +84,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     activeChat?.id
   );
 
-  // Use custom hooks for data management
+  // Use custom hooks for data management - simplified, no props needed
   const channelsHook = useChannels();
-  const dmsHook = useDMs(playSoundForMessage);
+  const dmsHook = useDMs();
   const chatMembersHook = useChatMembers();
   const channelMembersHook = useChannelMembers();
   
@@ -133,24 +123,27 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     currentOpenThreadRef.current = currentOpenThread;
   }, [currentOpenThread]);
 
-  // Use channel members hook
-  const getChannelUsers = channelMembersHook.fetchChannelMembers;
-  const getNonInvitedUsers = channelMembersHook.fetchNonInvitedUsers;
+  // Use channel members hook - store in refs to prevent re-renders
+  const getChannelUsersRef = useRef(channelMembersHook.fetchChannelMembers);
+  const getNonInvitedUsersRef = useRef(channelMembersHook.fetchNonInvitedUsers);
+  
+  getChannelUsersRef.current = channelMembersHook.fetchChannelMembers;
+  getNonInvitedUsersRef.current = channelMembersHook.fetchNonInvitedUsers;
+  
+  const getChannelUsers = useCallback(async (id: string) => {
+    return getChannelUsersRef.current(id);
+  }, []);
+  
+  const getNonInvitedUsers = useCallback(async (id: string) => {
+    return getNonInvitedUsersRef.current(id);
+  }, []);
 
   const reFetchChannelMembers = useCallback(async () => {
     const isDM = activeChatRef.current?.type === "direct_message";
-    await getChannelUsers(
+    await getChannelUsersRef.current(
       (isDM ? "private_dm" : activeChatRef.current?.id) || ""
     );
-  }, [getChannelUsers, activeChatRef]);
-  
-  // Debounce channel members refetch to avoid overwhelming the server
-  const debouncedReFetchChannelMembers = useMemo(
-    () => debounce(() => {
-      reFetchChannelMembers();
-    }, DEBOUNCE_FETCH_DELAY_MS),
-    [reFetchChannelMembers]
-  );
+  }, []);
 
   // Track last chat to prevent duplicate fetches
   const lastSelectedChatIdRef = useRef<string>("");
@@ -191,7 +184,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     // Refresh channels list after a delay to show updated unread counts
     // Use longer delay to reduce API calls during rapid channel switching
     setTimeout(() => {
-      debouncedFetchChannels();
+      channelsHook.fetchChannels();
     }, 1000);
     
     // Subscribe to websocket events for this chat
@@ -215,17 +208,17 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     setActiveChat(null);
   }, []);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const storedSession: ActiveChat | null = getStoredSession();
-    const chatToUse = storedSession || defaultActiveChat;
+    if (!storedSession) return;
 
-    setActiveChat(chatToUse);
-    activeChatRef.current = chatToUse;
+    setActiveChat(storedSession);
+    activeChatRef.current = storedSession;
     
     // Only fetch channel members for actual channels, not DMs
-    if (chatToUse.type === "channel") {
-      getChannelUsers(chatToUse.name);
-      getNonInvitedUsers(chatToUse.name);
+    if (storedSession.type === "channel") {
+      getChannelUsers(storedSession.name);
+      getNonInvitedUsers(storedSession.name);
     }
     
     mainMessages.clear();
@@ -233,12 +226,70 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
     // Delay to ensure app is ready before subscribing
     setTimeout(() => {
-      updateSelectedActiveChat(chatToUse);
+      updateSelectedActiveChat(storedSession);
     }, SUBSCRIPTION_INIT_DELAY_MS);
-  }, []); // Only run once on mount - intentionally omitting dependencies as this is initialization logic
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Track last DM selection to prevent rapid re-selections
   const lastDMSelectionRef = useRef<{ contextId: string; timestamp: number } | null>(null);
+  
+  // Simple debounce timers - no complex closures
+  const channelsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const dmsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const membersDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  
+  // Store latest fetch functions in refs
+  const fetchChannelsRef = useRef(channelsHook.fetchChannels);
+  const fetchDmsRef = useRef(dmsHook.fetchDms);
+  const fetchMembersRef = useRef(chatMembersHook.fetchMembers);
+  
+  // Update fetch refs every render (no useEffect needed)
+  fetchChannelsRef.current = channelsHook.fetchChannels;
+  fetchDmsRef.current = dmsHook.fetchDms;
+  fetchMembersRef.current = chatMembersHook.fetchMembers;
+  
+  // Create stable debounced wrappers
+  const debouncedFetchChannels = useCallback(async () => {
+    clearTimeout(channelsDebounceRef.current);
+    channelsDebounceRef.current = setTimeout(() => fetchChannelsRef.current(), 3000);
+  }, []);
+  
+  const debouncedFetchDMs = useCallback(async () => {
+    clearTimeout(dmsDebounceRef.current);
+    dmsDebounceRef.current = setTimeout(() => fetchDmsRef.current(), 3000);
+  }, []);
+  
+  const debouncedFetchMembers = useCallback(async () => {
+    clearTimeout(membersDebounceRef.current);
+    membersDebounceRef.current = setTimeout(() => fetchMembersRef.current(), 3000);
+  }, []);
+
+  // Create refs for handlers
+  const mainMessagesRef = useRef(mainMessages);
+  const playSoundForMessageRef = useRef(playSoundForMessage);
+  const onDMSelectedRef = useRef<(dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void>(() => {});
+  
+  // Update refs every render (no useEffect to avoid triggering extra renders)
+  mainMessagesRef.current = mainMessages;
+  playSoundForMessageRef.current = playSoundForMessage;
+  
+  const chatHandlersRefs = useRef({
+    mainMessages: mainMessagesRef,
+    playSoundForMessage: playSoundForMessageRef,
+    fetchDms: fetchDmsRef,
+    onDMSelected: onDMSelectedRef,
+    fetchChannels: { current: debouncedFetchChannels },
+    fetchDMs: { current: debouncedFetchDMs },
+    fetchMembers: { current: debouncedFetchMembers },
+  }).current;
+  
+  // Store updateSelectedActiveChat in ref to avoid dependency
+  const updateSelectedActiveChatRef = useRef(updateSelectedActiveChat);
+  updateSelectedActiveChatRef.current = updateSelectedActiveChat;
+  
+  const threadMessagesRef = useRef(threadMessages);
+  threadMessagesRef.current = threadMessages;
   
   const onDMSelected = useCallback(
     async (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => {
@@ -302,50 +353,44 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         };
       }
 
-      // Set DM context BEFORE calling updateSelectedActiveChat
-      // This is critical for DMs to work properly
       setDmContextId(sc?.contextId || dm?.context_id || "");
-      mainMessages.clear();
-      threadMessages.clear();
+      mainMessagesRef.current.clear();
+      threadMessagesRef.current.clear();
       
-      // Let updateSelectedActiveChat handle all the state updates and message loading
-      // Don't duplicate state setting here - it causes issues
-      await updateSelectedActiveChat(selectedChat);
+      await updateSelectedActiveChatRef.current(selectedChat);
 
       if (refetch) {
         try {
           await new ClientApiDataSource().readDm({
             other_user_id: dm?.other_identity_old || "",
           });
-          // Refresh DM list to update unread counts
-          await dmsHook.fetchDms();
+          await fetchDmsRef.current();
         } catch (error) {
           log.error("onDMSelected", "Error in DM selection", error);
         }
       }
     },
-    [updateSelectedActiveChat, mainMessages, threadMessages, dmsHook]
+    [] // NO DEPENDENCIES - everything through refs
   );
-
-  // Use debounced fetch methods from custom hooks
-  const debouncedFetchChannels = channelsHook.debouncedFetchChannels;
-  const debouncedFetchDms = dmsHook.debouncedFetchDms;
+  
+  // Update onDMSelected ref (no useEffect - direct assignment)
+  onDMSelectedRef.current = onDMSelected;
 
   const loadInitialChatMessages = useCallback(async (): Promise<ChatMessagesData> => {
-    const result = await mainMessages.loadInitial(activeChat);
+    const result = await mainMessagesRef.current.loadInitial(activeChatRef.current);
 
-    if (activeChat?.type === "channel" && result.messages.length > 0) {
+    if (activeChatRef.current?.type === "channel" && result.messages.length > 0) {
       const lastMessage = result.messages[result.messages.length - 1];
       if (lastMessage?.timestamp) {
         await new ClientApiDataSource().readMessage({
-          channel: { name: activeChat.name },
+          channel: { name: activeChatRef.current.name },
           timestamp: lastMessage.timestamp,
         });
       }
     }
 
     return result;
-  }, [activeChat, mainMessages]);
+  }, []); // NO DEPENDENCIES - everything through refs
 
   // Use custom hooks instead of local state + fetch functions
   const channels = channelsHook.channels;
@@ -357,7 +402,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const chatMembers = chatMembersHook.members;
   const fetchChatMembers = chatMembersHook.fetchMembers;
 
-  // Use chat handlers hook to manage all event-related logic
+  // Use chat handlers hook - simplified with refs
   const {
     handleMessageUpdates,
     handleDMUpdates,
@@ -366,13 +411,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   } = useChatHandlers(
     activeChatRef,
     activeChat,
-    mainMessages,
-    playSoundForMessage,
-    fetchDms,
-    onDMSelected,
-    debouncedFetchChannels,
-    debouncedFetchDms,
-    debouncedReFetchChannelMembers
+    chatHandlersRefs
   );
 
   // Track event processing to prevent overlap
@@ -527,9 +566,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const loadPrevMessages = useCallback(
     async (chatId: string): Promise<ChatMessagesDataWithOlder> => {
-      return await mainMessages.loadPrevious(activeChat, chatId);
+      return await mainMessagesRef.current.loadPrevious(activeChatRef.current, chatId);
     },
-    [activeChat, mainMessages]
+    [] // NO DEPENDENCIES
   );
 
   const createDM = async (value: string): Promise<CreateContextResult> => {
@@ -585,9 +624,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const loadInitialThreadMessages = useCallback(
     async (parentMessageId: string): Promise<ChatMessagesData> => {
-      return await threadMessages.loadInitial(activeChat, parentMessageId);
+      return await threadMessagesRef.current.loadInitial(activeChatRef.current, parentMessageId);
     },
-    [activeChat, threadMessages]
+    [] // NO DEPENDENCIES
   );
 
   const updateCurrentOpenThread = useCallback(
@@ -599,9 +638,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const loadPrevThreadMessages = useCallback(
     async (parentMessageId: string): Promise<ChatMessagesDataWithOlder> => {
-      return await threadMessages.loadPrevious(activeChat, parentMessageId);
+      return await threadMessagesRef.current.loadPrevious(activeChatRef.current, parentMessageId);
     },
-    [activeChat, threadMessages]
+    [] // NO DEPENDENCIES
   );
 
   return (

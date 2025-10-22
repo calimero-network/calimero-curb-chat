@@ -49,7 +49,7 @@ const MessageContainer = styled.div<{ $editmode: boolean }>`
   width: 100%;
   border-radius: 4px;
   box-sizing: border-box;
-  padding-top: 6px;
+  padding: 6px 0;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -162,13 +162,16 @@ const MessageText = styled.div<MessageTextProps>`
 
   .msg-content p {
     margin: 0 0 6px 0;
+    padding: 0;
   }
   .msg-content ul,
   .msg-content ol {
     margin: 4px 0 6px 16px;
+    padding: 0;
   }
   .msg-content li {
     margin: 2px 0;
+    padding: 0;
   }
   .msg-content code {
     background: #1e1e1e;
@@ -183,7 +186,7 @@ const MessageText = styled.div<MessageTextProps>`
   }
   .msg-content blockquote {
     margin: 6px 0;
-    padding: 6px 10px;
+    padding: 6px 10px 6px 10px;
     border-left: 3px solid #a5ff11;
     background: #111;
   }

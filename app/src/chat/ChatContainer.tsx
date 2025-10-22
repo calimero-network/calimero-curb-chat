@@ -497,4 +497,14 @@ function ChatContainer({
   );
 }
 
-export default memo(ChatContainer);
+// Custom comparison to prevent re-renders when only function references change
+export default memo(ChatContainer, (prevProps, nextProps) => {
+  // Re-render only if these key values actually change
+  return (
+    prevProps.activeChat.id === nextProps.activeChat.id &&
+    prevProps.activeChat.contextId === nextProps.activeChat.contextId &&
+    prevProps.incomingMessages === nextProps.incomingMessages &&
+    prevProps.updatedMessages === nextProps.updatedMessages &&
+    prevProps.openThread?.id === nextProps.openThread?.id
+  );
+});

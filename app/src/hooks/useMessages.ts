@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback, useLayoutEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FullMessageResponse } from "../api/clientApi";
 import type { ActiveChat, CurbMessage, ChatMessagesData, ChatMessagesDataWithOlder } from "../types/Common";
 import { transformMessageToUI, transformMessagesToUI } from "../utils/messageTransformers";
 import { MESSAGE_PAGE_SIZE, RECENT_MESSAGES_CHECK_SIZE } from "../constants/app";
+import { log } from "../utils/logger";
 
 /**
  * Custom hook for managing messages in a chat
@@ -16,6 +17,7 @@ export function useMessages() {
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(MESSAGE_PAGE_SIZE);
   const messagesRef = useRef<CurbMessage[]>([]);
+  const lastCheckRef = useRef<number>(0);
 
   /**
    * Load initial messages for a chat
@@ -109,12 +111,21 @@ export function useMessages() {
 
   /**
    * Check for and add new messages from websocket events
+   * Includes aggressive rate limiting to prevent API hammering
    */
   const checkForNewMessages = useCallback(async (
     activeChat: ActiveChat | null,
     isDM: boolean
   ): Promise<CurbMessage[]> => {
     if (!activeChat) return [];
+
+    // Aggressive throttling: only check once every 3 seconds per chat
+    const now = Date.now();
+    if (now - lastCheckRef.current < 3000) {
+      log.debug('useMessages', 'Skipping message check - throttled');
+      return [];
+    }
+    lastCheckRef.current = now;
 
     const response: ResponseData<FullMessageResponse> =
       await new ClientApiDataSource().getMessages({

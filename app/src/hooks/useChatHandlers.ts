@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ActiveChat } from "../types/Common";
 import type { DMChatInfo } from "../api/clientApi";
@@ -11,20 +11,27 @@ import type { WebSocketEvent, ExecutionEventData } from "../types/WebSocketTypes
  * Custom hook for handling chat-related events (messages, DMs, channels)
  * Extracted from Home component to reduce complexity
  */
+// Simplified interface - accept refs directly instead of creating them internally
+interface ChatHandlersRefs {
+  mainMessages: React.MutableRefObject<{
+    checkForNewMessages: (chat: ActiveChat, isDM: boolean) => Promise<any[]>;
+    addIncoming: (messages: any[]) => void;
+  }>;
+  playSoundForMessage: React.MutableRefObject<(messageId: string, type?: NotificationType, isMention?: boolean) => void>;
+  fetchDms: React.MutableRefObject<() => Promise<DMChatInfo[] | undefined>>;
+  onDMSelected: React.MutableRefObject<(dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void>;
+  fetchChannels: React.MutableRefObject<() => Promise<void>>;
+  fetchDMs: React.MutableRefObject<() => Promise<void>>;
+  fetchMembers: React.MutableRefObject<() => Promise<void>>;
+}
+
 export function useChatHandlers(
   activeChatRef: React.RefObject<ActiveChat | null>,
   activeChat: ActiveChat | null,
-  mainMessages: {
-    checkForNewMessages: (chat: ActiveChat, isDM: boolean) => Promise<any[]>;
-    addIncoming: (messages: any[]) => void;
-  },
-  playSoundForMessage: (messageId: string, type?: NotificationType, isMention?: boolean) => void,
-  fetchDms: () => Promise<DMChatInfo[] | undefined>,
-  onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void,
-  debouncedFetchChannels: () => void,
-  debouncedFetchDms: () => void,
-  debouncedReFetchChannelMembers: () => void
+  refs: ChatHandlersRefs
 ) {
+  // All callbacks come through refs - much simpler!
+
   // Track if we're already fetching messages to prevent concurrent calls
   const isFetchingMessagesRef = useRef(false);
   const lastMessageCheckRef = useRef<number>(0);
@@ -39,9 +46,10 @@ export function useChatHandlers(
     // Prevent concurrent message fetches
     if (isFetchingMessagesRef.current) return;
     
-    // Increase throttle to 2 seconds to reduce API calls
+    // Aggressive throttle to 5 seconds to prevent API hammering
     const now = Date.now();
-    if (now - lastMessageCheckRef.current < 2000) {
+    if (now - lastMessageCheckRef.current < 5000) {
+      log.debug('ChatHandlers', 'Skipping message check - throttled');
       return;
     }
     lastMessageCheckRef.current = now;
@@ -49,16 +57,14 @@ export function useChatHandlers(
     try {
       isFetchingMessagesRef.current = true;
       
-      const newMessages = await mainMessages.checkForNewMessages(
+      const newMessages = await refs.mainMessages.current.checkForNewMessages(
         activeChatRef.current,
         useDM
       );
 
       if (newMessages.length > 0) {
-        // Add incoming messages to trigger UI update
-        mainMessages.addIncoming(newMessages);
+        refs.mainMessages.current.addIncoming(newMessages);
         
-        // Throttle mark-as-read calls - only once per chat per 2 seconds
         const chatId = activeChatRef.current.id || activeChatRef.current.name;
         const shouldMarkAsRead = 
           lastReadMessageRef.current.chatId !== chatId ||
@@ -67,7 +73,6 @@ export function useChatHandlers(
         if (shouldMarkAsRead) {
           lastReadMessageRef.current = { chatId, timestamp: now };
           
-          // Mark messages as read and refresh the list to update unread counts
           if (activeChat?.type === "channel") {
             const lastMessage = newMessages[newMessages.length - 1];
             if (lastMessage?.timestamp) {
@@ -75,17 +80,15 @@ export function useChatHandlers(
                 channel: { name: activeChat?.name },
                 timestamp: lastMessage.timestamp,
               }).then(() => {
-                // Refresh channels list to update unread count
-                debouncedFetchChannels();
+                refs.fetchChannels.current();
               }).catch((error) => log.error("ChatHandlers", "Failed to mark message as read", error));
             }
-            playSoundForMessage(lastMessage.id, 'message', false);
+            refs.playSoundForMessage.current(lastMessage.id, 'message', false);
           } else {
             new ClientApiDataSource().readDm({
               other_user_id: activeChatRef.current?.name || "",
             }).then(() => {
-              // Refresh DMs list to update unread count
-              debouncedFetchDms();
+              refs.fetchDMs.current();
             }).catch((error) => log.error("ChatHandlers", "Failed to mark DM as read", error));
           }
         }
@@ -95,7 +98,7 @@ export function useChatHandlers(
     } finally {
       isFetchingMessagesRef.current = false;
     }
-  }, [activeChat, playSoundForMessage, mainMessages, activeChatRef]);
+  }, [activeChatRef, activeChat, refs]);
 
   // Track last DM update to prevent infinite loops
   const lastDMUpdateRef = useRef<{ contextId: string; timestamp: number } | null>(null);
@@ -106,18 +109,17 @@ export function useChatHandlers(
   const handleDMUpdates = useCallback(async (sessionChat: ActiveChat | null) => {
     if (sessionChat?.type !== "direct_message") return;
 
-    // Prevent rapid re-processing of the same DM
     const now = Date.now();
     if (
       lastDMUpdateRef.current &&
       lastDMUpdateRef.current.contextId === sessionChat.contextId &&
-      now - lastDMUpdateRef.current.timestamp < 2000 // 2 second cooldown
+      now - lastDMUpdateRef.current.timestamp < 2000
     ) {
       return;
     }
 
     try {
-      const updatedDMs = await fetchDms();
+      const updatedDMs = await refs.fetchDms.current();
       
       if (
         !sessionChat?.isFinal &&
@@ -131,16 +133,15 @@ export function useChatHandlers(
           (dm) => dm.context_id === sessionChat.contextId
         );
         
-        // Only call onDMSelected if we actually found a matching DM
         if (currentDM && sessionChat.contextId) {
           lastDMUpdateRef.current = { contextId: sessionChat.contextId, timestamp: now };
-          onDMSelected(currentDM, undefined, false);
+          refs.onDMSelected.current(currentDM, undefined, false);
         }
       }
     } catch (error) {
       log.error("ChatHandlers", "Error handling DM updates", error);
     }
-  }, [fetchDms, onDMSelected]);
+  }, [refs]);
 
   /**
    * Handle execution events inside StateMutation
@@ -215,20 +216,20 @@ export function useChatHandlers(
       }
     }
     
-    // Execute only the necessary actions (all are debounced to prevent spam)
+    // Execute only the necessary actions
     if (actions.fetchMessages) {
       handleMessageUpdates(useDM);
     }
     if (actions.fetchChannels) {
-      debouncedFetchChannels();
+      refs.fetchChannels.current();
     }
     if (actions.fetchDMs) {
-      debouncedFetchDms();
+      refs.fetchDMs.current();
     }
     if (actions.fetchMembers && !useDM) {
-      debouncedReFetchChannelMembers();
+      refs.fetchMembers.current();
     }
-  }, [handleMessageUpdates, debouncedFetchChannels, debouncedFetchDms, debouncedReFetchChannelMembers]);
+  }, [handleMessageUpdates, refs]);
 
   /**
    * Handle state mutation events (most common websocket event)

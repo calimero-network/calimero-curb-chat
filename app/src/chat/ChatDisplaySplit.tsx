@@ -343,4 +343,16 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
   );
 });
 
-export default ChatDisplaySplit;
+// Custom comparison to prevent re-renders from function reference changes
+export default memo(ChatDisplaySplit, (prevProps, nextProps) => {
+  // Only re-render if these critical values change
+  return (
+    prevProps.activeChat.id === nextProps.activeChat.id &&
+    prevProps.activeChat.contextId === nextProps.activeChat.contextId &&
+    prevProps.incomingMessages === nextProps.incomingMessages &&
+    prevProps.updatedMessages === nextProps.updatedMessages &&
+    prevProps.openThread?.id === nextProps.openThread?.id &&
+    prevProps.isEmojiSelectorVisible === nextProps.isEmojiSelectorVisible &&
+    prevProps.openMobileReactions === nextProps.openMobileReactions
+  );
+});
