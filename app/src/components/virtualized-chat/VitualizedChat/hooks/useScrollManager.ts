@@ -16,6 +16,7 @@ interface UseScrollManagerReturn {
   handleIsScrolling: (scrolling: boolean) => void;
   handleAtBottomStateChange: (atBottom: boolean) => void;
   hasScrolledToBottom: boolean;
+  resetScrollAwayFlag: () => void; // Expose to allow parent to reset
 }
 
 export function useScrollManager({
@@ -40,12 +41,16 @@ export function useScrollManager({
     }
   }, []);
 
+  const resetScrollAwayFlag = useCallback(() => {
+    userHasScrolledAwayRef.current = false;
+  }, []);
+
   const scrollToBottom = useCallback((): void => {
     // When user explicitly scrolls to bottom (like clicking button or sending message)
     // Reset the scroll-away flag to re-enable auto-scroll
-    userHasScrolledAwayRef.current = false;
+    resetScrollAwayFlag();
     listRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
-  }, []);
+  }, [resetScrollAwayFlag]);
 
   const handleFollowOutput = useCallback((atBottom: boolean) => {
     // During settling, don't auto-scroll
@@ -146,6 +151,7 @@ export function useScrollManager({
     handleIsScrolling,
     handleAtBottomStateChange,
     hasScrolledToBottom: hasScrolledToBottomRef.current,
+    resetScrollAwayFlag,
   };
 }
 

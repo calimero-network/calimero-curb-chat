@@ -66,6 +66,7 @@ export interface VirtualizedChatProps<T extends Message> {
   style?: React.CSSProperties;
   chatId: string;
   shouldTriggerNewItemIndicator?: (item: T) => boolean;
+  scrollToBottomOnSend?: boolean; // New prop for explicit control
 }
 
 const VirtualizedChat = <T extends Message>({
@@ -79,6 +80,7 @@ const VirtualizedChat = <T extends Message>({
   shouldTriggerNewItemIndicator,
   style,
   chatId,
+  scrollToBottomOnSend = true,
 }: VirtualizedChatProps<T>): React.ReactElement => {
   // Initialize message store
   const store = useRef(new MessageStore<T>()).current;
@@ -111,6 +113,7 @@ const VirtualizedChat = <T extends Message>({
     handleFollowOutput,
     handleIsScrolling,
     handleAtBottomStateChange,
+    resetScrollAwayFlag,
   } = useScrollManager({
     chatId,
     isLoadingInitial,
@@ -131,6 +134,7 @@ const VirtualizedChat = <T extends Message>({
     shouldTriggerNewItemIndicator,
     onMessagesUpdated: updateMessages,
     onNewMessagesWhileNotAtBottom: showNewMessageIndicator,
+    onOwnMessageSent: resetScrollAwayFlag, // Reset when user sends message
   });
 
   // Track last rendered item for notifications

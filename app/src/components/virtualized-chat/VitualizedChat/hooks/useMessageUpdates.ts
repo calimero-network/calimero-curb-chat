@@ -16,6 +16,7 @@ interface UseMessageUpdatesProps<T extends Message> {
   shouldTriggerNewItemIndicator?: (item: T) => boolean;
   onMessagesUpdated: (messages: T[], addedCount: number) => void;
   onNewMessagesWhileNotAtBottom: () => void;
+  onOwnMessageSent?: () => void; // Called when user sends their own message
 }
 
 export function useMessageUpdates<T extends Message>({
@@ -26,15 +27,18 @@ export function useMessageUpdates<T extends Message>({
   shouldTriggerNewItemIndicator,
   onMessagesUpdated,
   onNewMessagesWhileNotAtBottom,
+  onOwnMessageSent,
 }: UseMessageUpdatesProps<T>): void {
   // Use refs to avoid adding callbacks to dependency arrays (prevents render loops)
   const onMessagesUpdatedRef = useRef(onMessagesUpdated);
   const onNewMessagesWhileNotAtBottomRef = useRef(onNewMessagesWhileNotAtBottom);
+  const onOwnMessageSentRef = useRef(onOwnMessageSent);
   
   // Keep refs updated
   useEffect(() => {
     onMessagesUpdatedRef.current = onMessagesUpdated;
     onNewMessagesWhileNotAtBottomRef.current = onNewMessagesWhileNotAtBottom;
+    onOwnMessageSentRef.current = onOwnMessageSent;
   });
 
   // Handle incoming messages
@@ -49,27 +53,23 @@ export function useMessageUpdates<T extends Message>({
       onMessagesUpdatedRef.current([...store.messages], addedCount);
       
       // Pattern from VirtuosoMessageList: distinguish between sent vs received messages
-      // shouldTriggerNewItemIndicator returns FALSE for own messages
+      // shouldTriggerNewItemIndicator returns FALSE for own messages, TRUE for others
       if (addedCount > 0) {
         const lastMessage = store.messages[store.messages.length - 1];
         const isOwnMessage = shouldTriggerNewItemIndicator 
-          ? !shouldTriggerNewItemIndicator(lastMessage)  // Inverted - returns FALSE for own messages
+          ? !shouldTriggerNewItemIndicator(lastMessage)  // FALSE for own messages
           : false;
 
-        // If it's our own message (sending), show indicator only if not at bottom
-        // If it's someone else's message (receiving), show indicator only if not at bottom
-        if (!isAtBottom) {
-          const shouldShow = shouldTriggerNewItemIndicator 
-            ? shouldTriggerNewItemIndicator(lastMessage)
-            : true;
-          
-          if (shouldShow) {
-            onNewMessagesWhileNotAtBottomRef.current();
-            log.debug('useMessageUpdates', 'New messages from others - showing indicator');
-          }
+        if (isOwnMessage) {
+          // User sent a message - reset scroll-away flag to enable auto-scroll
+          // Following VirtuosoMessageList send pattern: always scroll to bottom when sending
+          onOwnMessageSentRef.current?.();
+          log.debug('useMessageUpdates', 'Own message sent - enabling auto-scroll');
+        } else if (!isAtBottom) {
+          // Someone else's message and we're not at bottom - show indicator
+          onNewMessagesWhileNotAtBottomRef.current();
+          log.debug('useMessageUpdates', 'Message from others - showing indicator');
         }
-        
-        // Note: followOutput in useScrollManager will handle auto-scroll for own messages
       }
       // For updates (reactions, edits) - don't show indicator
       // This follows the 'items-change' modifier pattern
