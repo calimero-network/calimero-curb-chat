@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FullMessageResponse } from "../api/clientApi";
 import type { ActiveChat, CurbMessage, ChatMessagesData, ChatMessagesDataWithOlder } from "../types/Common";
-import { transformMessagesToUI, getNewMessages } from "../utils/messageTransformers";
+import { transformMessageToUI, transformMessagesToUI } from "../utils/messageTransformers";
 import { MESSAGE_PAGE_SIZE, RECENT_MESSAGES_CHECK_SIZE } from "../constants/app";
 
 /**
@@ -12,9 +12,22 @@ import { MESSAGE_PAGE_SIZE, RECENT_MESSAGES_CHECK_SIZE } from "../constants/app"
  */
 export function useMessages() {
   const [messages, setMessages] = useState<CurbMessage[]>([]);
+  const [incomingMessages, setIncomingMessages] = useState<CurbMessage[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(MESSAGE_PAGE_SIZE);
   const messagesRef = useRef<CurbMessage[]>([]);
+  const processedMessageIds = useRef<Set<string>>(new Set());
+
+  // Auto-clear incoming messages immediately after render
+  // This prevents duplicate rendering in VirtualizedChat
+  useEffect(() => {
+    if (incomingMessages.length > 0) {
+      // Use queueMicrotask to clear after VirtualizedChat has seen them
+      queueMicrotask(() => {
+        setIncomingMessages([]);
+      });
+    }
+  }, [incomingMessages]);
 
   /**
    * Load initial messages for a chat
@@ -46,6 +59,9 @@ export function useMessages() {
       setMessages(messagesArray);
       setTotalCount(response.data.total_count);
       setOffset(MESSAGE_PAGE_SIZE);
+      
+      // Reset processed IDs when loading initial messages
+      processedMessageIds.current = new Set(messagesArray.map(m => m.id));
 
       return {
         messages: messagesArray,
@@ -128,14 +144,17 @@ export function useMessages() {
 
     if (!response.data) return [];
 
-    const newMessages = getNewMessages(
-      response.data.messages,
-      messagesRef.current
-    );
+    // Filter out messages we've already processed
+    const newMessages = response.data.messages
+      .filter((msg) => !processedMessageIds.current.has(msg.id))
+      .map((msg) => transformMessageToUI(msg));
 
     if (newMessages.length > 0) {
+      // Mark these messages as processed
+      newMessages.forEach((msg) => processedMessageIds.current.add(msg.id));
+      
       messagesRef.current = [...messagesRef.current, ...newMessages];
-      setMessages(prevMessages => [...prevMessages, ...newMessages]);
+      setIncomingMessages(newMessages);
       return newMessages;
     }
 
@@ -147,8 +166,16 @@ export function useMessages() {
    */
   const addIncoming = useCallback((newMessages: CurbMessage[]) => {
     if (newMessages.length > 0) {
-      messagesRef.current = [...messagesRef.current, ...newMessages];
-      setMessages(prevMessages => [...prevMessages, ...newMessages]);
+      // Filter out already processed messages
+      const trulyNewMessages = newMessages.filter(
+        msg => !processedMessageIds.current.has(msg.id)
+      );
+      
+      if (trulyNewMessages.length > 0) {
+        trulyNewMessages.forEach(msg => processedMessageIds.current.add(msg.id));
+        messagesRef.current = [...messagesRef.current, ...trulyNewMessages];
+        setIncomingMessages(trulyNewMessages);
+      }
     }
   }, []);
 
@@ -158,8 +185,10 @@ export function useMessages() {
   const clear = useCallback(() => {
     messagesRef.current = [];
     setMessages([]);
+    setIncomingMessages([]);
     setTotalCount(0);
     setOffset(MESSAGE_PAGE_SIZE);
+    processedMessageIds.current.clear();
   }, []);
 
   /**
@@ -171,6 +200,7 @@ export function useMessages() {
 
   return {
     messages,
+    incomingMessages,
     totalCount,
     messagesRef,
     loadInitial,

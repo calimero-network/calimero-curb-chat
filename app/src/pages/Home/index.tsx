@@ -94,7 +94,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   
   // Expose for compatibility with existing code
   const messagesRef = mainMessages.messagesRef;
-  const incomingMessages = mainMessages.messages;
+  const incomingMessages = mainMessages.incomingMessages;
 
   // Initialize audio context on first user interaction
   useEffect(() => {
@@ -623,7 +623,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       nonInvitedUserList={channelMembersHook.nonInvitedUsers}
       onDMSelected={onDMSelected}
       loadInitialChatMessages={loadInitialChatMessages}
-      incomingMessages={mainMessages.messages}
+      incomingMessages={mainMessages.incomingMessages}
       channels={channels}
       fetchChannels={fetchChannels}
       onJoinedChat={onJoinedChat}
