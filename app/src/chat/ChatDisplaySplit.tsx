@@ -7,7 +7,7 @@ import type {
   MessageRendererProps,
   UpdatedMessages,
 } from "../types/Common";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import MessageInput from "./MessageInput";
 import {
   messageRenderer,
@@ -185,11 +185,30 @@ export default function ChatDisplaySplit({
 }: ChatDisplaySplitProps) {
   const [accountId, setAccountId] = useState<string | undefined>(undefined);
   const [username, setUsername] = useState<string>("");
+  const hasLoadedUsername = useRef(false);
 
   useEffect(() => {
+    // Only fetch username once, not on every render
+    if (hasLoadedUsername.current) return;
+    
     const setUserInfo = async () => {
       const executorId = getExecutorPublicKey() ?? "";
       setAccountId(executorId);
+      
+      // Check if we already have the username in localStorage
+      const cachedUsername = localStorage.getItem("chat-username");
+      if (cachedUsername) {
+        const normalizedClass = cachedUsername
+          .replace(/\s+/g, "")
+          .toLowerCase()
+          .replace(/\./g, "\\.")
+          .replace(/_/g, "\\_");
+        setUsername(normalizedClass);
+        hasLoadedUsername.current = true;
+        return;
+      }
+      
+      // Fetch from API if not cached
       const response = await new ClientApiDataSource().getUsername({
         user_id: executorId ?? "",
       });
@@ -200,6 +219,7 @@ export default function ChatDisplaySplit({
           .replace(/\./g, "\\.")
           .replace(/_/g, "\\_");
         setUsername(normalizedClass);
+        hasLoadedUsername.current = true;
       }
     }
     setUserInfo();
@@ -241,7 +261,7 @@ export default function ChatDisplaySplit({
     currentChatStyle.overflow = "hidden";
   }
 
-  const renderMessage = () => {
+  const renderMessage = (message: CurbMessage, prevMessage?: CurbMessage) => {
     const params: MessageRendererProps = {
       accountId: username,
       isThread: isThread,
@@ -263,7 +283,7 @@ export default function ChatDisplaySplit({
       authToken: undefined,
       privateIpfsEndpoint: "https://ipfs.io",
     };
-    return messageRenderer(params);
+    return messageRenderer(params)(message, prevMessage);
   };
 
   return (
@@ -290,8 +310,8 @@ export default function ChatDisplaySplit({
             shouldTriggerNewItemIndicator={(message: CurbMessage) =>
               message.sender !== accountId
             }
-            render={renderMessage()}
-            chatId={isThread && openThread?.id ? openThread.id : (activeChat.type === "direct_message" && activeChat.contextId ? activeChat.contextId : activeChat.id || '')}
+            render={renderMessage}
+            chatId={isThread && openThread?.id ? openThread.id : activeChat.id || ''}
             style={currentChatStyle}
           />
         </ContainerPadding>

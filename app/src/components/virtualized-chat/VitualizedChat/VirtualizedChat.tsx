@@ -38,6 +38,7 @@ const VirtuosoWrapper = styled.div`
 
 interface Message {
   id: string;
+  timestamp: number;
 }
 
 interface NewMessageIndicatorProps {
@@ -149,13 +150,18 @@ const VirtualizedChat = <T extends Message>({
     if (incomingMessages.length > 0) {
       const { addedCount, updatedCount } = store.append(incomingMessages);
       
-      // Only update state if we added new messages
-      // For in-place updates, don't call setMessages to avoid flicker
-      if (addedCount > 0) {
-        setMessages(store.messages);
-        setTotalCount((prevTotalCount) => prevTotalCount + addedCount);
+      // Update state if we added OR updated messages
+      // We need to call setMessages even for updates because React won't detect
+      // mutations to the store.messages array
+      if (addedCount > 0 || updatedCount > 0) {
+        setMessages([...store.messages]); // Create new array reference to trigger re-render
+        
+        if (addedCount > 0) {
+          setTotalCount((prevTotalCount) => prevTotalCount + addedCount);
+        }
         
         if (
+          addedCount > 0 &&
           !isAtBottom.current &&
           (shouldTriggerNewItemIndicator
             ? shouldTriggerNewItemIndicator(
@@ -166,8 +172,6 @@ const VirtualizedChat = <T extends Message>({
           setHasNewMessages(true);
         }
       }
-      // Don't call setMessages for updates - the mutation is enough
-      // and avoids re-rendering which causes flicker
     }
   }, [incomingMessages]);
 
@@ -203,14 +207,16 @@ const VirtualizedChat = <T extends Message>({
 
   const handleRenderItem = useCallback(
     (index: number, item: T) => {
-      const prevMessageIndex = messages.length - (totalCount - index + 1);
-      if (prevMessageIndex < 0) {
-        return render(item);
-      }
-      const prevMessage = messages[prevMessageIndex];
+      // Calculate the actual index in the messages array
+      // Virtuoso uses firstItemIndex offset, so we need to adjust
+      const actualIndex = index - firstItemIndex;
+      // Use store.messages instead of messages state to get the most up-to-date data
+      const currentMessages = store.messages;
+      const prevMessage = actualIndex > 0 ? currentMessages[actualIndex - 1] : undefined;
+      
       return render(item, prevMessage);
     },
-    [messages, render, firstItemIndex],
+    [render, chatId, firstItemIndex, store],
   );
 
   const NewMessageIndicator = React.createElement(newMessageIndicator, {
@@ -249,12 +255,6 @@ const VirtualizedChat = <T extends Message>({
           ref={listHandler}
           overscan={{ reverse: 500, main: 0 }}
           increaseViewportBy={{ top: 200, bottom: 200 }}
-          totalListHeightChanged={(height) => {
-            // Force re-render when height changes
-            if (height > 0) {
-              setMessages([...store.messages]);
-            }
-          }}
         />
       )}
     </VirtuosoWrapper>

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ActiveChat } from "../types/Common";
 import type { DMChatInfo } from "../api/clientApi";
@@ -21,15 +21,23 @@ export function useChatHandlers(
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void,
   debouncedFetchChannels: () => void,
   debouncedFetchDms: () => void,
-  reFetchChannelMembers: () => Promise<void>
+  debouncedReFetchChannelMembers: () => void
 ) {
+  // Track if we're already fetching messages to prevent concurrent calls
+  const isFetchingMessagesRef = useRef(false);
+  
   /**
    * Handle message updates from websocket events
    */
   const handleMessageUpdates = useCallback(async (useDM: boolean) => {
     if (!activeChatRef.current) return;
+    
+    // Prevent concurrent message fetches
+    if (isFetchingMessagesRef.current) return;
 
     try {
+      isFetchingMessagesRef.current = true;
+      
       const newMessages = await mainMessages.checkForNewMessages(
         activeChatRef.current,
         useDM
@@ -57,15 +65,30 @@ export function useChatHandlers(
       }
     } catch (error) {
       console.error("Error handling message updates:", error);
+    } finally {
+      isFetchingMessagesRef.current = false;
     }
   }, [activeChat, playSoundForMessage, mainMessages, activeChatRef]);
 
+  // Track last DM update to prevent infinite loops
+  const lastDMUpdateRef = useRef<{ contextId: string; timestamp: number } | null>(null);
+  
   /**
    * Handle DM-specific updates
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDMUpdates = useCallback(async (sessionChat: any) => {
     if (sessionChat?.type !== "direct_message") return;
+
+    // Prevent rapid re-processing of the same DM
+    const now = Date.now();
+    if (
+      lastDMUpdateRef.current &&
+      lastDMUpdateRef.current.contextId === sessionChat.contextId &&
+      now - lastDMUpdateRef.current.timestamp < 2000 // 2 second cooldown
+    ) {
+      return;
+    }
 
     try {
       const updatedDMs = await fetchDms();
@@ -81,7 +104,12 @@ export function useChatHandlers(
         const currentDM = updatedDMs.find(
           (dm) => dm.context_id === sessionChat.contextId
         );
-        onDMSelected(currentDM, undefined, false);
+        
+        // Only call onDMSelected if we actually found a matching DM
+        if (currentDM) {
+          lastDMUpdateRef.current = { contextId: sessionChat.contextId, timestamp: now };
+          onDMSelected(currentDM, undefined, false);
+        }
       }
     } catch (error) {
       console.error("Error handling DM updates:", error);
@@ -106,15 +134,17 @@ export function useChatHandlers(
     debouncedFetchChannels();
 
     // Handle DM updates (includes fetching DMs list)
+    // For DMs, don't call handleDMUpdates on every event - it triggers cascading updates
+    // Only refetch DM list (debounced)
     if (sessionChat?.type === "direct_message") {
-      await handleDMUpdates(sessionChat);
+      debouncedFetchDms();
     } else {
       // Only update DM list if not currently in a DM
       debouncedFetchDms();
-      // Only refetch members for channel chats
-      await reFetchChannelMembers();
+      // Only refetch members for channel chats (debounced to prevent spam)
+      debouncedReFetchChannelMembers();
     }
-  }, [debouncedFetchChannels, debouncedFetchDms, handleDMUpdates, handleMessageUpdates, reFetchChannelMembers]);
+  }, [debouncedFetchChannels, debouncedFetchDms, handleMessageUpdates, debouncedReFetchChannelMembers]);
 
   /**
    * Handle execution events (channel created, message sent, etc.)

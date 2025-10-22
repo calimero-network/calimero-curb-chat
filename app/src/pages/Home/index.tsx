@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useState,
   useRef,
+  useMemo,
 } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
@@ -50,6 +51,7 @@ import {
   EVENT_QUEUE_CLEANUP_SIZE,
   SUBSCRIPTION_INIT_DELAY_MS,
 } from "../../constants/app";
+import { debounce } from "../../utils/debounce";
 import { useChannels } from "../../hooks/useChannels";
 import { useDMs } from "../../hooks/useDMs";
 import { useChatMembers } from "../../hooks/useChatMembers";
@@ -137,13 +139,24 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const getChannelUsers = channelMembersHook.fetchChannelMembers;
   const getNonInvitedUsers = channelMembersHook.fetchNonInvitedUsers;
 
-  const reFetchChannelMembers = async () => {
+  const reFetchChannelMembers = useCallback(async () => {
     const isDM = activeChatRef.current?.type === "direct_message";
     await getChannelUsers(
       (isDM ? "private_dm" : activeChatRef.current?.id) || ""
     );
-  };
+  }, [getChannelUsers, activeChatRef]);
+  
+  // Debounce channel members refetch to avoid overwhelming the server
+  const debouncedReFetchChannelMembers = useMemo(
+    () => debounce(() => {
+      reFetchChannelMembers();
+    }, DEBOUNCE_FETCH_DELAY_MS),
+    [reFetchChannelMembers]
+  );
 
+  // Track last chat to prevent duplicate fetches
+  const lastSelectedChatIdRef = useRef<string>("");
+  
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
     // Find the channel metadata to get channelType
     const channelMeta = channels.find((ch: ChannelMeta) => ch.name === selectedChat.name);
@@ -164,9 +177,18 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     setIsSidebarOpen(false);
     updateSessionChat(selectedChat);
     
-    // Fetch channel users in background
-    getChannelUsers(selectedChat.id);
-    getNonInvitedUsers(selectedChat.id);
+    // Only fetch channel users/non-invited if this is a new chat
+    // Prevents excessive API calls when re-selecting the same chat
+    const chatId = selectedChat.id || selectedChat.name;
+    if (lastSelectedChatIdRef.current !== chatId) {
+      lastSelectedChatIdRef.current = chatId;
+      
+      // Only fetch for channels, not for DMs
+      if (selectedChat.type === "channel") {
+        getChannelUsers(selectedChat.id);
+        getNonInvitedUsers(selectedChat.id);
+      }
+    }
     
     // Subscribe to websocket events for this chat
     if (app && subscriptionRef.current) {
@@ -195,8 +217,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
     setActiveChat(chatToUse);
     activeChatRef.current = chatToUse;
-    getChannelUsers(chatToUse.name);
-    getNonInvitedUsers(chatToUse.name);
+    
+    // Only fetch channel members for actual channels, not DMs
+    if (chatToUse.type === "channel") {
+      getChannelUsers(chatToUse.name);
+      getNonInvitedUsers(chatToUse.name);
+    }
+    
     mainMessages.clear();
     threadMessages.clear();
 
@@ -207,12 +234,30 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Track last DM selection to prevent rapid re-selections
+  const lastDMSelectionRef = useRef<{ contextId: string; timestamp: number } | null>(null);
+  
   const onDMSelected = useCallback(
     async (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => {
+      const contextId = sc?.contextId || dm?.context_id || "";
+      
+      // Prevent rapid re-selection of the same DM (within 1 second)
+      const now = Date.now();
+      if (
+        lastDMSelectionRef.current &&
+        lastDMSelectionRef.current.contextId === contextId &&
+        now - lastDMSelectionRef.current.timestamp < 1000
+      ) {
+        console.log("onDMSelected: Skipping rapid re-selection of same DM");
+        return;
+      }
+      
+      lastDMSelectionRef.current = { contextId, timestamp: now };
+      
       let canJoin = true;
       const verifyContextResponse = await apiClient
         .node()
-        .getContext((sc?.contextId ? sc.contextId : dm?.context_id) || "");
+        .getContext(contextId);
       if (verifyContextResponse.data) {
         canJoin = !(verifyContextResponse.data.rootHash ? true : false);
       }
@@ -269,12 +314,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           await new ClientApiDataSource().readDm({
             other_user_id: dm?.other_identity_old || "",
           });
+          // Refresh DM list to update unread counts
+          await dmsHook.fetchDms();
         } catch (error) {
           console.error("Error in onDMSelected:", error);
         }
       }
     },
-    [updateSelectedActiveChat]
+    [updateSelectedActiveChat, mainMessages, threadMessages, dmsHook]
   );
 
   // Use debounced fetch methods from custom hooks
@@ -322,7 +369,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     onDMSelected,
     debouncedFetchChannels,
     debouncedFetchDms,
-    reFetchChannelMembers
+    debouncedReFetchChannelMembers
   );
 
   // Create event callback for websocket subscription
@@ -394,26 +441,32 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   // Store subscription in ref for updateSelectedActiveChat
   subscriptionRef.current = subscription;
 
-  // Track if initial fetch has been done
+  // Track if initial fetch has been done - using useState to ensure it persists
   const initialFetchDone = useRef(false);
+  const isFetchingInitial = useRef(false);
 
   useEffect(() => {
     // Only fetch once on mount to avoid 429 errors from rapid refetches
-    if (!initialFetchDone.current) {
-      initialFetchDone.current = true;
+    // Use both flags to prevent concurrent fetches
+    if (!initialFetchDone.current && !isFetchingInitial.current) {
+      isFetchingInitial.current = true;
       
       // Batch initial data fetches for faster load using custom hooks
       Promise.all([
         channelsHook.fetchChannels(),
         dmsHook.fetchDms(),
         chatMembersHook.fetchMembers(),
-      ]).catch(error => {
+      ]).then(() => {
+        initialFetchDone.current = true;
+        isFetchingInitial.current = false;
+      }).catch(error => {
         console.error("Error fetching initial data:", error);
+        isFetchingInitial.current = false;
       });
     }
 
     // Cleanup is handled by useWebSocketSubscription hook
-  }, []);
+  }, [channelsHook, dmsHook, chatMembersHook]);
 
   const onJoinedChat = async () => {
     let canJoin = false;

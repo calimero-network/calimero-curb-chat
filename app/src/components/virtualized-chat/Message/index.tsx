@@ -1,5 +1,5 @@
 import { useLongPress } from '@uidotdev/usehooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import styled from 'styled-components';
 
 import { MessageActions } from '..';
@@ -279,17 +279,24 @@ const ClosableBackground = styled.div`
 `;
 
 const shouldShowHeader = (message: CurbMessage, prevMessage?: CurbMessage) => {
-  if (!prevMessage) return true; // No previous message
-  if (prevMessage.sender !== message.sender) return true; // Different sender
+  if (!prevMessage) {
+    return true; // No previous message
+  }
+  if (prevMessage.sender !== message.sender) {
+    return true; // Different sender
+  }
   if (
     (prevMessage.files.length === 0 &&
       prevMessage.images.length === 0 &&
       !prevMessage.text &&
       prevMessage.editedOn) ||
     prevMessage.deleted
-  )
-    return true;
-  return message.timestamp - prevMessage.timestamp >= 300000; // 5 minutes or more between messages
+  ) {
+    return true; // Previous message was deleted or empty
+  }
+  // Group messages from same sender within 5 minutes
+  const timeDiff = message.timestamp - prevMessage.timestamp;
+  return timeDiff >= 300000; // 5 minutes or more between messages
 };
 
 interface MessageProps {
@@ -325,6 +332,11 @@ const Message = (props: MessageProps) => {
   const [popupPosition, setPopupPosition] = useState<ElementPosition>(
     ElementPosition.TOP,
   );
+
+  // Memoize the shouldShowHeader result to prevent multiple calculations
+  const showHeader = useMemo(() => {
+    return shouldShowHeader(props.message, props.prevMessage);
+  }, [props.message.id, props.message.sender, props.message.timestamp, props.prevMessage?.id, props.prevMessage?.sender, props.prevMessage?.timestamp]);
 
   const [selectedReaction, setSelectedReaction] = useState<
     | {
@@ -451,7 +463,7 @@ const Message = (props: MessageProps) => {
             />
           </ActionsContainerMobile>
         )}
-        {shouldShowHeader(props.message, props.prevMessage) && (
+        {showHeader && (
           <SenderInfoContainer>
             <ProfileIconContainerMsg>
               <Avatar size="sm" name={props.message.senderUsername} />

@@ -25,6 +25,10 @@ interface MessageRendererProps {
   privateIpfsEndpoint: string;
 }
 
+// Create ImageRepository singleton outside the function to prevent memory leaks
+// This ensures we reuse the same instance and its cache across all renders
+let imageRepositoryInstance: ImageRepository | null = null;
+
 const messageRender = ({
   accountId,
   isThread = false,
@@ -45,7 +49,12 @@ const messageRender = ({
   authToken,
   privateIpfsEndpoint,
 }: MessageRendererProps) => {
-  const store = new ImageRepository(getIconFromCache);
+  // Reuse the same ImageRepository instance to maintain cache and prevent memory leaks
+  if (!imageRepositoryInstance) {
+    imageRepositoryInstance = new ImageRepository(getIconFromCache);
+  }
+  const store = imageRepositoryInstance;
+  
   const openThread = (message: CurbMessage) => {
     if (!isThread && setThread) {
       setThread(message);

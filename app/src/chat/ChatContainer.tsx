@@ -107,8 +107,24 @@ export default function ChatContainer({
   const [messageWithEmojiSelector, setMessageWithEmojiSelector] =
     useState<CurbMessage | null>(null);
 
+  // Track last fetched channel to prevent excessive API calls
+  const lastFetchedChannelRef = useRef<string>("");
+
   useEffect(() => {
     const fetchChannelMeta = async () => {
+      // Skip for DMs - they don't have channel info
+      if (activeChat.type === "direct_message") {
+        setChannelMeta({} as ChannelInfo);
+        return;
+      }
+      
+      // Only fetch if we haven't fetched for this channel yet
+      if (lastFetchedChannelRef.current === activeChat.name) {
+        return;
+      }
+      
+      lastFetchedChannelRef.current = activeChat.name;
+      
       const channelMeta: ResponseData<ChannelInfo> =
         await new ClientApiDataSource().getChannelInfo({
           channel: { name: activeChat.name },
@@ -118,7 +134,7 @@ export default function ChatContainer({
       }
     };
     fetchChannelMeta();
-  }, [activeChat]);
+  }, [activeChat.name, activeChat.type]);
 
   const activeChatRef = useRef(activeChat);
   const membersListRef = useRef(membersList);
@@ -209,13 +225,17 @@ export default function ChatContainer({
 
     // Add optimistic message immediately (if function is provided)
     if (addOptimisticMessage && !isThread) {
+      // For DMs, use the DM-specific identity (activeChat.account)
+      // For Channels, use the main identity (getExecutorPublicKey)
+      const sender = isDM ? (activeChatRef.current?.account || getExecutorPublicKey() || "") : (getExecutorPublicKey() || "");
+      
       const optimisticMessage: CurbMessage = {
         id: `temp-${Date.now()}`,
         text: message,
         nonce: Math.random().toString(36).substring(2, 15),
         key: `temp-${Date.now()}`,
         timestamp: Date.now(),
-        sender: getExecutorPublicKey() || "",
+        sender: sender,
         senderUsername: localStorage.getItem("chat-username") || undefined,
         reactions: {},
         editedOn: undefined,

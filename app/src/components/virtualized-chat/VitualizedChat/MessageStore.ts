@@ -11,6 +11,7 @@ type InternalMessage<T> = T & { version?: number };
 class MessageStore<
   T extends {
     id: string;
+    timestamp: number;
   },
 > {
   public messages: InternalMessage<T>[] = [];
@@ -43,56 +44,101 @@ class MessageStore<
   }
 
   prepend(messages: T[]): void {
-    this.messages = messages.concat(this.messages);
-    this.startOffset -= messages.length;
-    this.updateLookup(messages, true);
+    // Sort messages by timestamp to ensure correct chronological order
+    const sortedMessages = [...messages].sort((a, b) => a.timestamp - b.timestamp);
+    this.messages = sortedMessages.concat(this.messages);
+    this.startOffset -= sortedMessages.length;
+    this.updateLookup(sortedMessages, true);
   }
 
   initial(messages: T[]): void {
     this.reset();
-    this.append(messages);
+    // Sort messages by timestamp to ensure correct chronological order
+    const sortedMessages = [...messages].sort((a, b) => a.timestamp - b.timestamp);
+    this.append(sortedMessages);
   }
 
   append(messages: T[]): { addedCount: number; updatedCount: number } {
-    // Filter out messages that already exist in the store
-    let newMessages = messages.filter(msg => !this.messageMap.has(msg.id));
-    let updatedCount = 0;
+    if (messages.length === 0) {
+      return { addedCount: 0, updatedCount: 0 };
+    }
     
-    // Replace optimistic messages with real messages by updating in place (no flicker)
-    // This handles the case where an optimistic temp-123 message should become a real message
-    if (newMessages.length > 0) {
-      const realMessages = newMessages.filter(msg => !msg.id.startsWith('temp-'));
-      
-      if (realMessages.length > 0) {
-        // Find and update optimistic messages that match real messages
-        realMessages.forEach((realMsg: any) => {
-          const matchingTempMsg = this.messages.find((existingMsg: any) => 
-            existingMsg.id.startsWith('temp-') &&
-            existingMsg.text === realMsg.text && 
-            Math.abs(existingMsg.timestamp - realMsg.timestamp) < 5000
-          );
-          
-          if (matchingTempMsg) {
-            // Update the temp message in place WITHOUT changing the ID
-            // This keeps the React key stable and prevents remounting/flicker
-            const { id, ...realDataWithoutId } = realMsg;
-            this._updateWithoutVersion(matchingTempMsg.id, realDataWithoutId as Partial<T>);
-            updatedCount++;
-            // Remove this real message from newMessages since we updated the temp one
-            newMessages = newMessages.filter(m => m.id !== id);
-          }
-        });
-      }
-      
-      // Add any remaining new messages that weren't updates
-      if (newMessages.length > 0) {
-        this.updateLookup(newMessages);
-        this.messages = this.messages.concat(newMessages);
-        this.endOffset += newMessages.length;
+    let updatedCount = 0;
+    const messagesToAdd: T[] = [];
+    const idsToSkip = new Set<string>();
+    
+    // Build temp messages lookup map once - O(m) where m = existing messages
+    const tempMessagesMap = new Map<string, any>();
+    const tempMessagesByContent = new Map<string, any>();
+    
+    for (const existingMsg of this.messages) {
+      if ((existingMsg as any).id.startsWith('temp-')) {
+        const msg = existingMsg as any;
+        // Primary key: exact match on content and timestamp (rounded to second)
+        const exactKey = `${msg.sender}:${msg.text}:${Math.floor(msg.timestamp / 1000)}`;
+        tempMessagesMap.set(exactKey, msg);
+        
+        // Secondary key: for fuzzy matching with timestamp tolerance
+        const contentKey = `${msg.sender}:${msg.text}`;
+        if (!tempMessagesByContent.has(contentKey)) {
+          tempMessagesByContent.set(contentKey, []);
+        }
+        tempMessagesByContent.get(contentKey).push(msg);
       }
     }
     
-    return { addedCount: newMessages.length, updatedCount };
+    // Process all incoming messages in a single pass - O(n)
+    for (const msg of messages) {
+      // Skip if already exists
+      if (this.messageMap.has(msg.id)) {
+        continue;
+      }
+      
+      // Check if this is a real message that matches a temp message
+      if (!msg.id.startsWith('temp-')) {
+        const realMsg = msg as any;
+        const exactKey = `${realMsg.sender}:${realMsg.text}:${Math.floor(realMsg.timestamp / 1000)}`;
+        let matchingTempMsg = tempMessagesMap.get(exactKey);
+        
+        // Try fuzzy matching if exact match failed
+        if (!matchingTempMsg) {
+          const contentKey = `${realMsg.sender}:${realMsg.text}`;
+          const candidates = tempMessagesByContent.get(contentKey);
+          
+          if (candidates) {
+            // Find first candidate within 10 second window
+            matchingTempMsg = candidates.find((tempMsg: any) => 
+              Math.abs(tempMsg.timestamp - realMsg.timestamp) < 10000
+            );
+          }
+        }
+        
+        if (matchingTempMsg) {
+          // Update temp message in place
+          const { id, ...realDataWithoutId } = realMsg;
+          this._updateWithoutVersion(matchingTempMsg.id, realDataWithoutId as Partial<T>);
+          updatedCount++;
+          idsToSkip.add(msg.id);
+          continue;
+        }
+      }
+      
+      // Add to list of messages to append
+      messagesToAdd.push(msg);
+    }
+    
+    // Sort and add new messages if any
+    if (messagesToAdd.length > 0) {
+      // Sort by timestamp for chronological order
+      messagesToAdd.sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Update lookup and append
+      this.updateLookup(messagesToAdd);
+      this.messages = this.messages.concat(messagesToAdd);
+      this.endOffset += messagesToAdd.length;
+    }
+    
+    return { addedCount: messagesToAdd.length, updatedCount };
   }
 
   _update(oldId: string, updatedFields: Partial<T>): void {
