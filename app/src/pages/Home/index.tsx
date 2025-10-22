@@ -188,6 +188,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       }
     }
     
+    // Refresh channels list after a short delay to show updated unread counts
+    // This ensures the UI reflects that messages have been read
+    setTimeout(() => {
+      debouncedFetchChannels();
+    }, 500);
+    
     // Subscribe to websocket events for this chat
     if (app && subscriptionRef.current) {
       const useDM = (selectedChat.type === "direct_message" &&

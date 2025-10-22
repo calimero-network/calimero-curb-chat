@@ -67,19 +67,25 @@ export function useChatHandlers(
         if (shouldMarkAsRead) {
           lastReadMessageRef.current = { chatId, timestamp: now };
           
-          // Mark messages as read (but don't await to prevent blocking)
+          // Mark messages as read and refresh the list to update unread counts
           if (activeChat?.type === "channel") {
             const lastMessage = newMessages[newMessages.length - 1];
             if (lastMessage?.timestamp) {
               new ClientApiDataSource().readMessage({
                 channel: { name: activeChat?.name },
                 timestamp: lastMessage.timestamp,
+              }).then(() => {
+                // Refresh channels list to update unread count
+                debouncedFetchChannels();
               }).catch((error) => log.error("ChatHandlers", "Failed to mark message as read", error));
             }
             playSoundForMessage(lastMessage.id, 'message', false);
           } else {
             new ClientApiDataSource().readDm({
               other_user_id: activeChatRef.current?.name || "",
+            }).then(() => {
+              // Refresh DMs list to update unread count
+              debouncedFetchDms();
             }).catch((error) => log.error("ChatHandlers", "Failed to mark DM as read", error));
           }
         }
@@ -138,52 +144,96 @@ export function useChatHandlers(
 
   /**
    * Handle execution events inside StateMutation
-   * These are the specific events from the Rust backend
+   * Map each event type to its specific data refresh action
    */
-  const handleExecutionEvents = useCallback((executionEvents: ExecutionEventData[]) => {
-    // Track which actions we need to take to avoid duplicates
-    let needsChannelRefresh = false;
-    let needsDMRefresh = false;
+  const handleExecutionEvents = useCallback((executionEvents: ExecutionEventData[], useDM: boolean) => {
+    // Track which specific actions we need to take
+    const actions = {
+      fetchMessages: false,
+      fetchChannels: false,
+      fetchDMs: false,
+      fetchMembers: false,
+    };
     
     for (const executionEvent of executionEvents) {
       switch (executionEvent.kind) {
         case "MessageSent":
         case "MessageReceived":
-          // Skip - already handled by checkForNewMessages
+          // Fetch new messages for current chat
+          actions.fetchMessages = true;
           break;
+          
+        case "ReactionUpdated":
+          // Fetch messages to get updated reactions
+          actions.fetchMessages = true;
+          break;
+          
         case "ChannelCreated":
-        case "ChannelJoined":
-        case "ChannelLeft":
-        case "ChannelInvited":
-          needsChannelRefresh = true;
+          // Refresh channel list only
+          actions.fetchChannels = true;
           break;
+          
+        case "ChannelJoined":
+          // Refresh channel list and members
+          actions.fetchChannels = true;
+          actions.fetchMembers = true;
+          break;
+          
+        case "ChannelLeft":
+          // Refresh channel list and members
+          actions.fetchChannels = true;
+          actions.fetchMembers = true;
+          break;
+          
+        case "ChannelInvited":
+          // Refresh channel list and members
+          actions.fetchChannels = true;
+          actions.fetchMembers = true;
+          break;
+          
         case "DMCreated":
+          // Refresh DM list only
+          actions.fetchDMs = true;
+          break;
+          
         case "InvitationAccepted":
+          // Refresh DM list only
+          actions.fetchDMs = true;
+          break;
+          
         case "NewIdentityUpdated":
         case "InvitationPayloadUpdated":
-          needsDMRefresh = true;
+          // Refresh DM list to update metadata
+          actions.fetchDMs = true;
           break;
-        case "ReactionUpdated":
-          // Already handled by message refresh
-          break;
+          
         case "ChatInitialized":
-          // Initial setup event
+          // Full refresh on initialization
+          actions.fetchChannels = true;
+          actions.fetchDMs = true;
           break;
       }
     }
     
-    // Execute actions only once per batch
-    if (needsChannelRefresh) {
+    // Execute only the necessary actions (all are debounced to prevent spam)
+    if (actions.fetchMessages) {
+      handleMessageUpdates(useDM);
+    }
+    if (actions.fetchChannels) {
       debouncedFetchChannels();
     }
-    if (needsDMRefresh) {
+    if (actions.fetchDMs) {
       debouncedFetchDms();
     }
-  }, [debouncedFetchChannels, debouncedFetchDms]);
+    if (actions.fetchMembers && !useDM) {
+      debouncedReFetchChannelMembers();
+    }
+  }, [handleMessageUpdates, debouncedFetchChannels, debouncedFetchDms, debouncedReFetchChannelMembers]);
 
   /**
    * Handle state mutation events (most common websocket event)
    * StateMutation contains an array of execution events in event.data.events
+   * Each event type triggers only the specific data refresh it needs
    */
   const handleStateMutation = useCallback(async (event: WebSocketEvent) => {
     const sessionChat = getStoredSession();
@@ -192,29 +242,11 @@ export function useChatHandlers(
       !sessionChat?.canJoin &&
       sessionChat?.otherIdentityNew) as boolean;
 
-    // Check if this StateMutation has MessageSent or MessageReceived events
-    // Only fetch messages if there are actual message events
-    const hasMessageEvents = event.data?.events?.some(e => 
-      e.kind === 'MessageSent' || e.kind === 'MessageReceived'
-    );
-    
-    if (hasMessageEvents) {
-      // Only fetch messages if there were actual message events
-      await handleMessageUpdates(useDM);
-    }
-
-    // Process specific execution events if present
+    // Process execution events if present - this handles all the specific refreshes
     if (event.data?.events && event.data.events.length > 0) {
-      handleExecutionEvents(event.data.events);
+      handleExecutionEvents(event.data.events, useDM);
     }
-
-    // Only refetch members for channel chats and only if relevant events occurred
-    if (sessionChat?.type === "channel" && event.data?.events?.some(e => 
-      e.kind === 'ChannelJoined' || e.kind === 'ChannelLeft' || e.kind === 'ChannelInvited'
-    )) {
-      debouncedReFetchChannelMembers();
-    }
-  }, [handleMessageUpdates, handleExecutionEvents, debouncedFetchDms, debouncedReFetchChannelMembers]);
+  }, [handleExecutionEvents]);
 
   return {
     handleMessageUpdates,

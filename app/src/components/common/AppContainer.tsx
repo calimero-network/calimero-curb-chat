@@ -1,4 +1,5 @@
 import { styled } from "styled-components";
+import { memo } from 'react';
 import type { ActiveChat, ChannelMeta, ChatMessagesData, ChatMessagesDataWithOlder, CurbMessage } from "../../types/Common";
 import ChannelsContainer from "./ChannelsContainer";
 import CurbNavbar from "../navbar/CurbNavbar";
@@ -51,7 +52,7 @@ interface AppContainerProps {
   currentOpenThreadRef: React.RefObject<CurbMessage | undefined>;
   addOptimisticMessage?: (message: CurbMessage) => void;
 }
-export default function AppContainer({
+function AppContainer({
   activeChat,
   isSidebarOpen,
   setIsSidebarOpen,
@@ -143,3 +144,5 @@ export default function AppContainer({
     </>
   );
 }
+
+export default memo(AppContainer);

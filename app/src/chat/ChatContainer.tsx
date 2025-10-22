@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { styled } from "styled-components";
 import { StorageHelper } from "../utils/storage";
 import { log } from "../utils/logger";
@@ -79,7 +79,7 @@ const ChatContainerWrapper = styled.div`
 //   }
 // `;
 
-export default function ChatContainer({
+function ChatContainer({
   activeChat,
   setIsOpenSearchChannel,
   onJoinedChat,
@@ -500,40 +500,4 @@ export default function ChatContainer({
   );
 }
 
-{
-  /* {openThread && openThread.id && (
-            <ThreadWrapper>
-              <ChatDisplaySplit
-                readMessage={() => {}}
-                handleReaction={handleReaction}
-                openThread={openThread}
-                setOpenThread={setOpenThread}
-                activeChat={activeChat}
-                updatedMessages={updatedThreadMessages}
-                resetImage={() => {}}
-                sendMessage={(message: string) => sendMessage(message, true)}
-                getIconFromCache={getIconFromCache}
-                isThread={true}
-                isReadOnly={activeChat.readOnly ?? false}
-                toggleEmojiSelector={toggleEmojiSelector}
-                channelMeta={channelMeta}
-                channelUserList={channelUserList}
-                openMobileReactions={openMobileReactions}
-                setOpenMobileReactions={setOpenMobileReactions}
-                onMessageDeletion={handleDeleteMessage}
-                onEditModeRequested={handleEditMode}
-                onEditModeCancelled={handleEditMode}
-                onMessageUpdated={handleEditedMessage}
-                loadInitialChatMessages={() =>
-                  loadInitialThreadMessages(openThread.id)
-                }
-                incomingMessages={incomingThreadMessages}
-                loadPrevMessages={loadPrevThreadMessages}
-                currentOpenThreadRef={currentOpenThreadRef}
-                isEmojiSelectorVisible={isEmojiSelectorVisible}
-                setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
-                messageWithEmojiSelector={messageWithEmojiSelector}
-              />
-            </ThreadWrapper>
-          )} */
-}
+export default memo(ChatContainer);
