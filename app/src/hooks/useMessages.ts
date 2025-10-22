@@ -143,10 +143,11 @@ export function useMessages() {
 
   /**
    * Add incoming messages (from websocket) 
-   * Replaces any optimistic messages with the same text
+   * MessageStore handles deduplication of optimistic messages
    */
   const addIncoming = useCallback((newMessages: CurbMessage[]) => {
     if (newMessages.length > 0) {
+      // Just pass to VirtualizedChat - MessageStore will handle cleanup
       setIncomingMessages(newMessages);
     }
   }, []);

@@ -55,9 +55,35 @@ class MessageStore<
 
   append(messages: T[]): void {
     // Filter out messages that already exist in the store
-    const newMessages = messages.filter(msg => !this.messageMap.has(msg.id));
+    let newMessages = messages.filter(msg => !this.messageMap.has(msg.id));
     
+    // Also remove optimistic messages that match real messages by content
+    // This handles the case where an optimistic temp-123 message should be replaced by real message
     if (newMessages.length > 0) {
+      const hasRealMessages = newMessages.some(msg => !msg.id.startsWith('temp-'));
+      
+      if (hasRealMessages) {
+        // Remove any temp- messages that match the content of real messages
+        const realMessages = newMessages.filter(msg => !msg.id.startsWith('temp-'));
+        this.messages = this.messages.filter(existingMsg => {
+          // Keep non-temp messages
+          if (!existingMsg.id.startsWith('temp-')) return true;
+          
+          // Remove temp message if we have a real one with same text and similar timestamp
+          const hasMatchingReal = realMessages.some((realMsg: any) => 
+            realMsg.text === (existingMsg as any).text && 
+            Math.abs((realMsg as any).timestamp - (existingMsg as any).timestamp) < 5000
+          );
+          
+          if (hasMatchingReal) {
+            // Remove from messageMap too
+            this.messageMap.delete(existingMsg.id);
+            return false;
+          }
+          return true;
+        });
+      }
+      
       this.updateLookup(newMessages);
       this.messages = this.messages.concat(newMessages);
       this.endOffset += newMessages.length;
