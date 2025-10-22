@@ -21,10 +21,14 @@ export function usePersistentState<T>(
   };
   
   // Listen for changes from other instances
+  // Using a ref to avoid adding state to dependencies (prevents loops)
   useEffect(() => {
+    const stateRef = { current: state };
+    stateRef.current = state;
+    
     const handleStorageChange = () => {
       const storedValue = globalStore.get(key);
-      if (storedValue !== undefined && storedValue !== state) {
+      if (storedValue !== undefined && storedValue !== stateRef.current) {
         setState(storedValue);
       }
     };
@@ -33,7 +37,7 @@ export function usePersistentState<T>(
     const interval = setInterval(handleStorageChange, 500);
     
     return () => clearInterval(interval);
-  }, [key, state]);
+  }, [key]); // Removed state from dependencies to prevent unnecessary intervals
   
   return [state, setPersistentState];
 }

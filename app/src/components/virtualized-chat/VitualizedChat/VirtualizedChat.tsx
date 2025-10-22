@@ -146,24 +146,23 @@ const VirtualizedChat = <T extends Message>({
   
   // Ensure scroll to bottom after messages are loaded and component is rendered
   useEffect(() => {
-    if (!isLoadingInitial && messages.length > 0) {
-      // Multiple scroll attempts with increasing delays to ensure it works
-      const scrollAttempts = [50, 100, 200, 400];
-      
-      scrollAttempts.forEach((delay) => {
+    if (!isLoadingInitial && messages.length > 0 && listHandler.current) {
+      // Use requestAnimationFrame to ensure DOM is ready, then scroll after a short delay
+      requestAnimationFrame(() => {
         setTimeout(() => {
           if (listHandler.current) {
-            log.debug('VirtualizedChat', `Scroll attempt at ${delay}ms for chat ${chatId}`);
+            log.debug('VirtualizedChat', `Scrolling to bottom for chat ${chatId} with ${messages.length} messages`);
+            // Use LAST index which is more reliable than counting messages
             listHandler.current.scrollToIndex({ 
-              index: messages.length - 1,
+              index: 'LAST',
               align: 'end',
               behavior: 'auto'
             });
           }
-        }, delay);
+        }, 100);
       });
     }
-  }, [isLoadingInitial, chatId]);
+  }, [isLoadingInitial, messages.length, chatId]);
 
   useEffect(() => {
     if (incomingMessages.length > 0) {
@@ -274,6 +273,7 @@ const VirtualizedChat = <T extends Message>({
           followOutput={handleFollowOutput}
           data={messages}
           alignToBottom
+          initialTopMostItemIndex={messages.length - 1}
           startReached={handleLoadMore}
           endReached={handleEndReached}
           rangeChanged={reportLastRenderedItem}

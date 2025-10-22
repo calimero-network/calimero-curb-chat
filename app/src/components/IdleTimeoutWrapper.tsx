@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, memo } from 'react';
 import { useCalimero } from '@calimero-network/calimero-client';
 import { clearStoredSession, clearDmContextId, updateSessionActivity, clearSessionActivity } from '../utils/session';
 
@@ -15,7 +15,7 @@ interface IdleTimeoutWrapperProps {
   timeoutMs?: number;
 }
 
-export default function IdleTimeoutWrapper({ 
+const IdleTimeoutWrapper = memo(function IdleTimeoutWrapper({ 
   children, 
   timeoutMs = 3600000 // 1 hour
 }: IdleTimeoutWrapperProps) {
@@ -88,4 +88,6 @@ export default function IdleTimeoutWrapper({
   }, []);
 
   return <>{children}</>;
-}
+});
+
+export default IdleTimeoutWrapper;

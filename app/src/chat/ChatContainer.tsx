@@ -325,8 +325,7 @@ function ChatContainer({
         updateDeletedMessage(message);
       }
     },
-    // TODO
-    [activeChatRef, currentOpenThreadRef]
+    [] // Uses refs which don't need to be in dependencies
   );
 
   const handleEditMode = useCallback(
@@ -339,10 +338,9 @@ function ChatContainer({
           },
         },
       ];
-      // TODO
       setUpdatedMessages(update);
     },
-    [currentOpenThreadRef]
+    [] // No external dependencies needed
   );
 
   const handleEditedMessage = useCallback(
@@ -371,10 +369,9 @@ function ChatContainer({
           },
         ];
         setUpdatedMessages(update);
-        // TODO
       }
     },
-    [activeChatRef, currentOpenThreadRef]
+    [] // Uses refs which don't need to be in dependencies
   );
 
   const selectThread = (message: CurbMessage) => {

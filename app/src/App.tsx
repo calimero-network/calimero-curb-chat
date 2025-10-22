@@ -12,7 +12,6 @@ const PWAInstallPrompt = lazy(() => import("./components/PWAInstallPrompt"));
 
 function App() {
   const { isAuthenticated, logout } = useCalimero();
-  const authConfig = getAuthConfig();
   const [isConfigSet, setIsConfigSet] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const hasInitializedRef = useRef(false);
@@ -22,6 +21,8 @@ function App() {
     if (hasInitializedRef.current) return;
     
     const timer = setTimeout(() => {
+      // Get authConfig inside effect to avoid unnecessary re-renders
+      const authConfig = getAuthConfig();
       const hasRequiredConfig =
         authConfig?.appEndpointKey &&
         authConfig?.contextId &&
@@ -34,7 +35,7 @@ function App() {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [authConfig]);
+  }, []); // Empty deps - only run once on mount
 
   // Check for expired session on app initialization and initialize session activity
   useEffect(() => {

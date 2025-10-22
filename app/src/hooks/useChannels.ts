@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { Channels } from "../api/clientApi";
@@ -57,11 +57,18 @@ export function useChannels() {
     }
   }, []);
 
-  // Memoized debounced version
+  // Memoized debounced version with cleanup
   const debouncedFetch = useMemo(
     () => debounce(fetchChannels, DEBOUNCE_FETCH_DELAY_MS),
     [fetchChannels]
   );
+  
+  // Cleanup debounced function on unmount
+  useEffect(() => {
+    return () => {
+      debouncedFetch.cancel();
+    };
+  }, [debouncedFetch]);
 
   return {
     channels,

@@ -235,8 +235,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     setTimeout(() => {
       updateSelectedActiveChat(chatToUse);
     }, SUBSCRIPTION_INIT_DELAY_MS);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Only run once on mount - intentionally omitting dependencies as this is initialization logic
 
   // Track last DM selection to prevent rapid re-selections
   const lastDMSelectionRef = useRef<{ contextId: string; timestamp: number } | null>(null);

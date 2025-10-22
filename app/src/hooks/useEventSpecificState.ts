@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { ExecutionEventKind } from '../types/WebSocketTypes';
+import { log } from '../utils/logger';
 
 /**
  * Hook for managing state that only updates on specific events
@@ -68,7 +69,7 @@ export function useEventSpecificState<T>(config: StateUpdateConfig<T>) {
         const newData = await config.fetchData();
         setState(newData);
       } catch (error) {
-        console.error('Failed to update state:', error);
+        log.error('EventSpecificState', 'Failed to update state', error);
       } finally {
         setIsLoading(false);
       }
@@ -85,7 +86,7 @@ export function useEventSpecificState<T>(config: StateUpdateConfig<T>) {
       setState(newData);
       lastUpdateRef.current = Date.now();
     } catch (error) {
-      console.error('Failed to refresh state:', error);
+      log.error('EventSpecificState', 'Failed to refresh state', error);
     } finally {
       setIsLoading(false);
     }
