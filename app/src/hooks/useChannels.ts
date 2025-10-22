@@ -17,11 +17,11 @@ export function useChannels() {
   const fetchChannels = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response: ResponseData<Channels> =
         await new ClientApiDataSource().getChannels();
-      
+
       if (response.data) {
         const channelsArray: ChannelMeta[] = Object.entries(response.data).map(
           ([name, channelInfo]) => ({
@@ -41,7 +41,7 @@ export function useChannels() {
             isMember: false,
             readOnly: channelInfo.read_only,
             createdAt: new Date(channelInfo.created_at * 1000).toISOString(),
-          })
+          }),
         );
         setChannels(channelsArray);
       } else if (response.error) {

@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import MessageStore from '../MessageStore';
-import { log } from '../../../../utils/logger';
+import { useState, useRef, useEffect, useCallback } from "react";
+import MessageStore from "../MessageStore";
+import { log } from "../../../../utils/logger";
 
 interface Message {
   id: string;
@@ -10,7 +10,9 @@ interface Message {
 interface UseMessageLoaderProps<T extends Message> {
   chatId: string;
   loadInitialMessages: () => Promise<{ messages: T[]; totalCount: number }>;
-  loadPrevMessages: (id: string) => Promise<{ messages: T[]; hasOlder: boolean }>;
+  loadPrevMessages: (
+    id: string,
+  ) => Promise<{ messages: T[]; hasOlder: boolean }>;
   store: MessageStore<T>;
   onLoadComplete?: () => void;
 }
@@ -39,13 +41,13 @@ export function useMessageLoader<T extends Message>({
   const [hasMore, setHasMore] = useState<boolean>(false);
   const [firstItemIndex, setFirstItemIndex] = useState<number>(10000);
   const [totalCount, setTotalCount] = useState<number>(10000);
-  
+
   const isInitialLoadingRef = useRef<boolean>(false);
 
   // Keep refs updated to avoid including callbacks in dependency arrays
   const onLoadCompleteRef = useRef(onLoadComplete);
   const loadInitialMessagesRef = useRef(loadInitialMessages);
-  
+
   useEffect(() => {
     onLoadCompleteRef.current = onLoadComplete;
     loadInitialMessagesRef.current = loadInitialMessages;
@@ -53,12 +55,12 @@ export function useMessageLoader<T extends Message>({
 
   const fetchInitialMessages = useCallback(async () => {
     if (isInitialLoadingRef.current) return;
-    
+
     isInitialLoadingRef.current = true;
     setIsLoadingInitial(true);
 
     try {
-      const { messages: initialMessages, totalCount: totalItems } = 
+      const { messages: initialMessages, totalCount: totalItems } =
         await loadInitialMessagesRef.current();
 
       store.initial(initialMessages);
@@ -67,7 +69,7 @@ export function useMessageLoader<T extends Message>({
       setFirstItemIndex(totalItems - initialMessages.length);
       setTotalCount(totalItems);
     } catch (error) {
-      log.error('useMessageLoader', 'Failed to load initial messages', error);
+      log.error("useMessageLoader", "Failed to load initial messages", error);
     } finally {
       setIsLoadingInitial(false);
       isInitialLoadingRef.current = false;
@@ -77,7 +79,12 @@ export function useMessageLoader<T extends Message>({
 
   const handleLoadMore = useCallback(async () => {
     // Prevent concurrent loads and respect loading state
-    if (isLoadingOlder || !hasMore || isLoadingInitial || messages.length === 0) {
+    if (
+      isLoadingOlder ||
+      !hasMore ||
+      isLoadingInitial ||
+      messages.length === 0
+    ) {
       return;
     }
 
@@ -100,12 +107,15 @@ export function useMessageLoader<T extends Message>({
         setFirstItemIndex((prev) => prev - olderMessages.length);
         store.prepend(olderMessages);
         setMessages([...store.messages]);
-        
-        log.debug('useMessageLoader', `Prepended ${olderMessages.length} older messages`);
+
+        log.debug(
+          "useMessageLoader",
+          `Prepended ${olderMessages.length} older messages`,
+        );
       }
       setHasMore(olderHasMore);
     } catch (error) {
-      log.error('useMessageLoader', 'Failed to load older messages', error);
+      log.error("useMessageLoader", "Failed to load older messages", error);
     } finally {
       // Set loading false immediately - no delay needed
       setIsLoadingOlder(false);
@@ -119,12 +129,15 @@ export function useMessageLoader<T extends Message>({
     store,
   ]);
 
-  const updateMessages = useCallback((newMessages: T[], addedCount: number = 0) => {
-    setMessages(newMessages);
-    if (addedCount > 0) {
-      setTotalCount((prev) => prev + addedCount);
-    }
-  }, []);
+  const updateMessages = useCallback(
+    (newMessages: T[], addedCount: number = 0) => {
+      setMessages(newMessages);
+      if (addedCount > 0) {
+        setTotalCount((prev) => prev + addedCount);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (chatId && !isInitialLoadingRef.current) {
@@ -143,4 +156,3 @@ export function useMessageLoader<T extends Message>({
     updateMessages,
   };
 }
-

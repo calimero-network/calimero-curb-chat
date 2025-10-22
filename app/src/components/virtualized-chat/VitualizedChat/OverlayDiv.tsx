@@ -1,7 +1,7 @@
-import styled from 'styled-components';
+import styled from "styled-components";
 
 export const OverlayDiv = styled.div<{
-  type?: 'loading' | 'noMessages';
+  type?: "loading" | "noMessages";
 }>`
   width: 100%;
   height: 100%;

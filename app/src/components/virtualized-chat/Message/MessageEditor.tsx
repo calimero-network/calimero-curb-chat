@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import styled from 'styled-components';
+import { useEffect, useState } from "react";
+import styled from "styled-components";
 
-import EmojiSelectorPopup from '../EmojiSelector/EmojiSelectorPopup';
-import InputField from '../InputField/InputField';
-import type { AccountData } from '../types/curbTypes';
+import EmojiSelectorPopup from "../EmojiSelector/EmojiSelectorPopup";
+import InputField from "../InputField/InputField";
+import type { AccountData } from "../types/curbTypes";
 
-import AutocompleteList from './AutocompleteList';
+import AutocompleteList from "./AutocompleteList";
 
 interface MessageEditorProps {
   text: string;
@@ -142,7 +142,7 @@ const EmojiWink = ({ onClick }: EmojiWinkProps) => {
         width="18"
         height="18"
         fill="#686672"
-        className={`bi bi-emoji-wink ${hovered ? 'hidden-svg' : 'visible-svg'}`}
+        className={`bi bi-emoji-wink ${hovered ? "hidden-svg" : "visible-svg"}`}
         viewBox="0 0 16 16"
       >
         <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z" />
@@ -154,7 +154,7 @@ const EmojiWink = ({ onClick }: EmojiWinkProps) => {
         height="18"
         fill="#73B30C"
         className={`bi bi-emoji-wink-fill ${
-          hovered ? 'visible-svg' : 'hidden-svg'
+          hovered ? "visible-svg" : "hidden-svg"
         }`}
         viewBox="0 0 16 16"
       >
@@ -219,8 +219,8 @@ function MessageEditor({
   const [showAutocomplete, setShowAutocomplete] = useState(false);
 
   const autoCompleteAccountId = (accountId: string) => {
-    let tempText = inputText.replace(/[\s]{0,1}@[^\s]*$/, '');
-    tempText = `${tempText} @${accountId}`.trim() + ' \u200B';
+    let tempText = inputText.replace(/[\s]{0,1}@[^\s]*$/, "");
+    tempText = `${tempText} @${accountId}`.trim() + " \u200B";
     setInputText(tempText);
     setShowAutocomplete(false);
   };
@@ -230,7 +230,7 @@ function MessageEditor({
     setShowAutocomplete(showAccountAutocomplete);
   }, [inputText]);
 
-  const INPUT_FIELD_EMPTY_VALUE = '<p><br></p>';
+  const INPUT_FIELD_EMPTY_VALUE = "<p><br></p>";
 
   const updateEditedMessage = (libValue?: string) => {
     const updatedValue = libValue ?? inputText;
@@ -247,16 +247,16 @@ function MessageEditor({
       setInputText(`<p>${emoji}</p>`);
     }
     const endingsToCheck = [
-      '<br>',
-      '<br></p>',
-      '</p>',
-      '</strong>',
-      '<br></li></ul>',
-      '</li></ul>',
-      '</em>',
-      '</u>',
-      '<br></li></ol>',
-      '</li></ol>',
+      "<br>",
+      "<br></p>",
+      "</p>",
+      "</strong>",
+      "<br></li></ul>",
+      "</li></ul>",
+      "</em>",
+      "</u>",
+      "<br></li></ol>",
+      "</li></ol>",
     ];
 
     for (const ending of endingsToCheck) {
@@ -268,7 +268,7 @@ function MessageEditor({
   };
 
   useEffect(() => {
-    const term = inputText.split('@').pop()?.split('<')[0];
+    const term = inputText.split("@").pop()?.split("<")[0];
     if (term && showAutocomplete) {
       fetchAccounts(term.toLowerCase());
     }
@@ -302,18 +302,18 @@ function MessageEditor({
         <EmojiWink onClick={() => setOpenEmojisPopup(!openEmojisPopup)} />
         <SendIcon
           onClick={() => updateEditedMessage()}
-          fill={inputText !== INPUT_FIELD_EMPTY_VALUE ? '#4E95FF' : '#686672'}
+          fill={inputText !== INPUT_FIELD_EMPTY_VALUE ? "#4E95FF" : "#686672"}
         />
       </div>
       <div className="helperWrapper">
         <IconFile />
         <div className="helperTitle">Editing message</div>
         <div className="helperOptions">
-          escape to{' '}
+          escape to{" "}
           <span className="option" onClick={onCancelEdit}>
             cancel
-          </span>{' '}
-          - enter to{' '}
+          </span>{" "}
+          - enter to{" "}
           <span className="option" onClick={() => updateEditedMessage()}>
             save
           </span>

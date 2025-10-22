@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useState,
-  useRef,
-} from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
   MessageStatus,
@@ -38,9 +33,7 @@ import type { MessageWithReactions } from "../../api/clientApi";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
 import { generateDMParams } from "../../utils/dmSetupState";
 import useNotificationSound from "../../hooks/useNotificationSound";
-import {
-  SUBSCRIPTION_INIT_DELAY_MS,
-} from "../../constants/app";
+import { SUBSCRIPTION_INIT_DELAY_MS } from "../../constants/app";
 import { log } from "../../utils/logger";
 import type { WebSocketEvent } from "../../types/WebSocketTypes";
 import { useChannels } from "../../hooks/useChannels";
@@ -63,11 +56,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const activeChatRef = useRef<ActiveChat | null>(null);
   const currentOpenThreadRef = useRef<CurbMessage | undefined>(undefined);
   const [openThread, setOpenThread] = useState<CurbMessage | undefined>(
-    undefined
+    undefined,
   );
-  
+
   // Ref for subscription to avoid circular dependency
-  const subscriptionRef = useRef<{ subscribe: (contextId: string) => void } | null>(null);
+  const subscriptionRef = useRef<{
+    subscribe: (contextId: string) => void;
+  } | null>(null);
 
   // Use message hooks for cleaner message management
   const mainMessages = useMessages();
@@ -81,7 +76,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       respectFocus: true,
       respectMute: true,
     },
-    activeChat?.id
+    activeChat?.id,
   );
 
   // Use custom hooks for data management - simplified, no props needed
@@ -89,7 +84,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const dmsHook = useDMs();
   const chatMembersHook = useChatMembers();
   const channelMembersHook = useChannelMembers();
-  
+
   // Expose for compatibility with existing code
   const messagesRef = mainMessages.messagesRef;
   const incomingMessages = mainMessages.incomingMessages;
@@ -99,20 +94,19 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   // Initialize audio context on first user interaction
   useEffect(() => {
     const handleFirstInteraction = () => {
-      playSound('message'); // This will initialize the audio context
-      document.removeEventListener('click', handleFirstInteraction);
-      document.removeEventListener('keydown', handleFirstInteraction);
+      playSound("message"); // This will initialize the audio context
+      document.removeEventListener("click", handleFirstInteraction);
+      document.removeEventListener("keydown", handleFirstInteraction);
     };
 
-    document.addEventListener('click', handleFirstInteraction);
-    document.addEventListener('keydown', handleFirstInteraction);
+    document.addEventListener("click", handleFirstInteraction);
+    document.addEventListener("keydown", handleFirstInteraction);
 
     return () => {
-      document.removeEventListener('click', handleFirstInteraction);
-      document.removeEventListener('keydown', handleFirstInteraction);
+      document.removeEventListener("click", handleFirstInteraction);
+      document.removeEventListener("keydown", handleFirstInteraction);
     };
   }, [playSound]);
-
 
   useEffect(() => {
     if (!isConfigSet) {
@@ -127,14 +121,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   // Use channel members hook - store in refs to prevent re-renders
   const getChannelUsersRef = useRef(channelMembersHook.fetchChannelMembers);
   const getNonInvitedUsersRef = useRef(channelMembersHook.fetchNonInvitedUsers);
-  
+
   getChannelUsersRef.current = channelMembersHook.fetchChannelMembers;
   getNonInvitedUsersRef.current = channelMembersHook.fetchNonInvitedUsers;
-  
+
   const getChannelUsers = useCallback(async (id: string) => {
     return getChannelUsersRef.current(id);
   }, []);
-  
+
   const getNonInvitedUsers = useCallback(async (id: string) => {
     return getNonInvitedUsersRef.current(id);
   }, []);
@@ -142,52 +136,54 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const reFetchChannelMembers = useCallback(async () => {
     const isDM = activeChatRef.current?.type === "direct_message";
     await getChannelUsersRef.current(
-      (isDM ? "private_dm" : activeChatRef.current?.id) || ""
+      (isDM ? "private_dm" : activeChatRef.current?.id) || "",
     );
   }, []);
 
   // Track last chat to prevent duplicate fetches
   const lastSelectedChatIdRef = useRef<string>("");
-  
+
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
     // Find the channel metadata to get channelType
-    const channelMeta = channels.find((ch: ChannelMeta) => ch.name === selectedChat.name);
+    const channelMeta = channels.find(
+      (ch: ChannelMeta) => ch.name === selectedChat.name,
+    );
     if (channelMeta && selectedChat.type === "channel") {
       selectedChat.channelType = channelMeta.channelType;
     }
-    
+
     // Clear message state using hooks
     mainMessages.clear();
     threadMessages.clear();
     setOpenThread(undefined);
     setCurrentOpenThread(undefined);
-    
+
     // Then update the active chat
     setIsOpenSearchChannel(false);
     setActiveChat(selectedChat);
     activeChatRef.current = selectedChat;
     setIsSidebarOpen(false);
     updateSessionChat(selectedChat);
-    
+
     // Only fetch channel users/non-invited if this is a new chat
     // Prevents excessive API calls when re-selecting the same chat
     const chatId = selectedChat.id || selectedChat.name;
     if (lastSelectedChatIdRef.current !== chatId) {
       lastSelectedChatIdRef.current = chatId;
-      
+
       // Only fetch for channels, not for DMs
       if (selectedChat.type === "channel") {
         getChannelUsers(selectedChat.id);
         getNonInvitedUsers(selectedChat.id);
       }
     }
-    
+
     // Refresh channels list after a delay to show updated unread counts
     // Use longer delay to reduce API calls during rapid channel switching
     setTimeout(() => {
       channelsHook.fetchChannels();
     }, 1000);
-    
+
     // Subscribe to websocket events for this chat
     if (app && subscriptionRef.current) {
       const useDM = (selectedChat.type === "direct_message" &&
@@ -215,13 +211,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
     setActiveChat(storedSession);
     activeChatRef.current = storedSession;
-    
+
     // Only fetch channel members for actual channels, not DMs
     if (storedSession.type === "channel") {
       getChannelUsers(storedSession.name);
       getNonInvitedUsers(storedSession.name);
     }
-    
+
     mainMessages.clear();
     threadMessages.clear();
 
@@ -233,50 +229,67 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   }, []); // Only run once on mount
 
   // Track last DM selection to prevent rapid re-selections
-  const lastDMSelectionRef = useRef<{ contextId: string; timestamp: number } | null>(null);
-  
+  const lastDMSelectionRef = useRef<{
+    contextId: string;
+    timestamp: number;
+  } | null>(null);
+
   // Simple debounce timers - no complex closures
-  const channelsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const dmsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const membersDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  
+  const channelsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const dmsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const membersDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
   // Store latest fetch functions in refs
   const fetchChannelsRef = useRef(channelsHook.fetchChannels);
   const fetchDmsRef = useRef(dmsHook.fetchDms);
   const fetchMembersRef = useRef(chatMembersHook.fetchMembers);
-  
+
   // Update fetch refs every render (no useEffect needed)
   fetchChannelsRef.current = channelsHook.fetchChannels;
   fetchDmsRef.current = dmsHook.fetchDms;
   fetchMembersRef.current = chatMembersHook.fetchMembers;
-  
+
   // Create stable debounced wrappers
   const debouncedFetchChannels = useCallback(async () => {
     clearTimeout(channelsDebounceRef.current);
-    channelsDebounceRef.current = setTimeout(() => fetchChannelsRef.current(), 3000);
+    channelsDebounceRef.current = setTimeout(
+      () => fetchChannelsRef.current(),
+      3000,
+    );
   }, []);
-  
+
   const debouncedFetchDMs = useCallback(async () => {
     clearTimeout(dmsDebounceRef.current);
     dmsDebounceRef.current = setTimeout(() => fetchDmsRef.current(), 3000);
   }, []);
-  
+
   const debouncedFetchMembers = useCallback(async () => {
     clearTimeout(membersDebounceRef.current);
-    membersDebounceRef.current = setTimeout(() => fetchMembersRef.current(), 3000);
+    membersDebounceRef.current = setTimeout(
+      () => fetchMembersRef.current(),
+      3000,
+    );
   }, []);
 
   // Create refs for handlers
   const mainMessagesRef = useRef(mainMessages);
   const threadMessagesRef = useRef(threadMessages);
   const playSoundForMessageRef = useRef(playSoundForMessage);
-  const onDMSelectedRef = useRef<(dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void>(() => {});
-  
+  const onDMSelectedRef = useRef<
+    (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void
+  >(() => {});
+
   // Update refs every render (no useEffect to avoid triggering extra renders)
   mainMessagesRef.current = mainMessages;
   threadMessagesRef.current = threadMessages;
   playSoundForMessageRef.current = playSoundForMessage;
-  
+
   const chatHandlersRefs = useRef({
     mainMessages: mainMessagesRef,
     threadMessages: threadMessagesRef,
@@ -287,16 +300,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     fetchDMs: { current: debouncedFetchDMs },
     fetchMembers: { current: debouncedFetchMembers },
   }).current;
-  
+
   // Store updateSelectedActiveChat in ref to avoid dependency
   const updateSelectedActiveChatRef = useRef(updateSelectedActiveChat);
   updateSelectedActiveChatRef.current = updateSelectedActiveChat;
-  
-  
+
   const onDMSelected = useCallback(
     async (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => {
       const contextId = sc?.contextId || dm?.context_id || "";
-      
+
       // Prevent rapid re-selection of the same DM (within 1 second)
       const now = Date.now();
       if (
@@ -307,9 +319,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         log.debug("onDMSelected", "Skipping rapid re-selection of same DM");
         return;
       }
-      
+
       lastDMSelectionRef.current = { contextId, timestamp: now };
-      
+
       let canJoin = true;
       const verifyContextResponse = await apiClient
         .node()
@@ -358,7 +370,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       setDmContextId(sc?.contextId || dm?.context_id || "");
       mainMessagesRef.current.clear();
       threadMessagesRef.current.clear();
-      
+
       await updateSelectedActiveChatRef.current(selectedChat);
 
       if (refetch) {
@@ -372,35 +384,41 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         }
       }
     },
-    [] // NO DEPENDENCIES - everything through refs
+    [], // NO DEPENDENCIES - everything through refs
   );
-  
+
   // Update onDMSelected ref (no useEffect - direct assignment)
   onDMSelectedRef.current = onDMSelected;
 
-  const loadInitialChatMessages = useCallback(async (): Promise<ChatMessagesData> => {
-    const result = await mainMessagesRef.current.loadInitial(activeChatRef.current);
+  const loadInitialChatMessages =
+    useCallback(async (): Promise<ChatMessagesData> => {
+      const result = await mainMessagesRef.current.loadInitial(
+        activeChatRef.current,
+      );
 
-    if (activeChatRef.current?.type === "channel" && result.messages.length > 0) {
-      const lastMessage = result.messages[result.messages.length - 1];
-      if (lastMessage?.timestamp) {
-        await new ClientApiDataSource().readMessage({
-          channel: { name: activeChatRef.current.name },
-          timestamp: lastMessage.timestamp,
-        });
+      if (
+        activeChatRef.current?.type === "channel" &&
+        result.messages.length > 0
+      ) {
+        const lastMessage = result.messages[result.messages.length - 1];
+        if (lastMessage?.timestamp) {
+          await new ClientApiDataSource().readMessage({
+            channel: { name: activeChatRef.current.name },
+            timestamp: lastMessage.timestamp,
+          });
+        }
       }
-    }
 
-    return result;
-  }, []); // NO DEPENDENCIES - everything through refs
+      return result;
+    }, []); // NO DEPENDENCIES - everything through refs
 
   // Use custom hooks instead of local state + fetch functions
   const channels = channelsHook.channels;
   const fetchChannels = channelsHook.fetchChannels;
-  
+
   const privateDMs = dmsHook.dms;
   const fetchDms = dmsHook.fetchDms;
-  
+
   const chatMembers = chatMembersHook.members;
   const fetchChatMembers = chatMembersHook.fetchMembers;
 
@@ -411,11 +429,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     handleDMUpdates,
     handleStateMutation,
     handleExecutionEvents,
-  } = useChatHandlers(
-    activeChatRef,
-    activeChat,
-    chatHandlersRefs
-  );
+  } = useChatHandlers(activeChatRef, activeChat, chatHandlersRefs);
 
   // Track event processing to prevent overlap
   const isProcessingEventRef = useRef(false);
@@ -444,13 +458,16 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       // Since all events are StateMutations, only process the latest one
       // (it will fetch all new messages anyway)
       const latestEvent = events[events.length - 1];
-      
+
       if (import.meta.env.DEV && events.length > 1) {
-        log.debug('WebSocket', `Batched ${events.length} StateMutations, processing only the latest`);
+        log.debug(
+          "WebSocket",
+          `Batched ${events.length} StateMutations, processing only the latest`,
+        );
       }
 
       await handleStateMutation(latestEvent);
-      
+
       // Also handle thread messages if a thread is open
       if (openThread) {
         const sessionChat = getStoredSession();
@@ -458,57 +475,60 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           sessionChat?.account &&
           !sessionChat?.canJoin &&
           sessionChat?.otherIdentityNew) as boolean;
-        
+
         await handleThreadMessageUpdates(useDM, openThread.id);
       }
     } catch (error) {
-      log.error('WebSocket', 'Error processing batched events', error);
+      log.error("WebSocket", "Error processing batched events", error);
     } finally {
       isProcessingEventRef.current = false;
     }
   }, [handleStateMutation, handleThreadMessageUpdates, openThread]);
 
   // Create event callback for websocket subscription
-  const eventCallbackFn = useCallback(async (event: WebSocketEvent) => {
-    // Validate context before processing
-    const sessionChat = getStoredSession();
-    const useDM = (sessionChat?.type === "direct_message" &&
-      sessionChat?.account &&
-      !sessionChat?.canJoin &&
-      sessionChat?.otherIdentityNew) as boolean;
+  const eventCallbackFn = useCallback(
+    async (event: WebSocketEvent) => {
+      // Validate context before processing
+      const sessionChat = getStoredSession();
+      const useDM = (sessionChat?.type === "direct_message" &&
+        sessionChat?.account &&
+        !sessionChat?.canJoin &&
+        sessionChat?.otherIdentityNew) as boolean;
 
-    const contextId = getContextId();
-    const dmContextId = getDmContextId();
-    const currentContextId = (useDM ? dmContextId : contextId) || "";
+      const contextId = getContextId();
+      const dmContextId = getDmContextId();
+      const currentContextId = (useDM ? dmContextId : contextId) || "";
 
-    if (!currentContextId) {
-      return; // Skip if no valid context
-    }
+      if (!currentContextId) {
+        return; // Skip if no valid context
+      }
 
-    // Add event to batch
-    eventBatchRef.current.push(event);
+      // Add event to batch
+      eventBatchRef.current.push(event);
 
-    // Clear existing timer
-    if (batchTimerRef.current) {
-      clearTimeout(batchTimerRef.current);
-    }
+      // Clear existing timer
+      if (batchTimerRef.current) {
+        clearTimeout(batchTimerRef.current);
+      }
 
-    // Check if we should process immediately or wait for more events
-    const shouldProcessNow = eventBatchRef.current.length >= 20; // Increase to 20 to batch more
+      // Check if we should process immediately or wait for more events
+      const shouldProcessNow = eventBatchRef.current.length >= 20; // Increase to 20 to batch more
 
-    if (shouldProcessNow) {
-      processBatchedEvents();
-    } else {
-      // Increase timer to 300ms to batch more events together and reduce processing frequency
-      batchTimerRef.current = setTimeout(() => {
+      if (shouldProcessNow) {
         processBatchedEvents();
-      }, 300);
-    }
-  }, [processBatchedEvents]);
+      } else {
+        // Increase timer to 300ms to batch more events together and reduce processing frequency
+        batchTimerRef.current = setTimeout(() => {
+          processBatchedEvents();
+        }, 300);
+      }
+    },
+    [processBatchedEvents],
+  );
 
   // Use WebSocket subscription hook (pass callback directly, hook handles refs internally)
   const subscription = useWebSocketSubscription(app, eventCallbackFn);
-  
+
   // Store subscription in ref for updateSelectedActiveChat
   subscriptionRef.current = subscription;
 
@@ -521,19 +541,21 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     // Use both flags to prevent concurrent fetches
     if (!initialFetchDone.current && !isFetchingInitial.current) {
       isFetchingInitial.current = true;
-      
+
       // Batch initial data fetches for faster load using custom hooks
       Promise.all([
         channelsHook.fetchChannels(),
         dmsHook.fetchDms(),
         chatMembersHook.fetchMembers(),
-      ]).then(() => {
-        initialFetchDone.current = true;
-        isFetchingInitial.current = false;
-      }).catch(error => {
-        log.error("Home", "Error fetching initial data", error);
-        isFetchingInitial.current = false;
-      });
+      ])
+        .then(() => {
+          initialFetchDone.current = true;
+          isFetchingInitial.current = false;
+        })
+        .catch((error) => {
+          log.error("Home", "Error fetching initial data", error);
+          isFetchingInitial.current = false;
+        });
     }
 
     // Cleanup is handled by useWebSocketSubscription hook
@@ -580,9 +602,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const loadPrevMessages = useCallback(
     async (chatId: string): Promise<ChatMessagesDataWithOlder> => {
-      return await mainMessagesRef.current.loadPrevious(activeChatRef.current, chatId);
+      return await mainMessagesRef.current.loadPrevious(
+        activeChatRef.current,
+        chatId,
+      );
     },
-    [] // NO DEPENDENCIES
+    [], // NO DEPENDENCIES
   );
 
   const createDM = async (value: string): Promise<CreateContextResult> => {
@@ -596,7 +621,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       .createContext(
         dmParams.applicationId,
         dmParams.params,
-        dmParams.protocol
+        dmParams.protocol,
       );
 
     const verifyContextResponse = await apiClient
@@ -638,26 +663,35 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const loadInitialThreadMessages = useCallback(
     async (parentMessageId: string): Promise<ChatMessagesData> => {
-      log.debug('Home', `loadInitialThreadMessages called for parent: ${parentMessageId}`);
-      const result = await threadMessagesRef.current.loadInitial(activeChatRef.current, parentMessageId);
-      log.debug('Home', `loadInitialThreadMessages result:`, result);
+      log.debug(
+        "Home",
+        `loadInitialThreadMessages called for parent: ${parentMessageId}`,
+      );
+      const result = await threadMessagesRef.current.loadInitial(
+        activeChatRef.current,
+        parentMessageId,
+      );
+      log.debug("Home", `loadInitialThreadMessages result:`, result);
       return result;
     },
-    [] // NO DEPENDENCIES
+    [], // NO DEPENDENCIES
   );
 
   const updateCurrentOpenThread = useCallback(
     (thread: CurbMessage | undefined) => {
       setCurrentOpenThread(thread);
     },
-    []
+    [],
   );
 
   const loadPrevThreadMessages = useCallback(
     async (parentMessageId: string): Promise<ChatMessagesDataWithOlder> => {
-      return await threadMessagesRef.current.loadPrevious(activeChatRef.current, parentMessageId);
+      return await threadMessagesRef.current.loadPrevious(
+        activeChatRef.current,
+        parentMessageId,
+      );
     },
-    [] // NO DEPENDENCIES
+    [], // NO DEPENDENCIES
   );
 
   return (

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import styled from 'styled-components';
+import React, { useState } from "react";
+import styled from "styled-components";
 
-import CloseIcon from './Icons/CloseIcon';
-import UserProfileIcon from './ProfileIcon/UserProfileIcon';
+import CloseIcon from "./Icons/CloseIcon";
+import UserProfileIcon from "./ProfileIcon/UserProfileIcon";
 
 const OverlayContainer = styled.div`
   left: 0px;
@@ -68,7 +68,7 @@ const ReactionEmojiWrapper = styled.div<{ $selected: boolean }>`
   align-items: center;
   gap: 4px;
   ${({ $selected }) =>
-    $selected ? 'background-color: #2E2F3D;' : 'background-color: transparent;'}
+    $selected ? "background-color: #2E2F3D;" : "background-color: transparent;"}
   &:hover {
     background-color: #2a2b37;
   }

@@ -6,8 +6,8 @@ export interface CreateContextProps {
 }
 
 export interface CreateContextResponse {
-    contextId: string;
-    memberPublicKey: UserId;
+  contextId: string;
+  memberPublicKey: UserId;
 }
 
 export interface InviteToContextProps {

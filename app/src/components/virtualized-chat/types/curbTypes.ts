@@ -12,8 +12,8 @@ export interface CurbFile {
 }
 
 export enum MessageStatus {
-  sending = 'sending',
-  sent = 'sent',
+  sending = "sending",
+  sent = "sent",
 }
 
 export interface CurbMessage {
@@ -42,6 +42,6 @@ export interface AccountData {
 }
 
 export enum ElementPosition {
-  TOP = 'TOP',
-  BOTTOM = 'BOTTOM',
+  TOP = "TOP",
+  BOTTOM = "BOTTOM",
 }

@@ -114,11 +114,11 @@ const FlexContainer = styled.div`
 export const CurbLogo = ({ isMobile }: { isMobile: boolean }) => {
   return (
     <LogoContainer $isMobile={isMobile} role="banner">
-      <img 
-        src={CurbLogoIcon} 
-        alt="Curb Chat Application Logo" 
-        height="32px" 
-        width="auto" 
+      <img
+        src={CurbLogoIcon}
+        alt="Curb Chat Application Logo"
+        height="32px"
+        width="auto"
       />
       <CurbNameContainer></CurbNameContainer>
     </LogoContainer>
@@ -127,13 +127,13 @@ export const CurbLogo = ({ isMobile }: { isMobile: boolean }) => {
 
 const BackIconContainer = ({ onClick }: { onClick: () => void }) => {
   return (
-    <IconWrapper 
+    <IconWrapper
       onClick={onClick}
       role="button"
       aria-label="Toggle sidebar"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onClick();
         }
@@ -184,7 +184,11 @@ export default function CurbNavbar({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <NavigationBar $isSidebarOpen={isSidebarOpen} role="navigation" aria-label="Main navigation">
+    <NavigationBar
+      $isSidebarOpen={isSidebarOpen}
+      role="navigation"
+      aria-label="Main navigation"
+    >
       <ItemsContainer $align={true}>
         <>
           <CurbLogo isMobile={false} />

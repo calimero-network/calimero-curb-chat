@@ -34,14 +34,18 @@ class Logger {
     return level <= this.logLevel;
   }
 
-  private formatMessage(level: string, context: string, message: string): string {
+  private formatMessage(
+    level: string,
+    context: string,
+    message: string,
+  ): string {
     const timestamp = new Date().toISOString();
     return `[${timestamp}] [${level}] [${context}] ${message}`;
   }
 
   error(context: string, message: string, error?: unknown): void {
     if (this.shouldLog(LogLevel.ERROR)) {
-      const formattedMsg = this.formatMessage('ERROR', context, message);
+      const formattedMsg = this.formatMessage("ERROR", context, message);
       if (error) {
         console.error(formattedMsg, error);
       } else {
@@ -52,7 +56,7 @@ class Logger {
 
   warn(context: string, message: string, data?: unknown): void {
     if (this.shouldLog(LogLevel.WARN)) {
-      const formattedMsg = this.formatMessage('WARN', context, message);
+      const formattedMsg = this.formatMessage("WARN", context, message);
       if (data) {
         console.warn(formattedMsg, data);
       } else {
@@ -63,7 +67,7 @@ class Logger {
 
   info(context: string, message: string, data?: unknown): void {
     if (this.shouldLog(LogLevel.INFO)) {
-      const formattedMsg = this.formatMessage('INFO', context, message);
+      const formattedMsg = this.formatMessage("INFO", context, message);
       if (data) {
         console.log(formattedMsg, data);
       } else {
@@ -74,7 +78,7 @@ class Logger {
 
   debug(context: string, message: string, data?: unknown): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
-      const formattedMsg = this.formatMessage('DEBUG', context, message);
+      const formattedMsg = this.formatMessage("DEBUG", context, message);
       if (data) {
         console.log(formattedMsg, data);
       } else {
@@ -119,13 +123,16 @@ export const logger = Logger.getInstance();
 
 // Export convenience methods
 export const log = {
-  error: (context: string, message: string, error?: unknown) => logger.error(context, message, error),
-  warn: (context: string, message: string, data?: unknown) => logger.warn(context, message, data),
-  info: (context: string, message: string, data?: unknown) => logger.info(context, message, data),
-  debug: (context: string, message: string, data?: unknown) => logger.debug(context, message, data),
+  error: (context: string, message: string, error?: unknown) =>
+    logger.error(context, message, error),
+  warn: (context: string, message: string, data?: unknown) =>
+    logger.warn(context, message, data),
+  info: (context: string, message: string, data?: unknown) =>
+    logger.info(context, message, data),
+  debug: (context: string, message: string, data?: unknown) =>
+    logger.debug(context, message, data),
   time: (label: string) => logger.time(label),
   timeEnd: (label: string) => logger.timeEnd(label),
   group: (label: string) => logger.group(label),
   groupEnd: () => logger.groupEnd(),
 };
-

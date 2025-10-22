@@ -1,13 +1,13 @@
-import React, { type CSSProperties } from 'react';
-import styled from 'styled-components';
+import React, { type CSSProperties } from "react";
+import styled from "styled-components";
 
-import { ElementPosition } from '../types/curbTypes';
+import { ElementPosition } from "../types/curbTypes";
 
-import ChatTextIcon from './Icons/ChatTextIcon';
-import EditMessageIcon from './Icons/EditMessageIcon';
-import EmojiWinkIcon from './Icons/EmojiWinkIcon';
-import ThreeDotsIcon from './Icons/ThreeDotsIcon';
-import TrashIcon from './Icons/TrashIcon';
+import ChatTextIcon from "./Icons/ChatTextIcon";
+import EditMessageIcon from "./Icons/EditMessageIcon";
+import EmojiWinkIcon from "./Icons/EmojiWinkIcon";
+import ThreeDotsIcon from "./Icons/ThreeDotsIcon";
+import TrashIcon from "./Icons/TrashIcon";
 //
 // This component is not properly converted to styled-components
 // const ReactionsContainer = styled.div`
@@ -29,21 +29,21 @@ import TrashIcon from './Icons/TrashIcon';
 //background: '#2E2F3D',
 
 const styles: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'row',
-  alignItems: 'center',
-  height: '30px',
-  columnGap: '0.5rem',
-  fontSize: '1.5rem',
-  lineHeight: '1.75rem',
-  cursor: 'pointer',
-  background: '#2E2F3D',
-  borderRadius: '4px',
-  paddingTop: '7px',
-  paddingBottom: '7px',
-  paddingRight: '2px',
-  paddingLeft: '2px',
-  position: 'relative',
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "center",
+  height: "30px",
+  columnGap: "0.5rem",
+  fontSize: "1.5rem",
+  lineHeight: "1.75rem",
+  cursor: "pointer",
+  background: "#2E2F3D",
+  borderRadius: "4px",
+  paddingTop: "7px",
+  paddingBottom: "7px",
+  paddingRight: "2px",
+  paddingLeft: "2px",
+  position: "relative",
 };
 
 const EmojiContainer = styled.span`
@@ -104,16 +104,16 @@ const MoreActionContainer = styled.div`
 
 const reactionsArray = [
   {
-    emoji: '✅',
-    title: 'Check Mark Button',
+    emoji: "✅",
+    title: "Check Mark Button",
   },
   {
-    emoji: '👍',
-    title: 'Thumbs Up',
+    emoji: "👍",
+    title: "Thumbs Up",
   },
   {
-    emoji: '😀',
-    title: 'Grinning Face',
+    emoji: "😀",
+    title: "Grinning Face",
   },
 ];
 
@@ -150,7 +150,7 @@ const ActionsPopup: React.FC<{
 
   const moreActionArray = [
     {
-      name: 'Reactions',
+      name: "Reactions",
       icon: <EmojiWinkIcon />,
       onClick: openMessageReactionsList,
     },
@@ -158,14 +158,14 @@ const ActionsPopup: React.FC<{
 
   if (editable) {
     moreActionArray.push({
-      name: 'Edit message',
+      name: "Edit message",
       icon: <EditMessageIcon />,
       onClick: editMessage,
     });
   }
   if (deletable) {
     moreActionArray.push({
-      name: 'Delete message',
+      name: "Delete message",
       icon: <TrashIcon />,
       onClick: deleteMessage,
     });
@@ -203,8 +203,8 @@ const ActionsPopup: React.FC<{
         <MoreActionContainer
           style={
             popupPosition === ElementPosition.TOP
-              ? { bottom: '100%' }
-              : { top: '100%' }
+              ? { bottom: "100%" }
+              : { top: "100%" }
           }
         >
           {moreActionArray.map((action, id) => (
@@ -218,16 +218,16 @@ const ActionsPopup: React.FC<{
       {reactionsArray?.map((reaction, id) => (
         <EmojiContainer
           onClick={() => toggleReaction(reaction.emoji)}
-          key={'reaction' + id}
+          key={"reaction" + id}
         >
           {reaction.emoji}
         </EmojiContainer>
       ))}
       {(isThread ? ThreadActionsArray : actionsArray).map((action, id) => (
         <EmojiContainer
-          key={'action' + id}
+          key={"action" + id}
           onClick={action.onClick}
-          style={{ paddingBottom: '10px' }}
+          style={{ paddingBottom: "10px" }}
         >
           {action.icon}
         </EmojiContainer>

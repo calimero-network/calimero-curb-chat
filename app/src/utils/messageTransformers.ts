@@ -5,7 +5,9 @@ import { MessageStatus } from "../types/Common";
 /**
  * Transforms a MessageWithReactions from the API to a CurbMessage for UI display
  */
-export function transformMessageToUI(message: MessageWithReactions): CurbMessage {
+export function transformMessageToUI(
+  message: MessageWithReactions,
+): CurbMessage {
   return {
     id: message.id,
     text: message.text,
@@ -30,7 +32,9 @@ export function transformMessageToUI(message: MessageWithReactions): CurbMessage
 /**
  * Transforms an array of MessageWithReactions to CurbMessages
  */
-export function transformMessagesToUI(messages: MessageWithReactions[]): CurbMessage[] {
+export function transformMessagesToUI(
+  messages: MessageWithReactions[],
+): CurbMessage[] {
   return messages.map(transformMessageToUI);
 }
 
@@ -39,12 +43,11 @@ export function transformMessagesToUI(messages: MessageWithReactions[]): CurbMes
  */
 export function getNewMessages(
   apiMessages: MessageWithReactions[],
-  existingMessages: CurbMessage[]
+  existingMessages: CurbMessage[],
 ): CurbMessage[] {
   const existingMessageIds = new Set(existingMessages.map((msg) => msg.id));
-  
+
   return apiMessages
     .filter((message) => !existingMessageIds.has(message.id))
     .map(transformMessageToUI);
 }
-

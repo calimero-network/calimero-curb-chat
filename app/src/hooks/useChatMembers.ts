@@ -15,13 +15,13 @@ export function useChatMembers() {
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response: ResponseData<Map<string, string>> =
         await new ClientApiDataSource().getChatMembers({
           isDM: false,
         });
-      
+
       if (response.data) {
         setMembers(response.data);
       } else if (response.error) {
@@ -42,4 +42,3 @@ export function useChatMembers() {
     fetchMembers,
   };
 }
-

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { log } from '../utils/logger';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { log } from "../utils/logger";
 
 interface HealthStatus {
   isConnected: boolean;
@@ -31,10 +31,10 @@ const DEFAULT_CONFIG: HealthMonitorConfig = {
  */
 export function useWebSocketHealthMonitor(
   onReconnect: () => void,
-  config: Partial<HealthMonitorConfig> = {}
+  config: Partial<HealthMonitorConfig> = {},
 ) {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
-  
+
   const [status, setStatus] = useState<HealthStatus>({
     isConnected: true,
     lastEventTime: Date.now(),
@@ -43,7 +43,9 @@ export function useWebSocketHealthMonitor(
   });
 
   const statusRef = useRef(status);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // Keep ref in sync
   useEffect(() => {
@@ -55,7 +57,7 @@ export function useWebSocketHealthMonitor(
    */
   const recordEvent = useCallback(() => {
     const now = Date.now();
-    setStatus(prev => ({
+    setStatus((prev) => ({
       ...prev,
       isConnected: true,
       lastEventTime: now,
@@ -69,27 +71,30 @@ export function useWebSocketHealthMonitor(
    */
   const attemptReconnect = useCallback(() => {
     const attempts = statusRef.current.reconnectAttempts;
-    
+
     if (attempts >= finalConfig.maxReconnectAttempts) {
-      log.error('WebSocketHealth', 'Max reconnection attempts reached');
-      setStatus(prev => ({ ...prev, isConnected: false }));
+      log.error("WebSocketHealth", "Max reconnection attempts reached");
+      setStatus((prev) => ({ ...prev, isConnected: false }));
       return;
     }
 
     // Calculate delay with exponential backoff
     const delay = Math.min(
       finalConfig.initialReconnectDelay * Math.pow(2, attempts),
-      finalConfig.maxReconnectDelay
+      finalConfig.maxReconnectDelay,
     );
 
-    log.info('WebSocketHealth', `Reconnecting in ${delay}ms (attempt ${attempts + 1}/${finalConfig.maxReconnectAttempts})`);
+    log.info(
+      "WebSocketHealth",
+      `Reconnecting in ${delay}ms (attempt ${attempts + 1}/${finalConfig.maxReconnectAttempts})`,
+    );
 
     reconnectTimeoutRef.current = setTimeout(() => {
-      setStatus(prev => ({
+      setStatus((prev) => ({
         ...prev,
         reconnectAttempts: prev.reconnectAttempts + 1,
       }));
-      
+
       onReconnect();
     }, delay);
   }, [onReconnect, finalConfig]);
@@ -103,9 +108,12 @@ export function useWebSocketHealthMonitor(
       const timeSinceLastEvent = now - statusRef.current.lastEventTime;
 
       if (timeSinceLastEvent > finalConfig.heartbeatTimeout) {
-        log.warn('WebSocketHealth', `No events received for ${timeSinceLastEvent}ms`);
-        
-        setStatus(prev => ({
+        log.warn(
+          "WebSocketHealth",
+          `No events received for ${timeSinceLastEvent}ms`,
+        );
+
+        setStatus((prev) => ({
           ...prev,
           missedHeartbeats: prev.missedHeartbeats + 1,
           isConnected: false,
@@ -136,4 +144,3 @@ export function useWebSocketHealthMonitor(
     isHealthy: status.isConnected && status.missedHeartbeats === 0,
   };
 }
-

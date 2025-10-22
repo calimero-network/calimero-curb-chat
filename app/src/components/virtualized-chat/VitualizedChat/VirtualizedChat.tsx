@@ -1,22 +1,22 @@
-import React, { useState, useCallback, useRef } from 'react';
-import type { ListRange } from 'react-virtuoso';
-import { Virtuoso } from 'react-virtuoso';
-import styled from 'styled-components';
+import React, { useState, useCallback, useRef } from "react";
+import type { ListRange } from "react-virtuoso";
+import { Virtuoso } from "react-virtuoso";
+import styled from "styled-components";
 
-import DefaultNewMessageIndicator from './DefaultNewMessagesIndicator';
-import type { UpdateDescriptor } from './MessageStore';
-import MessageStore from './MessageStore';
-import NoMessages from './NoMessages';
-import { OverlayDiv } from './OverlayDiv';
-import LoadingHeader from './LoadingHeader';
-import ScrollToBottomButton from './ScrollToBottomButton';
-import { 
-  useMessageLoader, 
-  useScrollManager, 
-  useNewMessageIndicator, 
-  useMessageUpdates 
-} from './hooks';
-import { VIRTUOSO_CONFIGS } from './utils/virtuosoConfig';
+import DefaultNewMessageIndicator from "./DefaultNewMessagesIndicator";
+import type { UpdateDescriptor } from "./MessageStore";
+import MessageStore from "./MessageStore";
+import NoMessages from "./NoMessages";
+import { OverlayDiv } from "./OverlayDiv";
+import LoadingHeader from "./LoadingHeader";
+import ScrollToBottomButton from "./ScrollToBottomButton";
+import {
+  useMessageLoader,
+  useScrollManager,
+  useNewMessageIndicator,
+  useMessageUpdates,
+} from "./hooks";
+import { VIRTUOSO_CONFIGS } from "./utils/virtuosoConfig";
 
 const VirtuosoWrapper = styled.div`
   scrollbar-color: black transparent;
@@ -83,10 +83,14 @@ const VirtualizedChat = <T extends Message>({
 }: VirtualizedChatProps<T>): React.ReactElement => {
   // Initialize message store
   const store = useRef(new MessageStore<T>()).current;
-  const [oldestMessageReported, setOldestMessageReported] = useState<number>(-1);
+  const [oldestMessageReported, setOldestMessageReported] =
+    useState<number>(-1);
 
   // Memoize callbacks to prevent render loops
-  const handleLoadComplete = useCallback(() => setOldestMessageReported(-1), []);
+  const handleLoadComplete = useCallback(
+    () => setOldestMessageReported(-1),
+    [],
+  );
 
   // Use custom hooks for separated concerns (KISS principle)
   const {
@@ -157,8 +161,9 @@ const VirtualizedChat = <T extends Message>({
     (index: number, item: T) => {
       const actualIndex = index - firstItemIndex;
       const currentMessages = store.messages;
-      const prevMessage = actualIndex > 0 ? currentMessages[actualIndex - 1] : undefined;
-      
+      const prevMessage =
+        actualIndex > 0 ? currentMessages[actualIndex - 1] : undefined;
+
       return render(item, prevMessage);
     },
     [render, firstItemIndex, store],
@@ -169,12 +174,15 @@ const VirtualizedChat = <T extends Message>({
   // Reference: https://virtuoso.dev/virtuoso-message-list/tutorial/loading-older-messages/
   const handleComputeItemKey = useCallback(
     (_index: number, item: T) => store.computeKey(item),
-    [store]
+    [store],
   );
-  
+
   // Memoize custom components to prevent re-creation (Virtuoso best practice)
   // "Don't inline the custom components" - from VirtuosoMessageList docs
-  const HeaderComponent = useCallback(() => <LoadingHeader isLoading={isLoadingOlder} />, [isLoadingOlder]);
+  const HeaderComponent = useCallback(
+    () => <LoadingHeader isLoading={isLoadingOlder} />,
+    [isLoadingOlder],
+  );
 
   // Create new message indicator component
   const NewMessageIndicator = React.createElement(newMessageIndicator, {
@@ -182,11 +190,14 @@ const VirtualizedChat = <T extends Message>({
   });
 
   return (
-    <VirtuosoWrapper style={{ position: 'relative', ...style }}>
+    <VirtuosoWrapper style={{ position: "relative", ...style }}>
       {isLoadingInitial && <OverlayDiv type="loading" />}
       {!isLoadingInitial && messages?.length === 0 && <NoMessages />}
       {hasNewMessages && NewMessageIndicator}
-      <ScrollToBottomButton show={!isAtBottom && messages.length > 0} onClick={scrollToBottom} />
+      <ScrollToBottomButton
+        show={!isAtBottom && messages.length > 0}
+        onClick={scrollToBottom}
+      />
       {!isLoadingInitial && messages.length > 0 && (
         <Virtuoso
           key={chatId}

@@ -1,10 +1,15 @@
-import React, { useEffect, useRef, useCallback, memo } from 'react';
-import { useCalimero } from '@calimero-network/calimero-client';
-import { clearStoredSession, clearDmContextId, updateSessionActivity, clearSessionActivity } from '../utils/session';
+import React, { useEffect, useRef, useCallback, memo } from "react";
+import { useCalimero } from "@calimero-network/calimero-client";
+import {
+  clearStoredSession,
+  clearDmContextId,
+  updateSessionActivity,
+  clearSessionActivity,
+} from "../utils/session";
 
 /**
  * IdleTimeoutWrapper - Monitors user activity and automatically logs out inactive users
- * 
+ *
  * - Only activates when user is authenticated
  * - Monitors mouse, keyboard, scroll, and touch events
  * - Clears session data same as manual logout
@@ -15,9 +20,9 @@ interface IdleTimeoutWrapperProps {
   timeoutMs?: number;
 }
 
-const IdleTimeoutWrapper = memo(function IdleTimeoutWrapper({ 
-  children, 
-  timeoutMs = 3600000 // 1 hour
+const IdleTimeoutWrapper = memo(function IdleTimeoutWrapper({
+  children,
+  timeoutMs = 3600000, // 1 hour
 }: IdleTimeoutWrapperProps) {
   const { isAuthenticated, logout } = useCalimero();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,19 +59,22 @@ const IdleTimeoutWrapper = memo(function IdleTimeoutWrapper({
     if (isAuthenticated) {
       // Essential events for both desktop and mobile
       // mousedown (desktop clicks), touchstart (mobile taps), keypress (typing), mousemove (mouse activity)
-      const events = ['mousedown', 'touchstart', 'keypress', 'mousemove'];
-      
-      events.forEach(event => {
-        document.addEventListener(event, handleUserActivity, { capture: true, passive: true });
+      const events = ["mousedown", "touchstart", "keypress", "mousemove"];
+
+      events.forEach((event) => {
+        document.addEventListener(event, handleUserActivity, {
+          capture: true,
+          passive: true,
+        });
       });
 
       resetTimeout();
 
       return () => {
-        events.forEach(event => {
+        events.forEach((event) => {
           document.removeEventListener(event, handleUserActivity, true);
         });
-        
+
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
         }

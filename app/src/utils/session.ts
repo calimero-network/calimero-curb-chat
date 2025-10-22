@@ -10,7 +10,7 @@ const SESSION_TIMEOUT_MS = 3600000; // 1 hour
  * Validator for ActiveChat to ensure it has required properties
  */
 const isValidActiveChat = (data: unknown): boolean => {
-  if (!data || typeof data !== 'object') return false;
+  if (!data || typeof data !== "object") return false;
   const chat = data as Record<string, unknown>;
   return !!(chat.type && chat.id && chat.name);
 };
@@ -20,7 +20,10 @@ export const updateSessionChat = (session: ActiveChat): void => {
 };
 
 export const getStoredSession = (): ActiveChat | null => {
-  const session = StorageHelper.getJSON<ActiveChat>("lastSession", isValidActiveChat);
+  const session = StorageHelper.getJSON<ActiveChat>(
+    "lastSession",
+    isValidActiveChat,
+  );
   if (!session) {
     log.debug("Session", "No valid session found in storage");
   }
@@ -51,7 +54,7 @@ export const updateSessionActivity = (): void => {
 export const getSessionLastActivity = (): number | null => {
   const stored = StorageHelper.getItem(SESSION_TIMEOUT_KEY);
   if (!stored) return null;
-  
+
   const parsed = parseInt(stored, 10);
   return isNaN(parsed) ? null : parsed;
 };

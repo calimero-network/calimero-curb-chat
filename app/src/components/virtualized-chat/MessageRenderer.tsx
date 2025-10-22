@@ -1,8 +1,8 @@
-import React from 'react';
-import type { AccountData, CurbMessage } from './types/curbTypes';
-import ImageRepository from './VitualizedChat/ImageRepository';
+import React from "react";
+import type { AccountData, CurbMessage } from "./types/curbTypes";
+import ImageRepository from "./VitualizedChat/ImageRepository";
 
-import { Message } from '.';
+import { Message } from ".";
 
 interface MessageRendererProps {
   accountId: string;
@@ -54,7 +54,7 @@ const messageRender = ({
     imageRepositoryInstance = new ImageRepository(getIconFromCache);
   }
   const store = imageRepositoryInstance;
-  
+
   const openThread = (message: CurbMessage) => {
     if (!isThread && setThread) {
       setThread(message);

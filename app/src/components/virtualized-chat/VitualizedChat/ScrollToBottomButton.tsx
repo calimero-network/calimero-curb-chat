@@ -1,14 +1,16 @@
-import React from 'react';
-import styled from 'styled-components';
+import React from "react";
+import styled from "styled-components";
 
 const ButtonContainer = styled.div<{ show: boolean }>`
   position: absolute;
   bottom: 20px;
   right: 20px;
   z-index: 1000;
-  opacity: ${props => props.show ? 1 : 0};
-  visibility: ${props => props.show ? 'visible' : 'hidden'};
-  transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+  opacity: ${(props) => (props.show ? 1 : 0)};
+  visibility: ${(props) => (props.show ? "visible" : "hidden")};
+  transition:
+    opacity 0.2s ease-in-out,
+    visibility 0.2s ease-in-out;
 `;
 
 const Button = styled.button`
@@ -47,7 +49,10 @@ interface ScrollToBottomButtonProps {
   onClick: () => void;
 }
 
-const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({ show, onClick }) => {
+const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
+  show,
+  onClick,
+}) => {
   return (
     <ButtonContainer show={show}>
       <Button onClick={onClick} aria-label="Scroll to bottom">
@@ -68,4 +73,3 @@ const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({ show, onCli
 };
 
 export default ScrollToBottomButton;
-

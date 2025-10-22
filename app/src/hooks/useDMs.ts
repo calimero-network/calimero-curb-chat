@@ -12,16 +12,16 @@ export function useDMs() {
   const [dms, setDms] = useState<DMChatInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Simple, stable fetch function
   const fetchDms = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response: ResponseData<DMChatInfo[]> =
         await new ClientApiDataSource().getDms();
-      
+
       if (response.data) {
         setDms(response.data);
         return response.data;

@@ -9,20 +9,20 @@ const ScrollableUserList = styled.div`
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #282933 transparent;
-  
+
   &::-webkit-scrollbar {
     width: 4px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background-color: #282933;
     border-radius: 2px;
   }
-  
+
   &::-webkit-scrollbar-thumb:hover {
     background-color: #404040;
   }

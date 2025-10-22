@@ -27,9 +27,9 @@ export default function SyncWaiting({
           const data = {
             joined: verifyResponse.data.rootHash ? true : false,
             isSynced:
-            verifyResponse.data.rootHash !==
+              verifyResponse.data.rootHash !==
               "11111111111111111111111111111111",
-          }
+          };
           const savedSession = getStoredSession();
           if (savedSession) {
             savedSession.isSynced = data.isSynced;

@@ -23,4 +23,3 @@ export const WS_MAX_RECONNECT_DELAY_MS = 30000; // Cap at 30 seconds
 // Audio/Notifications
 export const DEFAULT_NOTIFICATION_VOLUME = 0.5;
 export const DEFAULT_NOTIFICATIONS_ENABLED = false;
-

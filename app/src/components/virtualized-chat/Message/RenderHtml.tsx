@@ -1,6 +1,6 @@
 // eslint-disable-next-line
-import React, { memo, useMemo } from 'react';
-import { sanitizeHtml } from '../utils';
+import React, { memo, useMemo } from "react";
+import { sanitizeHtml } from "../utils";
 
 export interface RenderHtmlProps {
   html: string;
@@ -9,7 +9,7 @@ export interface RenderHtmlProps {
 const RenderHtml: React.FC<RenderHtmlProps> = ({ html }) => {
   // Memoize the sanitized HTML to avoid expensive re-sanitization
   const sanitizedHtml = useMemo(() => sanitizeHtml(html), [html]);
-  
+
   return (
     <div
       className="msg-content"

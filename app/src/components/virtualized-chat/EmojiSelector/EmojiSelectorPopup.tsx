@@ -1,6 +1,6 @@
-import styled from 'styled-components';
+import styled from "styled-components";
 
-import EmojiSelector from './EmojiSelector';
+import EmojiSelector from "./EmojiSelector";
 
 const EmojiPopupContainer = styled.div`
   position: fixed;

@@ -212,9 +212,14 @@ export default function ContextSwitcher() {
       // First, fetch the identity for the new context
       const contextIdentityResponse: ResponseData<FetchContextIdentitiesResponse> =
         await apiClient.node().fetchContextIdentities(selectedContextId);
-      
-      if (!contextIdentityResponse.data || contextIdentityResponse.data.identities.length === 0) {
-        setError("You are not a member of this context. Please join the context first.");
+
+      if (
+        !contextIdentityResponse.data ||
+        contextIdentityResponse.data.identities.length === 0
+      ) {
+        setError(
+          "You are not a member of this context. Please join the context first.",
+        );
         setLoading(false);
         return;
       }
@@ -224,22 +229,26 @@ export default function ContextSwitcher() {
       // Now update both context and identity
       setContextId(selectedContextId);
       setExecutorPublicKey(contextIdentity);
-      
-      setSuccess(`Switched to context: ${selectedContextId.substring(0, 8)}...`);
-      
+
+      setSuccess(
+        `Switched to context: ${selectedContextId.substring(0, 8)}...`,
+      );
+
       // Reload the page after a short delay to apply the new context
       setTimeout(() => {
         window.location.reload();
       }, 1500);
     } catch (err) {
       console.error("Error switching context:", err);
-      setError("Failed to switch context. You may not be a member of this context.");
+      setError(
+        "Failed to switch context. You may not be a member of this context.",
+      );
       setLoading(false);
     }
   };
 
   const currentContext = contexts.find(
-    (ctx) => ctx.contextId === currentContextId
+    (ctx) => ctx.contextId === currentContextId,
   );
 
   return (
@@ -321,4 +330,3 @@ export default function ContextSwitcher() {
     </Container>
   );
 }
-

@@ -14,13 +14,21 @@ interface TabbedInterfaceProps {
   isConfigSet?: boolean;
 }
 
-export default function TabbedInterface({ tabs, isAuthenticated, isConfigSet }: TabbedInterfaceProps) {
+export default function TabbedInterface({
+  tabs,
+  isAuthenticated,
+  isConfigSet,
+}: TabbedInterfaceProps) {
   const [activeTab, setActiveTab] = useState(tabs[0].id);
-  
 
   return (
     <>
-      <Tabs tabs={tabs} value={activeTab} onValueChange={setActiveTab} style={{ justifyContent: "center", display: "flex" }} />
+      <Tabs
+        tabs={tabs}
+        value={activeTab}
+        onValueChange={setActiveTab}
+        style={{ justifyContent: "center", display: "flex" }}
+      />
       <TabPanel when="join-context" active={activeTab}>
         <JoinContextTab />
       </TabPanel>
@@ -37,7 +45,10 @@ export default function TabbedInterface({ tabs, isAuthenticated, isConfigSet }: 
         <ContextSwitcher />
       </TabPanel>
       <TabPanel when="chat" active={activeTab}>
-        <ChatTab isAuthenticated={isAuthenticated || false} isConfigSet={isConfigSet || false} />
+        <ChatTab
+          isAuthenticated={isAuthenticated || false}
+          isConfigSet={isConfigSet || false}
+        />
       </TabPanel>
     </>
   );

@@ -1,7 +1,7 @@
-import Quill from 'quill';
-import React, { useEffect, useRef } from 'react';
+import Quill from "quill";
+import React, { useEffect, useRef } from "react";
 
-import { sanitizePasteHtml } from '../utils';
+import { sanitizePasteHtml } from "../utils";
 
 interface InputFieldProps {
   value: string;
@@ -16,12 +16,12 @@ const InputField = (props: InputFieldProps): React.JSX.Element => {
   const ref = useRef(null);
   const quillRef = useRef<null | Quill>(null);
   const toolbarOptions = [
-    'bold',
-    'italic',
-    'underline',
-    'strike',
-    { list: 'ordered' },
-    { list: 'bullet' },
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    { list: "ordered" },
+    { list: "bullet" },
   ];
 
   const sendMessage = () => {
@@ -29,13 +29,13 @@ const InputField = (props: InputFieldProps): React.JSX.Element => {
     if (currentQuill) {
       const content = currentQuill.root.innerHTML;
       const cleanContent = content
-        .replace(/<br\s*\/?>\s*$/i, '')
-        .replace(/<p><br><\/p>\s*$/i, '')
-        .replace(/<p>\s*<\/p>\s*$/i, '');
+        .replace(/<br\s*\/?>\s*$/i, "")
+        .replace(/<p><br><\/p>\s*$/i, "")
+        .replace(/<p>\s*<\/p>\s*$/i, "");
 
-      if (cleanContent.trim() !== '') {
+      if (cleanContent.trim() !== "") {
         props.handleMessageSend(cleanContent);
-        currentQuill.setText('');
+        currentQuill.setText("");
       }
     }
   };
@@ -52,11 +52,11 @@ const InputField = (props: InputFieldProps): React.JSX.Element => {
     }
     const selection = currentQuill?.getSelection(true);
 
-    if (clipboardData?.types.includes('text/html')) {
-      const pastedData = clipboardData.getData('text/html');
+    if (clipboardData?.types.includes("text/html")) {
+      const pastedData = clipboardData.getData("text/html");
       const processedData = sanitizePasteHtml(pastedData).replace(
-        '&nbsp;',
-        ' ',
+        "&nbsp;",
+        " ",
       );
 
       try {
@@ -65,11 +65,11 @@ const InputField = (props: InputFieldProps): React.JSX.Element => {
           processedData,
         );
       } catch (error) {
-        const plainText = clipboardData.getData('text/plain');
+        const plainText = clipboardData.getData("text/plain");
         currentQuill.insertText(selection.index, plainText);
       }
-    } else if (clipboardData?.types.includes('text/plain')) {
-      const pastedData = clipboardData.getData('text/plain');
+    } else if (clipboardData?.types.includes("text/plain")) {
+      const pastedData = clipboardData.getData("text/plain");
       currentQuill.insertText(selection.index, pastedData);
     }
   };
@@ -102,15 +102,15 @@ const InputField = (props: InputFieldProps): React.JSX.Element => {
               },
             },
           },
-          theme: 'snow',
+          theme: "snow",
         });
 
         quillRef.current.root.innerHTML = props.value;
-        quillRef.current.root.addEventListener('paste', handlePaste);
-        quillRef.current.root.addEventListener('drop', handleDrop);
+        quillRef.current.root.addEventListener("paste", handlePaste);
+        quillRef.current.root.addEventListener("drop", handleDrop);
 
         const handleKeyDown = (e: KeyboardEvent) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
@@ -122,7 +122,7 @@ const InputField = (props: InputFieldProps): React.JSX.Element => {
           return true;
         };
 
-        quillRef.current.root.addEventListener('keydown', handleKeyDown);
+        quillRef.current.root.addEventListener("keydown", handleKeyDown);
       }
       isMounted.current = true;
     }
@@ -140,7 +140,7 @@ const InputField = (props: InputFieldProps): React.JSX.Element => {
         props.setValue(value);
       };
 
-      currentQuill.on('text-change', handleTextChange);
+      currentQuill.on("text-change", handleTextChange);
     }
   }, [quillRef.current, props.value]);
 

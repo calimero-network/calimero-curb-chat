@@ -35,7 +35,7 @@ interface ChatContainerProps {
   incomingMessages: CurbMessage[];
   loadPrevMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
   loadInitialThreadMessages: (
-    parentMessageId: string
+    parentMessageId: string,
   ) => Promise<ChatMessagesData>;
   incomingThreadMessages: CurbMessage[];
   loadPrevThreadMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
@@ -105,7 +105,7 @@ function ChatContainer({
   >([]);
   const [isEmojiSelectorVisible, setIsEmojiSelectorVisible] = useState(false);
   const [channelMeta, setChannelMeta] = useState<ChannelInfo>(
-    {} as ChannelInfo
+    {} as ChannelInfo,
   );
   const [openMobileReactions, setOpenMobileReactions] = useState("");
   const [messageWithEmojiSelector, setMessageWithEmojiSelector] =
@@ -121,14 +121,14 @@ function ChatContainer({
         setChannelMeta({} as ChannelInfo);
         return;
       }
-      
+
       // Only fetch if we haven't fetched for this channel yet
       if (lastFetchedChannelRef.current === activeChat.name) {
         return;
       }
-      
+
       lastFetchedChannelRef.current = activeChat.name;
-      
+
       const channelMeta: ResponseData<ChannelInfo> =
         await new ClientApiDataSource().getChannelInfo({
           channel: { name: activeChat.name },
@@ -162,7 +162,7 @@ function ChatContainer({
       }
       return { reactions: { ...message.reactions, [reaction]: update } };
     },
-    []
+    [],
   );
 
   const handleReaction = useCallback(
@@ -200,7 +200,7 @@ function ChatContainer({
         log.error("ChatContainer", "Error updating reaction", error);
       }
     },
-    []
+    [],
   );
 
   const getIconFromCache = useCallback(
@@ -208,7 +208,7 @@ function ChatContainer({
       const fallbackImage = "https://i.imgur.com/e8buxpa.png";
       return Promise.resolve(fallbackImage);
     },
-    []
+    [],
   );
 
   const toggleEmojiSelector = useCallback(
@@ -216,13 +216,22 @@ function ChatContainer({
       setMessageWithEmojiSelector(message);
       setIsEmojiSelectorVisible((prev) => !prev);
     },
-    [setIsEmojiSelectorVisible]
+    [setIsEmojiSelectorVisible],
   );
 
   const sendMessage = async (message: string, isThread: boolean) => {
-    log.debug('ChatContainer', `sendMessage called with message: "${message}", isThread: ${isThread}`);
-    log.debug('ChatContainer', `addOptimisticMessage: ${addOptimisticMessage ? 'provided' : 'missing'}`);
-    log.debug('ChatContainer', `addOptimisticThreadMessage: ${addOptimisticThreadMessage ? 'provided' : 'missing'}`);
+    log.debug(
+      "ChatContainer",
+      `sendMessage called with message: "${message}", isThread: ${isThread}`,
+    );
+    log.debug(
+      "ChatContainer",
+      `addOptimisticMessage: ${addOptimisticMessage ? "provided" : "missing"}`,
+    );
+    log.debug(
+      "ChatContainer",
+      `addOptimisticThreadMessage: ${addOptimisticThreadMessage ? "provided" : "missing"}`,
+    );
     const isDM = activeChatRef.current?.type === "direct_message";
 
     const result = extractAndAddMentions(message, membersListRef.current);
@@ -231,13 +240,20 @@ function ChatContainer({
     const usernames: string[] = [...result.usernameMentions];
 
     // Add optimistic message immediately (if function is provided)
-    const optimisticFunction = isThread ? addOptimisticThreadMessage : addOptimisticMessage;
-    log.debug('ChatContainer', `sendMessage called - isThread: ${isThread}, optimisticFunction: ${optimisticFunction ? 'provided' : 'missing'}`);
+    const optimisticFunction = isThread
+      ? addOptimisticThreadMessage
+      : addOptimisticMessage;
+    log.debug(
+      "ChatContainer",
+      `sendMessage called - isThread: ${isThread}, optimisticFunction: ${optimisticFunction ? "provided" : "missing"}`,
+    );
     if (optimisticFunction) {
       // For DMs, use the DM-specific identity (activeChat.account)
       // For Channels, use the main identity (getExecutorPublicKey)
-      const sender = isDM ? (activeChatRef.current?.account || getExecutorPublicKey() || "") : (getExecutorPublicKey() || "");
-      
+      const sender = isDM
+        ? activeChatRef.current?.account || getExecutorPublicKey() || ""
+        : getExecutorPublicKey() || "";
+
       const optimisticMessage: CurbMessage = {
         id: `temp-${Date.now()}`,
         text: message,
@@ -256,24 +272,36 @@ function ChatContainer({
         deleted: false,
       };
       try {
-        log.debug('ChatContainer', `Adding optimistic ${isThread ? 'thread' : 'main'} message:`, optimisticMessage);
+        log.debug(
+          "ChatContainer",
+          `Adding optimistic ${isThread ? "thread" : "main"} message:`,
+          optimisticMessage,
+        );
         optimisticFunction(optimisticMessage);
-        log.debug('ChatContainer', `Optimistic ${isThread ? 'thread' : 'main'} message added successfully`);
+        log.debug(
+          "ChatContainer",
+          `Optimistic ${isThread ? "thread" : "main"} message added successfully`,
+        );
       } catch (error) {
         log.error("ChatContainer", "Error adding optimistic message", error);
       }
     }
 
-    const parentMessageId = isThread ? (currentOpenThreadRef.current?.key || currentOpenThreadRef.current?.id) : undefined;
+    const parentMessageId = isThread
+      ? currentOpenThreadRef.current?.key || currentOpenThreadRef.current?.id
+      : undefined;
     if (isThread) {
-      log.debug('ChatContainer', `Sending thread message with parent_message: ${parentMessageId}`);
-      log.debug('ChatContainer', `currentOpenThreadRef.current:`, {
+      log.debug(
+        "ChatContainer",
+        `Sending thread message with parent_message: ${parentMessageId}`,
+      );
+      log.debug("ChatContainer", `currentOpenThreadRef.current:`, {
         id: currentOpenThreadRef.current?.id,
         key: currentOpenThreadRef.current?.key,
-        text: currentOpenThreadRef.current?.text
+        text: currentOpenThreadRef.current?.text,
       });
     }
-    
+
     await new ClientApiDataSource().sendMessage({
       group: {
         name: (isDM ? "private_dm" : activeChatRef.current?.name) ?? "",
@@ -344,7 +372,7 @@ function ChatContainer({
         updateDeletedMessage(message);
       }
     },
-    [] // Uses refs which don't need to be in dependencies
+    [], // Uses refs which don't need to be in dependencies
   );
 
   const handleEditMode = useCallback(
@@ -359,7 +387,7 @@ function ChatContainer({
       ];
       setUpdatedMessages(update);
     },
-    [] // No external dependencies needed
+    [], // No external dependencies needed
   );
 
   const handleEditedMessage = useCallback(
@@ -390,21 +418,24 @@ function ChatContainer({
         setUpdatedMessages(update);
       }
     },
-    [] // Uses refs which don't need to be in dependencies
+    [], // Uses refs which don't need to be in dependencies
   );
 
   const selectThread = (message: CurbMessage) => {
     // Extract the real message ID from the key (before any _nonce_version suffix)
     // The key format is: originalId_nonce_version, but we need just the originalId for API calls
     const realMessageId = message.key || message.id;
-    log.debug('ChatContainer', `Opening thread for message - id: ${message.id}, key: ${message.key}, using: ${realMessageId}`);
-    log.debug('ChatContainer', `Message details:`, {
+    log.debug(
+      "ChatContainer",
+      `Opening thread for message - id: ${message.id}, key: ${message.key}, using: ${realMessageId}`,
+    );
+    log.debug("ChatContainer", `Message details:`, {
       id: message.id,
       key: message.key,
       realMessageId,
       text: message.text,
       sender: message.sender,
-      timestamp: message.timestamp
+      timestamp: message.timestamp,
     });
     setOpenThread(message);
     updateCurrentOpenThread(message);
@@ -412,7 +443,7 @@ function ChatContainer({
   };
 
   const closeThread = () => {
-    log.debug('ChatContainer', 'Closing thread');
+    log.debug("ChatContainer", "Closing thread");
     setOpenThread(undefined);
     updateCurrentOpenThread(undefined);
     setUpdatedThreadMessages([]);
@@ -420,17 +451,23 @@ function ChatContainer({
 
   // Memoize the thread loadInitialChatMessages function
   // Capture the parent message ID at the time of thread opening
-  const parentMessageId = openThread?.key || openThread?.id || '';
-  
+  const parentMessageId = openThread?.key || openThread?.id || "";
+
   const threadLoadInitialChatMessages = useCallback(() => {
-    log.debug('ChatContainer', `Thread loadInitialChatMessages called with parentMessageId: ${parentMessageId}`);
+    log.debug(
+      "ChatContainer",
+      `Thread loadInitialChatMessages called with parentMessageId: ${parentMessageId}`,
+    );
     return loadInitialThreadMessages(parentMessageId);
   }, [parentMessageId, loadInitialThreadMessages]);
 
   // Debug logging for thread state
   useEffect(() => {
     if (openThread) {
-      log.debug('ChatContainer', `Thread component should be visible for message: ${openThread.id}`);
+      log.debug(
+        "ChatContainer",
+        `Thread component should be visible for message: ${openThread.id}`,
+      );
     }
   }, [openThread]);
 
@@ -505,7 +542,7 @@ function ChatContainer({
                   handleReaction={handleReaction}
                   openThread={openThread}
                   setOpenThread={selectThread}
-              closeThread={closeThread}
+                  closeThread={closeThread}
                   activeChat={activeChat}
                   updatedMessages={_updatedThreadMessages}
                   resetImage={() => {}}
@@ -523,7 +560,11 @@ function ChatContainer({
                   onMessageUpdated={handleEditedMessage}
                   loadInitialChatMessages={threadLoadInitialChatMessages}
                   incomingMessages={(() => {
-                    log.debug('ChatContainer', `Passing incomingThreadMessages to DM thread component:`, incomingThreadMessages);
+                    log.debug(
+                      "ChatContainer",
+                      `Passing incomingThreadMessages to DM thread component:`,
+                      incomingThreadMessages,
+                    );
                     return incomingThreadMessages;
                   })()}
                   loadPrevMessages={(id: string) => loadPrevThreadMessages(id)}
@@ -562,7 +603,7 @@ function ChatContainer({
                 handleReaction={handleReaction}
                 openThread={openThread}
                 setOpenThread={selectThread}
-              closeThread={closeThread}
+                closeThread={closeThread}
                 activeChat={activeChat}
                 updatedMessages={updatedMessages}
                 resetImage={() => {}}
@@ -593,11 +634,13 @@ function ChatContainer({
                     handleReaction={handleReaction}
                     openThread={openThread}
                     setOpenThread={selectThread}
-              closeThread={closeThread}
+                    closeThread={closeThread}
                     activeChat={activeChat}
                     updatedMessages={_updatedThreadMessages}
                     resetImage={() => {}}
-                    sendMessage={(message: string) => sendMessage(message, true)}
+                    sendMessage={(message: string) =>
+                      sendMessage(message, true)
+                    }
                     getIconFromCache={getIconFromCache}
                     isThread={true}
                     isReadOnly={activeChat.readOnly ?? false}
@@ -610,11 +653,16 @@ function ChatContainer({
                     onEditModeCancelled={handleEditMode}
                     onMessageUpdated={handleEditedMessage}
                     loadInitialChatMessages={() => {
-                      log.debug('ChatContainer', `Thread loadInitialChatMessages called with openThread.id: ${openThread.id}`);
+                      log.debug(
+                        "ChatContainer",
+                        `Thread loadInitialChatMessages called with openThread.id: ${openThread.id}`,
+                      );
                       return loadInitialThreadMessages(openThread.id);
                     }}
                     incomingMessages={incomingThreadMessages}
-                    loadPrevMessages={(id: string) => loadPrevThreadMessages(id)}
+                    loadPrevMessages={(id: string) =>
+                      loadPrevThreadMessages(id)
+                    }
                     currentOpenThreadRef={currentOpenThreadRef}
                     isEmojiSelectorVisible={isEmojiSelectorVisible}
                     setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}

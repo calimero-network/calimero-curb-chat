@@ -2,12 +2,20 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { getAuthConfig, useCalimero } from "@calimero-network/calimero-client";
 import { useEffect, useState, lazy, Suspense, useRef } from "react";
 import { LoadingSpinner } from "./components/LoadingSpinner";
-import { isSessionExpired, clearStoredSession, clearDmContextId, clearSessionActivity, updateSessionActivity } from "./utils/session";
+import {
+  isSessionExpired,
+  clearStoredSession,
+  clearDmContextId,
+  clearSessionActivity,
+  updateSessionActivity,
+} from "./utils/session";
 
 // Lazy load pages for better performance
 const Login = lazy(() => import("./pages/Login"));
 const Home = lazy(() => import("./pages/Home"));
-const IdleTimeoutWrapper = lazy(() => import("./components/IdleTimeoutWrapper"));
+const IdleTimeoutWrapper = lazy(
+  () => import("./components/IdleTimeoutWrapper"),
+);
 const PWAInstallPrompt = lazy(() => import("./components/PWAInstallPrompt"));
 
 function App() {
@@ -19,7 +27,7 @@ function App() {
   useEffect(() => {
     // Only check config once to avoid repeated auth checks
     if (hasInitializedRef.current) return;
-    
+
     const timer = setTimeout(() => {
       // Get authConfig inside effect to avoid unnecessary re-renders
       const authConfig = getAuthConfig();

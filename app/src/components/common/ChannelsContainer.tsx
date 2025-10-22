@@ -31,7 +31,7 @@ function ChannelsContainer(props: ChannelsContainerProps) {
     channels,
     chatMembers,
     createDM,
-    privateDMs
+    privateDMs,
   } = props;
 
   return (

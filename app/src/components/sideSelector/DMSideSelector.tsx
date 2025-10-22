@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo } from "react";
 import { styled } from "styled-components";
 import DMHeader from "./DMHeader";
 import UserList from "./UserList";
@@ -29,12 +29,22 @@ function DMSideSelector({
   onDMSelected,
   selectedDM,
   privateDMs,
-  isCollapsed
+  isCollapsed,
 }: DMSideSelectorProps) {
   return (
     <DMContainer>
-      <DMHeader key="dm-header" createDM={createDM} chatMembers={chatMembers} isCollapsed={isCollapsed}/>
-      <UserList selectedDM={selectedDM} onDMSelected={onDMSelected} privateDMs={privateDMs} isCollapsed={isCollapsed} />
+      <DMHeader
+        key="dm-header"
+        createDM={createDM}
+        chatMembers={chatMembers}
+        isCollapsed={isCollapsed}
+      />
+      <UserList
+        selectedDM={selectedDM}
+        onDMSelected={onDMSelected}
+        privateDMs={privateDMs}
+        isCollapsed={isCollapsed}
+      />
     </DMContainer>
   );
 }

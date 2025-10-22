@@ -22,7 +22,7 @@ export interface ApiCallOptions<T> {
 
 /**
  * Standardized API call handler with consistent error handling
- * 
+ *
  * @example
  * const result = await handleApiCall(
  *   () => apiClient.getChannels(),
@@ -31,16 +31,16 @@ export interface ApiCallOptions<T> {
  */
 export async function handleApiCall<T>(
   apiCall: () => Promise<ApiResponse<T>>,
-  options: ApiCallOptions<T> = {}
+  options: ApiCallOptions<T> = {},
 ): Promise<T | null> {
   const { onError, onSuccess, logErrors = true } = options;
-  
+
   try {
     const response = await apiCall();
-    
+
     if (response.error) {
       if (logErrors) {
-        console.error('API call failed:', response.error);
+        console.error("API call failed:", response.error);
       }
       const apiError: ApiError = {
         code: response.error.code || 500,
@@ -49,23 +49,24 @@ export async function handleApiCall<T>(
       onError?.(apiError);
       return null;
     }
-    
+
     if (response.data) {
       onSuccess?.(response.data);
       return response.data;
     }
-    
+
     return null;
   } catch (error) {
     if (logErrors) {
-      console.error('API call exception:', error);
+      console.error("API call exception:", error);
     }
-    
+
     const apiError: ApiError = {
       code: 500,
-      message: error instanceof Error ? error.message : "Unknown error occurred",
+      message:
+        error instanceof Error ? error.message : "Unknown error occurred",
     };
-    
+
     onError?.(apiError);
     return null;
   }
@@ -77,7 +78,7 @@ export async function handleApiCall<T>(
 export async function safeAsync<T>(
   fn: () => Promise<T>,
   fallback: T,
-  errorMessage?: string
+  errorMessage?: string,
 ): Promise<T> {
   try {
     return await fn();
@@ -88,4 +89,3 @@ export async function safeAsync<T>(
     return fallback;
   }
 }
-

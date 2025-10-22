@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect } from "react";
 import type { CalimeroApp } from "@calimero-network/calimero-client";
-import { log } from '../utils/logger';
-import type { WebSocketEventCallback } from '../types/WebSocketTypes';
+import { log } from "../utils/logger";
+import type { WebSocketEventCallback } from "../types/WebSocketTypes";
 
 /**
  * Custom hook for managing WebSocket event subscriptions
@@ -9,7 +9,7 @@ import type { WebSocketEventCallback } from '../types/WebSocketTypes';
  */
 export function useWebSocketSubscription(
   app: CalimeroApp | null | undefined,
-  eventCallback: WebSocketEventCallback | null
+  eventCallback: WebSocketEventCallback | null,
 ) {
   const subscriptionContextIdRef = useRef<string>("");
   const eventCallbackRef = useRef(eventCallback);
@@ -37,7 +37,7 @@ export function useWebSocketSubscription(
           log.error(
             "WebSocket",
             `Failed to unsubscribe from: ${subscriptionContextIdRef.current}`,
-            error
+            error,
           );
         }
       }
@@ -50,7 +50,7 @@ export function useWebSocketSubscription(
         log.error("WebSocket", `Failed to subscribe to: ${contextId}`, error);
       }
     },
-    [app]
+    [app],
   );
 
   /**
@@ -93,4 +93,3 @@ export function useWebSocketSubscription(
     getCurrentContextId,
   };
 }
-

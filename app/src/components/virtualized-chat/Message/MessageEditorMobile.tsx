@@ -1,8 +1,8 @@
-import styled from 'styled-components';
+import styled from "styled-components";
 
-import type { AccountData } from '../types/curbTypes';
+import type { AccountData } from "../types/curbTypes";
 
-import MessageEditor from './MessageEditor';
+import MessageEditor from "./MessageEditor";
 
 const EditorWrapper = styled.div`
   position: fixed;

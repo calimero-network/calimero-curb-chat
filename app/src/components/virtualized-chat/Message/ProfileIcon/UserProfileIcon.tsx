@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import styled from 'styled-components';
+import React, { useEffect, useState } from "react";
+import styled from "styled-components";
 
 const ProfileIconContainer = styled.div<{ $height: string; $width: string }>`
   position: relative;
@@ -18,7 +18,7 @@ const ActiveStatusCricle = styled.div<{ $active: boolean }>`
   height: 10px;
   border-radius: 50%;
   ${({ $active }: { $active: boolean }) =>
-    $active ? 'background-color: #00FF66;' : 'background-color: #777583;'}
+    $active ? "background-color: #00FF66;" : "background-color: #777583;"}
   border: 1px solid #1A1A1D;
 `;
 
@@ -34,12 +34,12 @@ interface UserProfileIconProps {
 const UserProfileIcon: React.FC<UserProfileIconProps> = ({
   accountId,
   showStatus = true,
-  width = '24px',
-  height = '24px',
+  width = "24px",
+  height = "24px",
   active = false,
   getIconFromCache,
 }) => {
-  const [imageUrl, setImageUrl] = useState('https://i.imgur.com/e8buxpa.png');
+  const [imageUrl, setImageUrl] = useState("https://i.imgur.com/e8buxpa.png");
 
   useEffect(() => {
     const setImage = async () => {
@@ -57,7 +57,7 @@ const UserProfileIcon: React.FC<UserProfileIconProps> = ({
         src={imageUrl}
         alt={`profile-icon-${accountId}`}
         className="rounded-circle"
-        style={{ width: width, height: height, objectFit: 'cover' }}
+        style={{ width: width, height: height, objectFit: "cover" }}
       />
       {showStatus && <ActiveStatusCricle $active={active} />}
     </ProfileIconContainer>

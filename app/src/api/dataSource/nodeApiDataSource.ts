@@ -24,17 +24,17 @@ function getAuthHeaders() {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  
+
   if (authConfig?.jwtToken) {
     headers["Authorization"] = `Bearer ${authConfig.jwtToken}`;
   }
-  
+
   return headers;
 }
 
 export class ContextApiDataSource implements NodeApi {
   async createContext(
-    props: CreateContextProps
+    props: CreateContextProps,
   ): ApiResponse<CreateContextResponse> {
     try {
       const jsonData = {
@@ -51,7 +51,7 @@ export class ContextApiDataSource implements NodeApi {
       const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
 
       const response = await axios.post(
-        `${nodeEndpoint}/admin-api/contexts`, 
+        `${nodeEndpoint}/admin-api/contexts`,
         {
           applicationId: import.meta.env.VITE_APPLICATION_ID || "",
           protocol: "near",
@@ -59,7 +59,7 @@ export class ContextApiDataSource implements NodeApi {
         },
         {
           headers: getAuthHeaders(),
-        }
+        },
       );
 
       if (response.status === 200) {
@@ -104,7 +104,7 @@ export class ContextApiDataSource implements NodeApi {
         },
         {
           headers: getAuthHeaders(),
-        }
+        },
       );
 
       if (response.status === 200) {
@@ -147,7 +147,7 @@ export class ContextApiDataSource implements NodeApi {
         },
         {
           headers: getAuthHeaders(),
-        }
+        },
       );
 
       if (response.status === 200) {
@@ -181,7 +181,7 @@ export class ContextApiDataSource implements NodeApi {
   }
 
   async verifyContext(
-    props: VerifyContextProps
+    props: VerifyContextProps,
   ): ApiResponse<VerifyContextResponse> {
     try {
       const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
@@ -189,7 +189,7 @@ export class ContextApiDataSource implements NodeApi {
         `${nodeEndpoint}/admin-api/contexts/${props.contextId}`,
         {
           headers: getAuthHeaders(),
-        }
+        },
       );
 
       if (response.status === 200) {
@@ -228,7 +228,7 @@ export class ContextApiDataSource implements NodeApi {
         {},
         {
           headers: getAuthHeaders(),
-        }
+        },
       );
 
       if (response.status === 200) {
@@ -262,7 +262,7 @@ export class ContextApiDataSource implements NodeApi {
         `${nodeEndpoint}/admin-api/contexts/${props.contextId}`,
         {
           headers: getAuthHeaders(),
-        }
+        },
       );
       if (response.status === 200) {
         return {
@@ -291,17 +291,15 @@ export class ContextApiDataSource implements NodeApi {
   async listContexts(): ApiResponse<import("../nodeApi").ContextInfo[]> {
     try {
       const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
-      const response = await axios.get(
-        `${nodeEndpoint}/admin-api/contexts`,
-        {
-          headers: getAuthHeaders(),
-        }
-      );
-      
+      const response = await axios.get(`${nodeEndpoint}/admin-api/contexts`, {
+        headers: getAuthHeaders(),
+      });
+
       if (response.status === 200) {
         // The response structure is { data: { contexts: [...] } }
-        const rawContexts = response.data.data?.contexts || response.data?.contexts || [];
-        
+        const rawContexts =
+          response.data.data?.contexts || response.data?.contexts || [];
+
         // Map the API response to our ContextInfo interface
         // API uses 'id' but our interface expects 'contextId'
         const contexts = rawContexts.map((ctx: any) => ({
@@ -310,7 +308,7 @@ export class ContextApiDataSource implements NodeApi {
           lastUpdate: ctx.lastUpdate || 0,
           rootHash: ctx.rootHash,
         }));
-        
+
         return {
           data: contexts,
           error: null,

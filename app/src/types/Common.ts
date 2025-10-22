@@ -138,13 +138,7 @@ export interface ChatFile {
 }
 
 // Re-export types from virtualized-chat to maintain backwards compatibility
-export type {
-  CurbMessage,
-  CurbFile,
-  AccountData,
-  Option,
-  HashMap,
-};
+export type { CurbMessage, CurbFile, AccountData, Option, HashMap };
 // MessageStatus is an enum, so it must be exported as a value, not just a type
 export { MessageStatus };
 

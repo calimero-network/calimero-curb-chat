@@ -27,7 +27,7 @@ interface ChatDisplaySplitProps {
   handleReaction: (
     message: CurbMessage,
     emoji: string,
-    isThread: boolean
+    isThread: boolean,
   ) => void;
   openThread: CurbMessage | undefined;
   setOpenThread: (message: CurbMessage) => void;
@@ -63,10 +63,10 @@ const ContainerPadding = styled.div`
     padding-left: 0px !important;
     padding-right: 0px !important;
   }
-  
+
   /* Apply shared scrollbar styles */
   ${scrollbarStyles}
-  
+
   /* Optimize scrolling performance */
   contain: layout style paint;
   overflow-anchor: none;
@@ -107,7 +107,7 @@ const Wrapper = styled.div`
   /* GPU acceleration for smoother rendering */
   transform: translateZ(0);
   backface-visibility: hidden;
-  
+
   @media (max-width: 1024px) {
     width: 100% !important;
   }
@@ -194,17 +194,17 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
   useEffect(() => {
     // Update accountId whenever activeChat changes (DM vs Channel have different IDs)
     const isDM = activeChat?.type === "direct_message";
-    const currentAccountId = isDM 
-      ? (activeChat?.account || getExecutorPublicKey() || "")
-      : (getExecutorPublicKey() || "");
+    const currentAccountId = isDM
+      ? activeChat?.account || getExecutorPublicKey() || ""
+      : getExecutorPublicKey() || "";
     setAccountId(currentAccountId);
-    
+
     // Only fetch username once, not on every render
     if (hasLoadedUsername.current) return;
-    
+
     const setUserInfo = async () => {
       const executorId = getExecutorPublicKey() ?? "";
-      
+
       // Check if we already have the username in storage
       const cachedUsername = StorageHelper.getItem("chat-username");
       if (cachedUsername) {
@@ -217,7 +217,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
         hasLoadedUsername.current = true;
         return;
       }
-      
+
       // Fetch from API if not cached
       const response = await new ClientApiDataSource().getUsername({
         user_id: executorId ?? "",
@@ -231,7 +231,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
         setUsername(normalizedClass);
         hasLoadedUsername.current = true;
       }
-    }
+    };
     setUserInfo();
   }, [activeChat]);
 
@@ -274,7 +274,11 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
   // Debug logging for incomingMessages
   useEffect(() => {
     if (isThread) {
-      log.debug('ChatDisplaySplit', `Thread component received incomingMessages:`, incomingMessages);
+      log.debug(
+        "ChatDisplaySplit",
+        `Thread component received incomingMessages:`,
+        incomingMessages,
+      );
     }
   }, [incomingMessages, isThread]);
 
@@ -289,8 +293,16 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
       toggleEmojiSelector: toggleEmojiSelector,
       openMobileReactions: openMobileReactions,
       setOpenMobileReactions: setOpenMobileReactions,
-      editable: (message: CurbMessage) =>  message.sender === (activeChat.type === "direct_message" ? activeChat.account : getExecutorPublicKey()),
-      deleteable: (message: CurbMessage) =>  message.sender === (activeChat.type === "direct_message" ? activeChat.account : getExecutorPublicKey()),
+      editable: (message: CurbMessage) =>
+        message.sender ===
+        (activeChat.type === "direct_message"
+          ? activeChat.account
+          : getExecutorPublicKey()),
+      deleteable: (message: CurbMessage) =>
+        message.sender ===
+        (activeChat.type === "direct_message"
+          ? activeChat.account
+          : getExecutorPublicKey()),
       onEditModeRequested: onEditModeRequested,
       onEditModeCancelled: onEditModeCancelled,
       onMessageUpdated: onMessageUpdated,
@@ -332,13 +344,17 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
               message.sender !== accountId
             }
             render={renderMessage}
-            chatId={isThread && openThread?.id ? openThread.id : activeChat.id || ''}
+            chatId={
+              isThread && openThread?.id ? openThread.id : activeChat.id || ""
+            }
             style={currentChatStyle}
           />
         </ContainerPadding>
         <MessageInput
           selectedChat={
-            activeChat.type === "channel" ? activeChat.name : activeChat.username || ""
+            activeChat.type === "channel"
+              ? activeChat.name
+              : activeChat.username || ""
           }
           sendMessage={sendMessage}
           resetImage={resetImage}

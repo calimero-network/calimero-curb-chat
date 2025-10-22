@@ -1,29 +1,23 @@
-import { useLongPress } from '@uidotdev/usehooks';
-import { useEffect, useState, useMemo, memo } from 'react';
-import styled from 'styled-components';
+import { useLongPress } from "@uidotdev/usehooks";
+import { useEffect, useState, useMemo, memo } from "react";
+import styled from "styled-components";
 
-import { MessageActions } from '..';
-import type {
-  AccountData,
-  CurbMessage,
-} from '../types/curbTypes';
-import {
-  ElementPosition,
-  MessageStatus,
-} from '../types/curbTypes';
-import { formatTimeAgo } from '../utils';
+import { MessageActions } from "..";
+import type { AccountData, CurbMessage } from "../types/curbTypes";
+import { ElementPosition, MessageStatus } from "../types/curbTypes";
+import { formatTimeAgo } from "../utils";
 
-import { POPUP_POSITION_SWITCH_HEIGHT } from './AutocompleteList';
-import { Avatar } from './Avatar';
-import DeletedMessage from './DeletedMessage';
-import MessageSendingIcon from './Icons/MessageSendingIcon';
-import MessageSentIcon from './Icons/MessageSentIcon';
-import MessageEditor from './MessageEditor';
-import MessageEditorMobile from './MessageEditorMobile';
+import { POPUP_POSITION_SWITCH_HEIGHT } from "./AutocompleteList";
+import { Avatar } from "./Avatar";
+import DeletedMessage from "./DeletedMessage";
+import MessageSendingIcon from "./Icons/MessageSendingIcon";
+import MessageSentIcon from "./Icons/MessageSentIcon";
+import MessageEditor from "./MessageEditor";
+import MessageEditorMobile from "./MessageEditorMobile";
 // MessageFileField and MessageImageField removed - using our own versions
-import MessageReactionsField from './MessageReactionsField';
-import RenderHtml from './RenderHtml';
-import ReplyContainerButton from './ReplyContainerButton';
+import MessageReactionsField from "./MessageReactionsField";
+import RenderHtml from "./RenderHtml";
+import ReplyContainerButton from "./ReplyContainerButton";
 
 const ActionsContainer = styled.div`
   position: absolute;
@@ -40,7 +34,7 @@ const ActionsContainerMobile = styled.div<{ $addPadding: boolean }>`
     display: flex;
     position: absolute;
     z-index: 30;
-    top: ${({ $addPadding }) => ($addPadding ? '-1rem' : '0rem')};
+    top: ${({ $addPadding }) => ($addPadding ? "-1rem" : "0rem")};
     right: 1rem;
   }
 `;
@@ -62,14 +56,14 @@ const MessageContainer = styled.div<{ $editmode: boolean }>`
     padding-left: 14px;
     padding-right: 14px;
   }
-  ${({ $editmode }) => $editmode && 'background-color: #0A131E;'}
+  ${({ $editmode }) => $editmode && "background-color: #0A131E;"}
   @media (min-width: 1025px) {
     &:hover ${ActionsContainer} {
       visibility: visible;
-      ${({ $editmode }) => !$editmode && 'opacity: 1;'}
+      ${({ $editmode }) => !$editmode && "opacity: 1;"}
     }
     &:hover {
-      ${({ $editmode }) => !$editmode && 'background-color: #1e1e1e;'}
+      ${({ $editmode }) => !$editmode && "background-color: #1e1e1e;"}
     }
   }
 `;
@@ -142,7 +136,7 @@ const MessageText = styled.div<MessageTextProps>`
     padding-right: 0;
   }
 
-  background-color: ${(props) => props.$globalMention && '#ecfc910d'};
+  background-color: ${(props) => props.$globalMention && "#ecfc910d"};
 
   .mention-everyone,
   .mention-here {
@@ -151,7 +145,7 @@ const MessageText = styled.div<MessageTextProps>`
   }
 
   .mention-user-${(props: MessageTextProps) =>
-      props.$accountId && `${props.$accountId}`} {
+    props.$accountId && `${props.$accountId}`} {
     color: #73b30c !important;
     background-color: #ecfc910d !important;
   }
@@ -339,7 +333,14 @@ const Message = (props: MessageProps) => {
   // Memoize the shouldShowHeader result to prevent multiple calculations
   const showHeader = useMemo(() => {
     return shouldShowHeader(props.message, props.prevMessage);
-  }, [props.message.id, props.message.sender, props.message.timestamp, props.prevMessage?.id, props.prevMessage?.sender, props.prevMessage?.timestamp]);
+  }, [
+    props.message.id,
+    props.message.sender,
+    props.message.timestamp,
+    props.prevMessage?.id,
+    props.prevMessage?.sender,
+    props.prevMessage?.timestamp,
+  ]);
 
   const [selectedReaction, setSelectedReaction] = useState<
     | {
@@ -396,14 +397,14 @@ const Message = (props: MessageProps) => {
 
   // Memoize accountId transformation for CSS class names
   const escapedAccountId = useMemo(() => {
-    return props.accountId.replace(/\./g, '\\.').replace(/_/g, '\\_');
+    return props.accountId.replace(/\./g, "\\.").replace(/_/g, "\\_");
   }, [props.accountId]);
 
   // Memoize global mention check
   const hasGlobalMention = useMemo(() => {
     return (
-      text?.includes('mention-everyone') ||
-      text?.includes('mention-here') ||
+      text?.includes("mention-everyone") ||
+      text?.includes("mention-here") ||
       text?.includes(`mention-user-${props.accountId}`)
     );
   }, [text, props.accountId]);
@@ -412,16 +413,16 @@ const Message = (props: MessageProps) => {
     const handleResize = () => {
       setScreenSize(window.innerWidth);
     };
-    
+
     // Set initial size
     setScreenSize(window.innerWidth);
-    
+
     // Add resize listener
-    window.addEventListener('resize', handleResize);
-    
+    window.addEventListener("resize", handleResize);
+
     // Cleanup
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener("resize", handleResize);
     };
   }, []); // Empty deps - only run once on mount
 
@@ -466,7 +467,7 @@ const Message = (props: MessageProps) => {
             <ClosableBackground
               onClick={() => {
                 setIsOpen(false);
-                props.setOpenMobileReactions('');
+                props.setOpenMobileReactions("");
               }}
             ></ClosableBackground>
           </FullScreenWrapper>
@@ -505,12 +506,10 @@ const Message = (props: MessageProps) => {
             <NameContainerSender>
               {props.message.senderUsername}
             </NameContainerSender>
-            <MessageTime>
-              {formattedTime}
-            </MessageTime>
+            <MessageTime>{formattedTime}</MessageTime>
           </SenderInfoContainer>
         )}
-        {(props.message?.editMode && screenSize > 1024) ?? false ? (
+        {((props.message?.editMode && screenSize > 1024) ?? false) ? (
           <MessageEditor
             text={text}
             onSubmit={props.submitEditedMessage}
@@ -529,7 +528,7 @@ const Message = (props: MessageProps) => {
               <RenderHtml html={text} />
             </MessageText>
             <Tick>
-              {props.message.editedOn && '(edited) '}
+              {props.message.editedOn && "(edited) "}
               {statusIcon}
             </Tick>
           </MessageContentContainer>
@@ -596,7 +595,10 @@ const Message = (props: MessageProps) => {
  * Custom comparison function for React.memo
  * Only re-render if relevant props have changed
  */
-const arePropsEqual = (prevProps: MessageProps, nextProps: MessageProps): boolean => {
+const arePropsEqual = (
+  prevProps: MessageProps,
+  nextProps: MessageProps,
+): boolean => {
   // If message IDs are different, definitely re-render
   if (prevProps.message.id !== nextProps.message.id) {
     return false;
@@ -610,7 +612,8 @@ const arePropsEqual = (prevProps: MessageProps, nextProps: MessageProps): boolea
     prevProps.message.editedOn !== nextProps.message.editedOn ||
     prevProps.message.status !== nextProps.message.status ||
     prevProps.message.threadCount !== nextProps.message.threadCount ||
-    prevProps.message.threadLastTimestamp !== nextProps.message.threadLastTimestamp
+    prevProps.message.threadLastTimestamp !==
+      nextProps.message.threadLastTimestamp
   ) {
     return false;
   }
@@ -626,17 +629,17 @@ const arePropsEqual = (prevProps: MessageProps, nextProps: MessageProps): boolea
     if (prevProps.message.reactions && nextProps.message.reactions) {
       const prevKeys = Object.keys(prevProps.message.reactions);
       const nextKeys = Object.keys(nextProps.message.reactions);
-      
+
       // Check if number of reactions changed
       if (prevKeys.length !== nextKeys.length) {
         return false;
       }
-      
+
       // Check if any reaction emoji or accounts changed
       for (const emoji of prevKeys) {
         const prevAccounts = prevProps.message.reactions[emoji];
         const nextAccounts = nextProps.message.reactions[emoji];
-        
+
         if (!nextAccounts || prevAccounts.length !== nextAccounts.length) {
           return false;
         }
@@ -645,10 +648,12 @@ const arePropsEqual = (prevProps: MessageProps, nextProps: MessageProps): boolea
   }
 
   // Check if previous message changed (affects header display)
-  if (prevProps.prevMessage?.id !== nextProps.prevMessage?.id ||
-      prevProps.prevMessage?.sender !== nextProps.prevMessage?.sender ||
-      prevProps.prevMessage?.timestamp !== nextProps.prevMessage?.timestamp ||
-      prevProps.prevMessage?.deleted !== nextProps.prevMessage?.deleted) {
+  if (
+    prevProps.prevMessage?.id !== nextProps.prevMessage?.id ||
+    prevProps.prevMessage?.sender !== nextProps.prevMessage?.sender ||
+    prevProps.prevMessage?.timestamp !== nextProps.prevMessage?.timestamp ||
+    prevProps.prevMessage?.deleted !== nextProps.prevMessage?.deleted
+  ) {
     return false;
   }
 
@@ -660,7 +665,10 @@ const arePropsEqual = (prevProps: MessageProps, nextProps: MessageProps): boolea
   }
 
   // Check if editable/deletable permissions changed
-  if (prevProps.editable !== nextProps.editable || prevProps.deletable !== nextProps.deletable) {
+  if (
+    prevProps.editable !== nextProps.editable ||
+    prevProps.deletable !== nextProps.deletable
+  ) {
     return false;
   }
 
@@ -670,7 +678,10 @@ const arePropsEqual = (prevProps: MessageProps, nextProps: MessageProps): boolea
   }
 
   // Check if autocompleteAccounts changed (for edit mode)
-  if (prevProps.autocompleteAccounts.length !== nextProps.autocompleteAccounts.length) {
+  if (
+    prevProps.autocompleteAccounts.length !==
+    nextProps.autocompleteAccounts.length
+  ) {
     return false;
   }
 

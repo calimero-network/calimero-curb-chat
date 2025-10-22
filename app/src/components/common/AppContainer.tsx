@@ -1,6 +1,12 @@
 import { styled } from "styled-components";
-import { memo } from 'react';
-import type { ActiveChat, ChannelMeta, ChatMessagesData, ChatMessagesDataWithOlder, CurbMessage } from "../../types/Common";
+import { memo } from "react";
+import type {
+  ActiveChat,
+  ChannelMeta,
+  ChatMessagesData,
+  ChatMessagesDataWithOlder,
+  CurbMessage,
+} from "../../types/Common";
 import ChannelsContainer from "./ChannelsContainer";
 import CurbNavbar from "../navbar/CurbNavbar";
 import SearchChannelsContainer from "../searchChannels/SearchChannelsContainer";
@@ -43,7 +49,9 @@ interface AppContainerProps {
   chatMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
   privateDMs: DMChatInfo[];
-  loadInitialThreadMessages: (parentMessageId: string) => Promise<ChatMessagesData>;
+  loadInitialThreadMessages: (
+    parentMessageId: string,
+  ) => Promise<ChatMessagesData>;
   incomingThreadMessages: CurbMessage[];
   loadPrevThreadMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
   updateCurrentOpenThread: (thread: CurbMessage | undefined) => void;

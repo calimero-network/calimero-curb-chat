@@ -1,4 +1,4 @@
-import styled from 'styled-components';
+import styled from "styled-components";
 
 const HeaderContainer = styled.div`
   height: 30px;
@@ -21,10 +21,9 @@ const LoadingHeader: React.FC<LoadingHeaderProps> = ({ isLoading }) => {
   // Return empty div to avoid layout shift (Virtuoso best practice)
   return (
     <HeaderContainer>
-      {isLoading ? 'Loading older messages...' : ''}
+      {isLoading ? "Loading older messages..." : ""}
     </HeaderContainer>
   );
 };
 
 export default LoadingHeader;
-

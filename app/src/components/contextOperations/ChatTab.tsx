@@ -106,7 +106,13 @@ const Message = styled.div<{ type?: "success" | "error" | "info" }>`
   font-size: 0.7rem;
   text-align: center;
   color: ${({ type }) =>
-    type === "success" ? "#27ae60" : type === "error" ? "#e74c3c" : type === "info" ? "#3b82f6" : "#b8b8d1"};
+    type === "success"
+      ? "#27ae60"
+      : type === "error"
+        ? "#e74c3c"
+        : type === "info"
+          ? "#3b82f6"
+          : "#b8b8d1"};
 `;
 
 interface ChatTabProps {
@@ -139,7 +145,7 @@ export default function ChatTab({
         setFetchingContexts(true);
         const nodeUrl = getAppEndpointKey() || "";
         setUsername(localStorage.getItem("chat-username") || "");
-        setFormData(prev => ({ ...prev, nodeUrl }));
+        setFormData((prev) => ({ ...prev, nodeUrl }));
 
         try {
           const nodeApi = new ContextApiDataSource();
@@ -149,11 +155,13 @@ export default function ChatTab({
             // Auto-select first context if only one available
             if (response.data.length === 1) {
               const contextId = response.data[0].contextId;
-              setFormData(prev => ({ ...prev, contextId }));
+              setFormData((prev) => ({ ...prev, contextId }));
               await fetchIdentityForContext(contextId);
             }
           } else {
-            setError("No contexts found on this node. Please join or create a context first.");
+            setError(
+              "No contexts found on this node. Please join or create a context first.",
+            );
             setIsDisabled(true);
           }
         } catch (err) {
@@ -174,7 +182,7 @@ export default function ChatTab({
   // Fetch identity for selected context
   const fetchIdentityForContext = async (contextId: string) => {
     if (!contextId) return;
-    
+
     setFetchingIdentity(true);
     setError("");
     setIsDisabled(false);
@@ -182,17 +190,25 @@ export default function ChatTab({
     try {
       const contextIdentityResponse: ResponseData<FetchContextIdentitiesResponse> =
         await apiClient.node().fetchContextIdentities(contextId);
-      
-      if (contextIdentityResponse.data && contextIdentityResponse.data.identities.length > 0) {
-        const contextIdentity: string = contextIdentityResponse.data.identities[0];
-        setFormData(prev => ({
+
+      if (
+        contextIdentityResponse.data &&
+        contextIdentityResponse.data.identities.length > 0
+      ) {
+        const contextIdentity: string =
+          contextIdentityResponse.data.identities[0];
+        setFormData((prev) => ({
           ...prev,
           contextId,
           identityId: contextIdentity,
         }));
-      } else if (contextIdentityResponse.error?.message === "Context not found") {
+      } else if (
+        contextIdentityResponse.error?.message === "Context not found"
+      ) {
         setIsDisabled(true);
-        setError("You are not a member of this context. Please join the context first.");
+        setError(
+          "You are not a member of this context. Please join the context first.",
+        );
       } else {
         setError("Failed to fetch identity for this context");
       }
@@ -204,7 +220,9 @@ export default function ChatTab({
   };
 
   // Handle context selection change
-  const handleContextChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleContextChange = async (
+    e: React.ChangeEvent<HTMLSelectElement>,
+  ) => {
     const contextId = e.target.value;
     if (contextId) {
       await fetchIdentityForContext(contextId);
@@ -291,8 +309,8 @@ export default function ChatTab({
               {fetchingContexts
                 ? "Loading contexts..."
                 : availableContexts.length === 0
-                ? "No contexts available"
-                : "Select a context..."}
+                  ? "No contexts available"
+                  : "Select a context..."}
             </option>
             {availableContexts.map((context) => (
               <option key={context.contextId} value={context.contextId}>
@@ -308,7 +326,9 @@ export default function ChatTab({
         </InputGroup>
 
         {fetchingIdentity && (
-          <Message type="info">Fetching identity for selected context...</Message>
+          <Message type="info">
+            Fetching identity for selected context...
+          </Message>
         )}
 
         {formData.identityId && (
@@ -339,13 +359,13 @@ export default function ChatTab({
           />
         </InputGroup>
 
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           disabled={
-            isLoading || 
-            isDisabled || 
-            !username.trim() || 
-            !formData.contextId || 
+            isLoading ||
+            isDisabled ||
+            !username.trim() ||
+            !formData.contextId ||
             !formData.identityId ||
             fetchingIdentity
           }

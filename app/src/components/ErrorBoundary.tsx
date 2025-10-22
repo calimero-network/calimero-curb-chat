@@ -1,6 +1,6 @@
-import React, { Component, type ReactNode, type ErrorInfo } from 'react';
-import styled from 'styled-components';
-import { log } from '../utils/logger';
+import React, { Component, type ReactNode, type ErrorInfo } from "react";
+import styled from "styled-components";
+import { log } from "../utils/logger";
 
 interface Props {
   children: ReactNode;
@@ -87,7 +87,7 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Log error to console and external service
-    log.error('ErrorBoundary', 'React error boundary caught an error', {
+    log.error("ErrorBoundary", "React error boundary caught an error", {
       error: error.message,
       stack: error.stack,
       componentStack: errorInfo.componentStack,
@@ -122,11 +122,11 @@ class ErrorBoundary extends Component<Props, State> {
           {import.meta.env.DEV && this.state.error && (
             <ErrorDetails role="status" aria-label="Error details">
               {this.state.error.message}
-              {'\n\n'}
+              {"\n\n"}
               {this.state.error.stack}
             </ErrorDetails>
           )}
-          <RetryButton 
+          <RetryButton
             onClick={this.handleReset}
             aria-label="Retry and recover from error"
           >
@@ -141,4 +141,3 @@ class ErrorBoundary extends Component<Props, State> {
 }
 
 export default ErrorBoundary;
-

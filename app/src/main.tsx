@@ -10,14 +10,15 @@ import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { log } from "./utils/logger.ts";
 
 // Register service worker for PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
       .then((_registration) => {
-        log.info('ServiceWorker', 'Service worker registered successfully');
+        log.info("ServiceWorker", "Service worker registered successfully");
       })
       .catch((error) => {
-        log.error('ServiceWorker', 'Service worker registration failed', error);
+        log.error("ServiceWorker", "Service worker registration failed", error);
       });
   });
 }
@@ -28,9 +29,11 @@ const AppWrapper = import.meta.env.DEV ? StrictMode : React.Fragment;
 
 createRoot(document.getElementById("root")!).render(
   <AppWrapper>
-    <ErrorBoundary onError={(error, errorInfo) => {
-      log.error('App', 'Uncaught error in React tree', { error, errorInfo });
-    }}>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        log.error("App", "Uncaught error in React tree", { error, errorInfo });
+      }}
+    >
       <BrowserRouter>
         <CalimeroProvider
           clientApplicationId={APPLICATION_ID}
@@ -43,5 +46,5 @@ createRoot(document.getElementById("root")!).render(
         </CalimeroProvider>
       </BrowserRouter>
     </ErrorBoundary>
-  </AppWrapper>
+  </AppWrapper>,
 );

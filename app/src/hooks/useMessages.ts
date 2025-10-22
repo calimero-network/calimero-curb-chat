@@ -2,9 +2,20 @@ import { useState, useRef, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FullMessageResponse } from "../api/clientApi";
-import type { ActiveChat, CurbMessage, ChatMessagesData, ChatMessagesDataWithOlder } from "../types/Common";
-import { transformMessageToUI, transformMessagesToUI } from "../utils/messageTransformers";
-import { MESSAGE_PAGE_SIZE, RECENT_MESSAGES_CHECK_SIZE } from "../constants/app";
+import type {
+  ActiveChat,
+  CurbMessage,
+  ChatMessagesData,
+  ChatMessagesDataWithOlder,
+} from "../types/Common";
+import {
+  transformMessageToUI,
+  transformMessagesToUI,
+} from "../utils/messageTransformers";
+import {
+  MESSAGE_PAGE_SIZE,
+  RECENT_MESSAGES_CHECK_SIZE,
+} from "../constants/app";
 import { log } from "../utils/logger";
 
 /**
@@ -22,139 +33,148 @@ export function useMessages() {
   /**
    * Load initial messages for a chat
    */
-  const loadInitial = useCallback(async (
-    activeChat: ActiveChat | null
-  ): Promise<ChatMessagesData> => {
-    if (!activeChat?.name) {
+  const loadInitial = useCallback(
+    async (activeChat: ActiveChat | null): Promise<ChatMessagesData> => {
+      if (!activeChat?.name) {
+        return {
+          messages: [],
+          totalCount: 0,
+          hasMore: false,
+        };
+      }
+
+      const isDM = activeChat.type === "direct_message";
+      const response: ResponseData<FullMessageResponse> =
+        await new ClientApiDataSource().getMessages({
+          group: { name: (isDM ? "private_dm" : activeChat.name) || "" },
+          limit: MESSAGE_PAGE_SIZE,
+          offset: 0,
+          is_dm: isDM,
+          dm_identity: activeChat.account,
+        });
+
+      if (response.data) {
+        const messagesArray = transformMessagesToUI(response.data.messages);
+        messagesRef.current = messagesArray;
+        setMessages(messagesArray);
+        setTotalCount(response.data.total_count);
+        setOffset(MESSAGE_PAGE_SIZE);
+
+        return {
+          messages: messagesArray,
+          totalCount: response.data.total_count,
+          hasMore: response.data.start_position < response.data.total_count,
+        };
+      }
+
       return {
         messages: [],
         totalCount: 0,
         hasMore: false,
       };
-    }
-
-    const isDM = activeChat.type === "direct_message";
-    const response: ResponseData<FullMessageResponse> =
-      await new ClientApiDataSource().getMessages({
-        group: { name: (isDM ? "private_dm" : activeChat.name) || "" },
-        limit: MESSAGE_PAGE_SIZE,
-        offset: 0,
-        is_dm: isDM,
-        dm_identity: activeChat.account,
-      });
-
-    if (response.data) {
-      const messagesArray = transformMessagesToUI(response.data.messages);
-      messagesRef.current = messagesArray;
-      setMessages(messagesArray);
-      setTotalCount(response.data.total_count);
-      setOffset(MESSAGE_PAGE_SIZE);
-
-      return {
-        messages: messagesArray,
-        totalCount: response.data.total_count,
-        hasMore: response.data.start_position < response.data.total_count,
-      };
-    }
-
-    return {
-      messages: [],
-      totalCount: 0,
-      hasMore: false,
-    };
-  }, []);
+    },
+    [],
+  );
 
   /**
    * Load previous (older) messages for pagination
    */
-  const loadPrevious = useCallback(async (
-    activeChat: ActiveChat | null,
-    _chatId: string
-  ): Promise<ChatMessagesDataWithOlder> => {
-    if (!activeChat || offset >= totalCount) {
+  const loadPrevious = useCallback(
+    async (
+      activeChat: ActiveChat | null,
+      _chatId: string,
+    ): Promise<ChatMessagesDataWithOlder> => {
+      if (!activeChat || offset >= totalCount) {
+        return {
+          messages: [],
+          totalCount,
+          hasOlder: false,
+        };
+      }
+
+      const isDM = activeChat.type === "direct_message";
+      const response: ResponseData<FullMessageResponse> =
+        await new ClientApiDataSource().getMessages({
+          group: {
+            name: (isDM ? "private_dm" : activeChat.name) || "",
+          },
+          limit: MESSAGE_PAGE_SIZE,
+          offset,
+          is_dm: isDM,
+          dm_identity: activeChat.account,
+        });
+
+      if (response.data) {
+        const messagesArray = transformMessagesToUI(response.data.messages);
+        setOffset(offset + MESSAGE_PAGE_SIZE);
+
+        return {
+          messages: messagesArray,
+          totalCount: response.data.total_count,
+          hasOlder: response.data.start_position < response.data.total_count,
+        };
+      }
+
       return {
         messages: [],
-        totalCount,
+        totalCount: 0,
         hasOlder: false,
       };
-    }
-
-    const isDM = activeChat.type === "direct_message";
-    const response: ResponseData<FullMessageResponse> =
-      await new ClientApiDataSource().getMessages({
-        group: {
-          name: (isDM ? "private_dm" : activeChat.name) || "",
-        },
-        limit: MESSAGE_PAGE_SIZE,
-        offset,
-        is_dm: isDM,
-        dm_identity: activeChat.account,
-      });
-
-    if (response.data) {
-      const messagesArray = transformMessagesToUI(response.data.messages);
-      setOffset(offset + MESSAGE_PAGE_SIZE);
-      
-      return {
-        messages: messagesArray,
-        totalCount: response.data.total_count,
-        hasOlder: response.data.start_position < response.data.total_count,
-      };
-    }
-
-    return {
-      messages: [],
-      totalCount: 0,
-      hasOlder: false,
-    };
-  }, [offset, totalCount]);
+    },
+    [offset, totalCount],
+  );
 
   /**
    * Check for and add new messages from websocket events
    * Includes aggressive rate limiting to prevent API hammering
    */
-  const checkForNewMessages = useCallback(async (
-    activeChat: ActiveChat | null,
-    isDM: boolean
-  ): Promise<CurbMessage[]> => {
-    if (!activeChat) return [];
+  const checkForNewMessages = useCallback(
+    async (
+      activeChat: ActiveChat | null,
+      isDM: boolean,
+    ): Promise<CurbMessage[]> => {
+      if (!activeChat) return [];
 
-    // Aggressive throttling: only check once every 3 seconds per chat
-    const now = Date.now();
-    if (now - lastCheckRef.current < 3000) {
-      log.debug('useMessages', 'Skipping message check - throttled');
+      // Aggressive throttling: only check once every 3 seconds per chat
+      const now = Date.now();
+      if (now - lastCheckRef.current < 3000) {
+        log.debug("useMessages", "Skipping message check - throttled");
+        return [];
+      }
+      lastCheckRef.current = now;
+
+      const response: ResponseData<FullMessageResponse> =
+        await new ClientApiDataSource().getMessages({
+          group: {
+            name: (isDM ? "private_dm" : activeChat.name) || "",
+          },
+          limit: RECENT_MESSAGES_CHECK_SIZE,
+          offset: 0,
+          is_dm: isDM,
+          dm_identity: activeChat.account,
+          parent_message: undefined, // Only get main chat messages, not thread messages
+        });
+
+      if (!response.data) return [];
+
+      // Transform messages - MessageStore will handle deduplication
+      const newMessages = response.data.messages.map((msg) =>
+        transformMessageToUI(msg),
+      );
+
+      if (newMessages.length > 0) {
+        // Only update ref, not state (MessageStore will deduplicate in VirtualizedChat)
+        messagesRef.current = [...messagesRef.current, ...newMessages];
+        return newMessages;
+      }
+
       return [];
-    }
-    lastCheckRef.current = now;
-
-    const response: ResponseData<FullMessageResponse> =
-      await new ClientApiDataSource().getMessages({
-        group: {
-          name: (isDM ? "private_dm" : activeChat.name) || "",
-        },
-        limit: RECENT_MESSAGES_CHECK_SIZE,
-        offset: 0,
-        is_dm: isDM,
-        dm_identity: activeChat.account,
-        parent_message: undefined, // Only get main chat messages, not thread messages
-      });
-
-    if (!response.data) return [];
-
-    // Transform messages - MessageStore will handle deduplication
-    const newMessages = response.data.messages.map((msg) => transformMessageToUI(msg));
-
-    if (newMessages.length > 0) {
-      // Only update ref, not state (MessageStore will deduplicate in VirtualizedChat)
-      messagesRef.current = [...messagesRef.current, ...newMessages];
-      return newMessages;
-    }
-
-    return [];
-  }, []);
+    },
+    [],
+  );
 
   /**
-   * Add incoming messages (from websocket) 
+   * Add incoming messages (from websocket)
    * MessageStore handles deduplication of optimistic messages
    */
   const addIncoming = useCallback((newMessages: CurbMessage[]) => {
@@ -163,7 +183,7 @@ export function useMessages() {
       setIncomingMessages(newMessages);
     }
   }, []);
-  
+
   /**
    * Add optimistic message (for messages being sent)
    */
@@ -207,4 +227,3 @@ export function useMessages() {
     getCurrent,
   };
 }
-

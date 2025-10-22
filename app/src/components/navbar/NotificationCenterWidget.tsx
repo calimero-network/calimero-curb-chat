@@ -1,6 +1,10 @@
-import { useState } from 'react';
-import styled from 'styled-components';
-import { NotificationCenter, useNotifications, type Notification } from '@calimero-network/mero-ui';
+import { useState } from "react";
+import styled from "styled-components";
+import {
+  NotificationCenter,
+  useNotifications,
+  type Notification,
+} from "@calimero-network/mero-ui";
 
 const NotificationButton = styled.button`
   position: relative;
@@ -57,7 +61,7 @@ const NotificationDropdown = styled.div<{ $isOpen: boolean }>`
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 1000;
-  display: ${(props) => (props.$isOpen ? 'block' : 'none')};
+  display: ${(props) => (props.$isOpen ? "block" : "none")};
 
   @media (max-width: 768px) {
     width: calc(100vw - 40px);
@@ -67,8 +71,12 @@ const NotificationDropdown = styled.div<{ $isOpen: boolean }>`
 `;
 
 const BellIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+  >
+    <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
   </svg>
 );
 
@@ -77,14 +85,13 @@ export default function NotificationCenterWidget() {
   const {
     notifications,
     markAsRead,
-    markAllAsRead,
     archive,
     archiveAll,
     deleteNotification,
     clearAll,
   } = useNotifications();
 
-  const unreadCount = notifications.filter((n) => n.status === 'unread').length;
+  const unreadCount = notifications.filter((n) => n.status === "unread").length;
 
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
@@ -95,10 +102,12 @@ export default function NotificationCenterWidget() {
     <>
       <NotificationButton
         onClick={() => setIsOpen(!isOpen)}
-        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
       >
         <BellIcon />
-        {unreadCount > 0 && <NotificationBadge>{unreadCount}</NotificationBadge>}
+        {unreadCount > 0 && (
+          <NotificationBadge>{unreadCount}</NotificationBadge>
+        )}
       </NotificationButton>
 
       <NotificationDropdown $isOpen={isOpen}>
@@ -119,7 +128,7 @@ export default function NotificationCenterWidget() {
       {isOpen && (
         <div
           style={{
-            position: 'fixed',
+            position: "fixed",
             top: 0,
             left: 0,
             right: 0,
@@ -132,4 +141,3 @@ export default function NotificationCenterWidget() {
     </>
   );
 }
-

@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
-import MessageStore from '../MessageStore';
-import type { UpdateDescriptor } from '../MessageStore';
-import { log } from '../../../../utils/logger';
+import { useEffect, useRef } from "react";
+import MessageStore from "../MessageStore";
+import type { UpdateDescriptor } from "../MessageStore";
+import { log } from "../../../../utils/logger";
 
 interface Message {
   id: string;
@@ -31,9 +31,11 @@ export function useMessageUpdates<T extends Message>({
 }: UseMessageUpdatesProps<T>): void {
   // Use refs to avoid adding callbacks to dependency arrays (prevents render loops)
   const onMessagesUpdatedRef = useRef(onMessagesUpdated);
-  const onNewMessagesWhileNotAtBottomRef = useRef(onNewMessagesWhileNotAtBottom);
+  const onNewMessagesWhileNotAtBottomRef = useRef(
+    onNewMessagesWhileNotAtBottom,
+  );
   const onOwnMessageSentRef = useRef(onOwnMessageSent);
-  
+
   // Keep refs updated
   useEffect(() => {
     onMessagesUpdatedRef.current = onMessagesUpdated;
@@ -48,19 +50,20 @@ export function useMessageUpdates<T extends Message>({
     if (incomingMessages.length === 0) return;
 
     const { addedCount, updatedCount } = store.append(incomingMessages);
-    
+
     if (addedCount > 0 || updatedCount > 0) {
       onMessagesUpdatedRef.current([...store.messages], addedCount);
-      
+
       // Pattern from VirtuosoMessageList: distinguish between sent vs received messages
       // Check ANY new incoming message, not just added ones (handles optimistic -> real transition)
       if (incomingMessages.length > 0) {
         // Check the last incoming message
-        const lastIncomingMessage = incomingMessages[incomingMessages.length - 1];
-        const shouldTriggerIndicator = shouldTriggerNewItemIndicator 
+        const lastIncomingMessage =
+          incomingMessages[incomingMessages.length - 1];
+        const shouldTriggerIndicator = shouldTriggerNewItemIndicator
           ? shouldTriggerNewItemIndicator(lastIncomingMessage)
           : false;
-        const isOwnMessage = !shouldTriggerIndicator;  // Inverse of shouldTriggerNewItemIndicator
+        const isOwnMessage = !shouldTriggerIndicator; // Inverse of shouldTriggerNewItemIndicator
 
         if (isOwnMessage) {
           // User sent a message - always scroll to bottom
@@ -86,4 +89,3 @@ export function useMessageUpdates<T extends Message>({
     onMessagesUpdatedRef.current([...store.messages], 0);
   }, [updatedMessages, store]);
 }
-

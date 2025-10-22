@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import styled from 'styled-components';
+import React, { useState, useEffect } from "react";
+import styled from "styled-components";
 
-import { elapsedTime } from '../utils';
+import { elapsedTime } from "../utils";
 
 const Container = styled.div`
   width: fit-content;
@@ -82,7 +82,7 @@ const ReplyContainerButton: React.FC<{
             ? `${props.replyCount} replies`
             : `${props.replyCount} reply`}
         </ReplyText>
-        <TimestampText>{hover ? 'View thread' : time}</TimestampText>
+        <TimestampText>{hover ? "View thread" : time}</TimestampText>
       </LeftContainer>
     </Container>
   );

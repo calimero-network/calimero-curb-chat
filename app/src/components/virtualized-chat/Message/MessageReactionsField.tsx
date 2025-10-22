@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import styled from 'styled-components';
+import React, { useState } from "react";
+import styled from "styled-components";
 
-import type { AccountId, CurbString, HashMap, Vec } from '../types/curbTypes';
+import type { AccountId, CurbString, HashMap, Vec } from "../types/curbTypes";
 
-import MessageReactionsList from './MessageReactionsList';
+import MessageReactionsList from "./MessageReactionsList";
 
 const ReactionsWrapper = styled.div`
   display: flex;
@@ -48,13 +48,13 @@ const ReactionEmojiWrapper = styled.div<ReactionEmojiWrapperProps>`
   gap: 4px;
   ${(props: ReactionEmojiWrapperProps) =>
     props.$isOwnReaction
-      ? 'background-color: #372D19;'
-      : 'background-color: #1e1f28;'}
+      ? "background-color: #372D19;"
+      : "background-color: #1e1f28;"}
   &:hover {
     ${(props: ReactionEmojiWrapperProps) =>
       props.$isOwnReaction
-        ? 'background-color: #4D3F24;'
-        : 'background-color: #2A2B37;'}
+        ? "background-color: #4D3F24;"
+        : "background-color: #2A2B37;"}
   }
   border-radius: 4px;
 `;
@@ -132,15 +132,15 @@ const ReactionDescription = ({
   const accountsCount = accounts.length;
 
   if (accountsCount <= 3) {
-    return <Text>{`reacted by ${accounts.join(', ')}`}</Text>;
+    return <Text>{`reacted by ${accounts.join(", ")}`}</Text>;
   } else {
-    const initialAccounts = accounts.slice(0, 3).join(', ');
+    const initialAccounts = accounts.slice(0, 3).join(", ");
     const othersCount = accountsCount - 3;
     return (
       <Text>
         {`reacted by ${initialAccounts} and `}
         <OthersButton onClick={openMessageReactionsList}>
-          {`${othersCount} other${othersCount > 1 ? 's' : ''}`}
+          {`${othersCount} other${othersCount > 1 ? "s" : ""}`}
         </OthersButton>
       </Text>
     );

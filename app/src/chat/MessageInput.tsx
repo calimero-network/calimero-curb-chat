@@ -184,7 +184,7 @@ const IconEmoji = () => {
 const IconSendSvg = styled.svg`
   margin-bottom: 8px;
   :hover {
-    fill: #73B30C;
+    fill: #73b30c;
   }
   cursor: pointer;
 `;
@@ -374,7 +374,7 @@ export default function MessageInput({
   const placeholderPosition = "-10px";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
-  
+
   // Memoize placeholder text to avoid recalculation
   const placeholderText = useMemo(() => {
     if (openThread && isThread) {
@@ -382,14 +382,15 @@ export default function MessageInput({
     }
     return `Type message in ${selectedChat}`;
   }, [openThread, isThread, selectedChat]);
-  
+
   const placeholderTextMobile = useMemo(() => {
     if (openThread && isThread) {
       return "Reply in thread";
     }
-    const chatName = selectedChat.length === 44 
-      ? `${selectedChat.toLowerCase().slice(0, 6)}...${selectedChat.toLowerCase().slice(-4)}` 
-      : selectedChat;
+    const chatName =
+      selectedChat.length === 44
+        ? `${selectedChat.toLowerCase().slice(0, 6)}...${selectedChat.toLowerCase().slice(-4)}`
+        : selectedChat;
     return `Type message in ${chatName}`;
   }, [openThread, isThread, selectedChat]);
 
@@ -397,7 +398,7 @@ export default function MessageInput({
     (mesage: MessageWithReactions | null) => {
       setMessage(mesage);
     },
-    []
+    [],
   );
 
   const handleEmojiSelected = useCallback((emoji: string) => {
@@ -557,13 +558,13 @@ export default function MessageInput({
                             images: [],
                             thread_count: 0,
                             thread_last_timestamp: 0,
-                          }
+                          },
                     );
                   }}
                   onSend={handleSendMessageEnter}
                   placeholder={placeholderText}
                   maxHeight={50}
-                  style={{fontSize: "14px"}}
+                  style={{ fontSize: "14px" }}
                   className="full-width-editor"
                 />
               </EditorWrapper>

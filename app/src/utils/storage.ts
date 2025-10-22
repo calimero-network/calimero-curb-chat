@@ -13,7 +13,10 @@ export class StorageHelper {
         return defaultValue ?? null;
       }
       // Try to parse as JSON if it looks like JSON
-      if ((item.startsWith('{') || item.startsWith('[')) && defaultValue !== undefined) {
+      if (
+        (item.startsWith("{") || item.startsWith("[")) &&
+        defaultValue !== undefined
+      ) {
         try {
           return JSON.parse(item) as T;
         } catch {
@@ -33,7 +36,8 @@ export class StorageHelper {
    */
   static setItem<T>(key: string, value: T): boolean {
     try {
-      const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+      const stringValue =
+        typeof value === "string" ? value : JSON.stringify(value);
       localStorage.setItem(key, stringValue);
       return true;
     } catch (error) {
@@ -63,7 +67,7 @@ export class StorageHelper {
       localStorage.clear();
       return true;
     } catch (error) {
-      console.error('Error clearing localStorage:', error);
+      console.error("Error clearing localStorage:", error);
       return false;
     }
   }
@@ -73,8 +77,8 @@ export class StorageHelper {
    */
   static isAvailable(): boolean {
     try {
-      const testKey = '__storage_test__';
-      localStorage.setItem(testKey, 'test');
+      const testKey = "__storage_test__";
+      localStorage.setItem(testKey, "test");
       localStorage.removeItem(testKey);
       return true;
     } catch {
@@ -85,21 +89,27 @@ export class StorageHelper {
   /**
    * Get JSON item with validation
    */
-  static getJSON<T>(key: string, validator?: (data: unknown) => boolean): T | null {
+  static getJSON<T>(
+    key: string,
+    validator?: (data: unknown) => boolean,
+  ): T | null {
     try {
       const item = localStorage.getItem(key);
       if (!item) return null;
-      
+
       const parsed = JSON.parse(item) as T;
-      
+
       if (validator && !validator(parsed)) {
         console.warn(`Validation failed for localStorage key: ${key}`);
         return null;
       }
-      
+
       return parsed;
     } catch (error) {
-      console.error(`Error parsing JSON from localStorage (key: ${key}):`, error);
+      console.error(
+        `Error parsing JSON from localStorage (key: ${key}):`,
+        error,
+      );
       return null;
     }
   }
@@ -111,4 +121,3 @@ export class StorageHelper {
     return this.setItem(key, value);
   }
 }
-

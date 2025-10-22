@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 interface Message {
   id: string;
@@ -36,4 +36,3 @@ export function useNewMessageIndicator<T extends Message>({
     hideNewMessageIndicator,
   };
 }
-

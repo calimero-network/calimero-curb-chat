@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import styled from 'styled-components';
+import { useEffect, useState } from "react";
+import styled from "styled-components";
 
-import type { AccountData } from '../types/curbTypes';
+import type { AccountData } from "../types/curbTypes";
 
-import UserProfileIcon from './ProfileIcon/UserProfileIcon';
+import UserProfileIcon from "./ProfileIcon/UserProfileIcon";
 
 const AutocompleteWrapper = styled.div`
   flex-grow: 1;
@@ -81,7 +81,7 @@ function AutocompleteList({
   const [elementHoverTop, setElementHoverTop] = useState(true);
 
   useEffect(() => {
-    const element = document.getElementById('wrapper');
+    const element = document.getElementById("wrapper");
     if (element) {
       const elementPosition = element.getBoundingClientRect();
       if (elementPosition.top < POPUP_POSITION_SWITCH_HEIGHT) {
@@ -95,7 +95,7 @@ function AutocompleteList({
   return (
     <AutocompleteWrapper
       id="wrapper"
-      style={elementHoverTop ? { bottom: '100%' } : { top: '100%' }}
+      style={elementHoverTop ? { bottom: "100%" } : { top: "100%" }}
     >
       {autocompleteAccounts.map((account, id) => (
         <div
@@ -108,8 +108,8 @@ function AutocompleteList({
               accountId={account.id}
               getIconFromCache={getIconFromCache}
               showStatus={false}
-              width={'32px'}
-              height={'32px'}
+              width={"32px"}
+              height={"32px"}
               active={account.active}
             />
             <span>{account.id}</span>

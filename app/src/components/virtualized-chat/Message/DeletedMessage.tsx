@@ -1,4 +1,4 @@
-import styled from 'styled-components';
+import styled from "styled-components";
 
 const DeletedMessageWrapper = styled.div`
   color: #696969;

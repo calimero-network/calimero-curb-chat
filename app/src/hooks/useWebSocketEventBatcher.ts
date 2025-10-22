@@ -1,6 +1,6 @@
-import { useRef, useCallback, useEffect } from 'react';
-import type { WebSocketEvent } from '../types/WebSocketTypes';
-import { log } from '../utils/logger';
+import { useRef, useCallback, useEffect } from "react";
+import type { WebSocketEvent } from "../types/WebSocketTypes";
+import { log } from "../utils/logger";
 
 interface BatchConfig {
   /** Maximum time to wait before processing batch (ms) */
@@ -28,10 +28,10 @@ const DEFAULT_CONFIG: BatchConfig = {
  */
 export function useWebSocketEventBatcher(
   processEvents: (events: WebSocketEvent[]) => Promise<void>,
-  config: Partial<BatchConfig> = {}
+  config: Partial<BatchConfig> = {},
 ) {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
-  
+
   const eventBatchRef = useRef<EventBatch>({ events: [], firstEventTime: 0 });
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isProcessingRef = useRef(false);
@@ -57,27 +57,34 @@ export function useWebSocketEventBatcher(
     try {
       // Group events by type for optimized processing
       const eventsByType = new Map<string, WebSocketEvent[]>();
-      
+
       for (const event of eventsToProcess) {
-        const type = event.type || 'unknown';
+        const type = event.type || "unknown";
         if (!eventsByType.has(type)) {
           eventsByType.set(type, []);
         }
         eventsByType.get(type)!.push(event);
       }
 
-      log.debug('WebSocketBatcher', `Processing batch of ${eventsToProcess.length} events`, {
-        totalEvents: eventsToProcess.length,
-        eventTypes: Array.from(eventsByType.keys()),
-        typeCounts: Object.fromEntries(
-          Array.from(eventsByType.entries()).map(([type, events]) => [type, events.length])
-        ),
-      });
+      log.debug(
+        "WebSocketBatcher",
+        `Processing batch of ${eventsToProcess.length} events`,
+        {
+          totalEvents: eventsToProcess.length,
+          eventTypes: Array.from(eventsByType.keys()),
+          typeCounts: Object.fromEntries(
+            Array.from(eventsByType.entries()).map(([type, events]) => [
+              type,
+              events.length,
+            ]),
+          ),
+        },
+      );
 
       // Process all events in the batch
       await processEvents(eventsToProcess);
     } catch (error) {
-      log.error('WebSocketBatcher', 'Error processing event batch', error);
+      log.error("WebSocketBatcher", "Error processing event batch", error);
     } finally {
       isProcessingRef.current = false;
     }
@@ -86,36 +93,39 @@ export function useWebSocketEventBatcher(
   /**
    * Add event to batch
    */
-  const addEvent = useCallback((event: WebSocketEvent) => {
-    const now = Date.now();
-    
-    // If this is the first event in the batch, record the time
-    if (eventBatchRef.current.events.length === 0) {
-      eventBatchRef.current.firstEventTime = now;
-    }
+  const addEvent = useCallback(
+    (event: WebSocketEvent) => {
+      const now = Date.now();
 
-    // Add event to batch
-    eventBatchRef.current.events.push(event);
-
-    // Check if we should process immediately
-    const shouldProcessNow =
-      eventBatchRef.current.events.length >= finalConfig.maxBatchSize ||
-      (now - eventBatchRef.current.firstEventTime >= finalConfig.maxWaitTime);
-
-    if (shouldProcessNow) {
-      // Process immediately
-      processBatch();
-    } else {
-      // Schedule processing after maxWaitTime
-      if (batchTimerRef.current) {
-        clearTimeout(batchTimerRef.current);
+      // If this is the first event in the batch, record the time
+      if (eventBatchRef.current.events.length === 0) {
+        eventBatchRef.current.firstEventTime = now;
       }
-      
-      batchTimerRef.current = setTimeout(() => {
+
+      // Add event to batch
+      eventBatchRef.current.events.push(event);
+
+      // Check if we should process immediately
+      const shouldProcessNow =
+        eventBatchRef.current.events.length >= finalConfig.maxBatchSize ||
+        now - eventBatchRef.current.firstEventTime >= finalConfig.maxWaitTime;
+
+      if (shouldProcessNow) {
+        // Process immediately
         processBatch();
-      }, finalConfig.maxWaitTime);
-    }
-  }, [processBatch, finalConfig.maxBatchSize, finalConfig.maxWaitTime]);
+      } else {
+        // Schedule processing after maxWaitTime
+        if (batchTimerRef.current) {
+          clearTimeout(batchTimerRef.current);
+        }
+
+        batchTimerRef.current = setTimeout(() => {
+          processBatch();
+        }, finalConfig.maxWaitTime);
+      }
+    },
+    [processBatch, finalConfig.maxBatchSize, finalConfig.maxWaitTime],
+  );
 
   /**
    * Flush any pending events immediately
@@ -142,4 +152,3 @@ export function useWebSocketEventBatcher(
     flush,
   };
 }
-
