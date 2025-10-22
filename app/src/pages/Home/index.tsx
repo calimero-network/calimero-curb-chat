@@ -40,31 +40,29 @@ import type { MessageWithReactions } from "../../api/clientApi";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
 import { generateDMParams } from "../../utils/dmSetupState";
 import useNotificationSound from "../../hooks/useNotificationSound";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const debounce = <T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): ((...args: Parameters<T>) => void) => {
-  let timeout: ReturnType<typeof setTimeout>;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-};
+import { transformMessagesToUI, getNewMessages } from "../../utils/messageTransformers";
+import {
+  MESSAGE_PAGE_SIZE,
+  RECENT_MESSAGES_CHECK_SIZE,
+  DEBOUNCE_FETCH_DELAY_MS,
+  EVENT_RATE_LIMIT_MS,
+  EVENT_QUEUE_MAX_SIZE,
+  EVENT_QUEUE_CLEANUP_SIZE,
+  SUBSCRIPTION_INIT_DELAY_MS,
+} from "../../constants/app";
+import { useChannels } from "../../hooks/useChannels";
+import { useDMs } from "../../hooks/useDMs";
+import { useChatMembers } from "../../hooks/useChatMembers";
+import { useChannelMembers } from "../../hooks/useChannelMembers";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
   const [isOpenSearchChannel, setIsOpenSearchChannel] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [channelUsers, setChannelUsers] = useState<Map<string, string>>(
-    new Map()
-  );
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
   const [incomingMessages, setIncomingMessages] = useState<CurbMessage[]>([]);
-  const [nonInvitedUserList, setNonInvitedUserList] = useState<UserId[]>([]);
   const [totalThreadMessageCount, setTotalThreadMessageCount] = useState(0);
-  const [threadMessagesOffset, setThreadMessagesOffset] = useState(20);
+  const [threadMessagesOffset, setThreadMessagesOffset] = useState(MESSAGE_PAGE_SIZE);
   const [incomingThreadMessages, _setIncomingThreadMessages] = useState<
     CurbMessage[]
   >([]);
@@ -88,6 +86,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     },
     activeChat?.id
   );
+
+  // Use custom hooks for data management
+  const channelsHook = useChannels();
+  const dmsHook = useDMs(playSoundForMessage);
+  const chatMembersHook = useChatMembers();
+  const channelMembersHook = useChannelMembers();
 
   // Initialize audio context on first user interaction
   useEffect(() => {
@@ -152,31 +156,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     currentOpenThreadRef.current = currentOpenThread;
   }, [currentOpenThread]);
 
-  const getChannelUsers = async (channelId: string) => {
-    const channelUsers: ResponseData<Map<string, string>> =
-      await new ClientApiDataSource().getChannelMembers({
-        channel: { name: channelId },
-      });
-    if (channelUsers.data) {
-      setChannelUsers(channelUsers.data);
-    }
-  };
-
+  // Use channel members hook
+  const getChannelUsers = channelMembersHook.fetchChannelMembers;
+  const getNonInvitedUsers = channelMembersHook.fetchNonInvitedUsers;
+  
   const reFetchChannelMembers = async () => {
     const isDM = activeChatRef.current?.type === "direct_message";
     await getChannelUsers(
       (isDM ? "private_dm" : activeChatRef.current?.id) || ""
     );
-  };
-
-  const getNonInvitedUsers = async (channelId: string) => {
-    const nonInvitedUsers: ResponseData<UserId[]> =
-      await new ClientApiDataSource().getNonMemberUsers({
-        channel: { name: channelId },
-      });
-    if (nonInvitedUsers.data) {
-      setNonInvitedUserList(nonInvitedUsers.data);
-    }
   };
 
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
@@ -186,13 +174,26 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       selectedChat.channelType = channelMeta.channelType;
     }
     
+    // First, clear all message state completely
+    messagesRef.current = [];
+    setIncomingMessages([]);
+    setMessagesOffset(MESSAGE_PAGE_SIZE);
+    setTotalMessageCount(0);
+    setOpenThread(undefined);
+    setCurrentOpenThread(undefined);
+    
+    // Then update the active chat
     setIsOpenSearchChannel(false);
     setActiveChat(selectedChat);
     activeChatRef.current = selectedChat;
-    getChannelUsers(selectedChat.id);
-    getNonInvitedUsers(selectedChat.id);
     setIsSidebarOpen(false);
     updateSessionChat(selectedChat);
+    
+    // Fetch channel users in background
+    getChannelUsers(selectedChat.id);
+    getNonInvitedUsers(selectedChat.id);
+    
+    // Subscribe to websocket events for this chat
     if (app) {
       const useDM = (selectedChat.type === "direct_message" &&
         selectedChat.account &&
@@ -203,30 +204,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       const currentContextId = (useDM ? dmContextId : contextId) || "";
       if (currentContextId) {
         manageEventSubscription(currentContextId);
-      }
-    }
-    setMessagesOffset(20);
-    setTotalMessageCount(0);
-    setOpenThread(undefined);
-    setCurrentOpenThread(undefined);
-    
-    // Clear messages to prepare for new chat
-    // VirtualizedChat will call loadInitialMessages automatically when chatId changes
-    messagesRef.current = [];
-    setIncomingMessages([]);
-    
-    if (selectedChat.type === "channel") {
-      const messages = messagesRef.current;
-      if (
-        messages &&
-        messages.length > 0 &&
-        messages[messages.length - 1]?.timestamp
-      ) {
-        const lastMessageTimestamp = messages[messages.length - 1].timestamp;
-        await new ClientApiDataSource().readMessage({
-          channel: { name: selectedChat.name },
-          timestamp: lastMessageTimestamp,
-        });
       }
     }
   };
@@ -245,13 +222,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     activeChatRef.current = chatToUse;
     getChannelUsers(chatToUse.name);
     getNonInvitedUsers(chatToUse.name);
-    setMessagesOffset(20);
+    setMessagesOffset(MESSAGE_PAGE_SIZE);
     setTotalMessageCount(0);
 
     // Delay to ensure app is ready before subscribing
     setTimeout(() => {
       updateSelectedActiveChat(chatToUse);
-    }, 500);
+    }, SUBSCRIPTION_INIT_DELAY_MS);
   }, [app, manageEventSubscription]);
 
   const onDMSelected = useCallback(
@@ -327,21 +304,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const lastEventTime = useRef(0);
   const eventQueue = useRef<Set<string>>(new Set());
 
-  // Debounced function to prevent rapid-fire events
-  // Increased debounce time to reduce load on the node
-  const debouncedFetchChannels = useCallback(
-    debounce(() => {
-      fetchChannels();
-    }, 1000), // Increased from 300ms to 1000ms
-    []
-  );
-
-  const debouncedFetchDms = useCallback(
-    debounce(() => {
-      fetchDms();
-    }, 1000), // Increased from 300ms to 1000ms
-    []
-  );
+  // Use debounced fetch methods from custom hooks
+  const debouncedFetchChannels = channelsHook.debouncedFetchChannels;
+  const debouncedFetchDms = dmsHook.debouncedFetchDms;
 
   // Self-contained function to handle message updates
   const handleMessageUpdates = useCallback(async (useDM: boolean) => {
@@ -355,7 +320,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           group: {
             name: (useDM ? "private_dm" : activeChatRef.current?.name) || "",
           },
-          limit: 5, // Reduced from 20 - only fetch latest few messages
+          limit: RECENT_MESSAGES_CHECK_SIZE,
           offset: 0,
           is_dm: useDM,
           dm_identity: activeChatRef.current?.account,
@@ -363,34 +328,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       if (!reFetchedMessages.data) return;
 
-      const existingMessageIds = new Set(
-        messagesRef.current.map((msg) => msg.id)
+      const newMessages = getNewMessages(
+        reFetchedMessages.data.messages,
+        messagesRef.current
       );
-      
-      const newMessages = reFetchedMessages.data.messages
-        .filter(
-          (message: MessageWithReactions) =>
-            !existingMessageIds.has(message.id)
-        )
-        .map((message: MessageWithReactions) => ({
-          id: message.id,
-          text: message.text,
-          nonce: Math.random().toString(36).substring(2, 15),
-          key: message.id,
-          timestamp: message.timestamp * 1000,
-          sender: message.sender,
-          senderUsername: message.sender_username,
-          reactions: message.reactions,
-          threadCount: message.thread_count,
-          threadLastTimestamp: message.thread_last_timestamp,
-          editedOn: message.edited_on,
-          mentions: [],
-          files: [],
-          images: [],
-          editMode: false,
-          status: MessageStatus.sent,
-          deleted: message.deleted,
-        }));
 
       if (newMessages.length > 0) {
         // Mark messages as read (but don't await to prevent blocking)
@@ -497,7 +438,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
     // Rate limiting - prevent events from firing too frequently
     const now = Date.now();
-    if (now - lastEventTime.current < 100) {
+    if (now - lastEventTime.current < EVENT_RATE_LIMIT_MS) {
       return;
     }
     lastEventTime.current = now;
@@ -509,10 +450,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
     eventQueue.current.add(eventId);
 
-    // Clean up old events from queue (keep only last 10)
-    if (eventQueue.current.size > 10) {
+    // Clean up old events from queue
+    if (eventQueue.current.size > EVENT_QUEUE_MAX_SIZE) {
       const eventsArray = Array.from(eventQueue.current);
-      eventQueue.current = new Set(eventsArray.slice(-5));
+      eventQueue.current = new Set(eventsArray.slice(-EVENT_QUEUE_CLEANUP_SIZE));
     }
 
     const sessionChat = getStoredSession();
@@ -567,33 +508,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     const messages: ResponseData<FullMessageResponse> =
       await new ClientApiDataSource().getMessages({
         group: { name: (isDM ? "private_dm" : activeChat?.name) || "" },
-        limit: 20,
+        limit: MESSAGE_PAGE_SIZE,
         offset: 0,
         is_dm: isDM,
         dm_identity: activeChat?.account,
       });
     if (messages.data) {
-      const messagesArray = messages.data.messages.map(
-        (message: MessageWithReactions) => ({
-          id: message.id,
-          text: message.text,
-          nonce: Math.random().toString(36).substring(2, 15),
-          key: message.id,
-          timestamp: message.timestamp * 1000,
-          sender: message.sender,
-          senderUsername: message.sender_username,
-          reactions: message.reactions,
-          threadCount: message.thread_count,
-          threadLastTimestamp: message.thread_last_timestamp,
-          editedOn: message.edited_on,
-          mentions: [],
-          files: [],
-          images: [],
-          editMode: false,
-          status: MessageStatus.sent,
-          deleted: message.deleted,
-        })
-      );
+      const messagesArray = transformMessagesToUI(messages.data.messages);
 
       messagesRef.current = messagesArray;
       setTotalMessageCount(messages.data.total_count);
@@ -625,70 +546,33 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     };
   };
 
-  const [channels, setChannels] = useState<ChannelMeta[]>([]);
+  // Use custom hooks instead of local state + fetch functions
+  const channels = channelsHook.channels;
+  const fetchChannels = channelsHook.fetchChannels;
+  
+  const privateDMs = dmsHook.dms;
+  const fetchDms = dmsHook.fetchDms;
+  
+  const chatMembers = chatMembersHook.members;
+  const fetchChatMembers = chatMembersHook.fetchMembers;
 
-  const fetchChannels = async () => {
-    const channels: ResponseData<Channels> =
-      await new ClientApiDataSource().getChannels();
-    if (channels.data) {
-      const channelsArray: ChannelMeta[] = Object.entries(channels.data).map(
-        ([name, channelInfo]) => ({
-          name,
-          type: "channel" as const,
-          channelType: channelInfo.channel_type,
-          description: "",
-          owner: channelInfo.created_by,
-          createdByUsername: channelInfo.created_by_username,
-          members: [],
-          createdBy: channelInfo.created_by,
-          inviteOnly: false,
-          unreadMessages: {
-            count: channelInfo.unread_count,
-            mentions: channelInfo.unread_mention_count,
-          },
-          isMember: false,
-          readOnly: channelInfo.read_only,
-          createdAt: new Date(channelInfo.created_at * 1000).toISOString(),
-        })
-      );
-      setChannels(channelsArray);
-    }
-  };
-
-  const [privateDMs, setPrivateDMs] = useState<DMChatInfo[]>([]);
-
-  const fetchDms = async () => {
-    const dms: ResponseData<DMChatInfo[]> =
-      await new ClientApiDataSource().getDms();
-    if (dms.data) {
-      dms.data.forEach((dm) => {
-        if (dm.unread_messages > 0) {
-          playSoundForMessage(`dm-${dm.other_identity_old}`, 'dm');
-        }
-      });
-      setPrivateDMs(dms.data);
-      return dms.data;
-    }
-  };
-
-  const [chatMembers, setChatMembers] = useState<Map<string, string>>(
-    new Map()
-  );
-
-  const fetchChatMembers = async () => {
-    const chatMembers: ResponseData<Map<string, string>> =
-      await new ClientApiDataSource().getChatMembers({
-        isDM: false,
-      });
-    if (chatMembers.data) {
-      setChatMembers(chatMembers.data);
-    }
-  };
+  // Track if initial fetch has been done
+  const initialFetchDone = useRef(false);
 
   useEffect(() => {
-    fetchChannels();
-    fetchDms();
-    fetchChatMembers();
+    // Only fetch once on mount to avoid 429 errors from rapid refetches
+    if (!initialFetchDone.current) {
+      initialFetchDone.current = true;
+      
+      // Batch initial data fetches for faster load using custom hooks
+      Promise.all([
+        channelsHook.fetchChannels(),
+        dmsHook.fetchDms(),
+        chatMembersHook.fetchMembers(),
+      ]).catch(error => {
+        console.error("Error fetching initial data:", error);
+      });
+    }
 
     // Cleanup: unsubscribe from events when component unmounts
     return () => {
@@ -741,7 +625,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     activeChatRef.current = activeChatCopy as ActiveChat;
   };
 
-  const [messagesOffset, setMessagesOffset] = useState(20);
+  const [messagesOffset, setMessagesOffset] = useState(MESSAGE_PAGE_SIZE);
   const [totalMessageCount, setTotalMessageCount] = useState(0);
 
   const loadPrevMessages = async (
@@ -761,33 +645,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         group: {
           name: (isDM ? "private_dm" : activeChatRef.current?.name) || "",
         },
-        limit: 20,
+        limit: MESSAGE_PAGE_SIZE,
         offset: messagesOffset,
         is_dm: isDM,
         dm_identity: activeChat?.account,
       });
     if (messages.data) {
-      const messagesArray = messages.data.messages.map(
-        (message: MessageWithReactions) => ({
-          id: message.id,
-          text: message.text,
-          nonce: Math.random().toString(36).substring(2, 15),
-          key: message.id,
-          timestamp: message.timestamp * 1000,
-          sender: message.sender,
-          senderUsername: message.sender_username,
-          reactions: message.reactions,
-          threadCount: message.thread_count,
-          threadLastTimestamp: message.thread_last_timestamp,
-          editedOn: message.edited_on,
-          mentions: [],
-          files: [],
-          images: [],
-          editMode: false,
-          status: MessageStatus.sent,
-        })
-      );
-      setMessagesOffset(messagesOffset + 20);
+      const messagesArray = transformMessagesToUI(messages.data.messages);
+      setMessagesOffset(messagesOffset + MESSAGE_PAGE_SIZE);
       return {
         messages: messagesArray,
         totalCount: messages.data.total_count,
@@ -866,34 +731,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     const messages: ResponseData<FullMessageResponse> =
       await new ClientApiDataSource().getMessages({
         group: { name: activeChat?.name || "" },
-        limit: 20,
+        limit: MESSAGE_PAGE_SIZE,
         offset: 0,
         parent_message: parentMessageId,
         is_dm: activeChat?.type === "direct_message",
         dm_identity: activeChat?.account,
       });
     if (messages.data) {
-      const messagesArray = messages.data.messages.map(
-        (message: MessageWithReactions) => ({
-          id: message.id,
-          text: message.text,
-          nonce: Math.random().toString(36).substring(2, 15),
-          key: message.id,
-          timestamp: message.timestamp * 1000,
-          sender: message.sender,
-          senderUsername: message.sender_username,
-          reactions: message.reactions,
-          threadCount: message.thread_count,
-          threadLastTimestamp: message.thread_last_timestamp,
-          editedOn: message.edited_on,
-          mentions: [],
-          files: [],
-          images: [],
-          editMode: false,
-          status: MessageStatus.sent,
-          deleted: message.deleted,
-        })
-      );
+      const messagesArray = transformMessagesToUI(messages.data.messages);
 
       messagesThreadRef.current = messagesArray;
       setTotalThreadMessageCount(messages.data.total_count);
@@ -931,35 +776,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     const messages: ResponseData<FullMessageResponse> =
       await new ClientApiDataSource().getMessages({
         group: { name: activeChatRef.current?.name || "" },
-        limit: 20,
+        limit: MESSAGE_PAGE_SIZE,
         offset: threadMessagesOffset,
         parent_message: parentMessageId,
         is_dm: activeChat?.type === "direct_message",
         dm_identity: activeChat?.account,
       });
     if (messages.data) {
-      const messagesArray = messages.data.messages.map(
-        (message: MessageWithReactions) => ({
-          id: message.id,
-          text: message.text,
-          nonce: Math.random().toString(36).substring(2, 15),
-          key: message.id,
-          timestamp: message.timestamp * 1000,
-          sender: message.sender,
-          senderUsername: message.sender_username,
-          reactions: message.reactions,
-          threadCount: message.thread_count,
-          threadLastTimestamp: message.thread_last_timestamp,
-          editedOn: message.edited_on,
-          mentions: [],
-          files: [],
-          images: [],
-          editMode: false,
-          status: MessageStatus.sent,
-          deleted: message.deleted,
-        })
-      );
-      setThreadMessagesOffset(threadMessagesOffset + 20);
+      const messagesArray = transformMessagesToUI(messages.data.messages);
+      setThreadMessagesOffset(threadMessagesOffset + MESSAGE_PAGE_SIZE);
       return {
         messages: messagesArray,
         totalCount: messages.data.total_count,
@@ -984,8 +809,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       updateSelectedActiveChat={updateSelectedActiveChat}
       reFetchChannelMembers={reFetchChannelMembers}
       openSearchPage={openSearchPage}
-      channelUsers={channelUsers}
-      nonInvitedUserList={nonInvitedUserList}
+      channelUsers={channelMembersHook.channelUsers}
+      nonInvitedUserList={channelMembersHook.nonInvitedUsers}
       onDMSelected={onDMSelected}
       loadInitialChatMessages={loadInitialChatMessages}
       incomingMessages={incomingMessages}

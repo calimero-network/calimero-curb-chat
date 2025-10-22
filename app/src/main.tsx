@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
@@ -17,8 +17,12 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Disable StrictMode in production to avoid double-rendering
+// which can cause 429 errors from CalimeroProvider's auth checks
+const AppWrapper = import.meta.env.DEV ? StrictMode : React.Fragment;
+
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
+  <AppWrapper>
     <BrowserRouter>
     <CalimeroProvider
       clientApplicationId={APPLICATION_ID}
@@ -28,5 +32,5 @@ createRoot(document.getElementById("root")!).render(
       <App />
     </CalimeroProvider>
     </BrowserRouter>
-  </StrictMode>
+  </AppWrapper>
 );

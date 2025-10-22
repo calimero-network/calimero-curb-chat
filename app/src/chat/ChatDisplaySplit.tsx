@@ -18,6 +18,7 @@ import type { ChannelInfo } from "../api/clientApi";
 import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 import EmojiSelectorPopup from "../emojiSelector/EmojiSelectorPopup";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
+import { scrollbarStyles } from "../styles/scrollbar";
 
 interface ChatDisplaySplitProps {
   readMessage: (message: MessageWithReactions) => void;
@@ -59,30 +60,9 @@ const ContainerPadding = styled.div`
     padding-left: 0px !important;
     padding-right: 0px !important;
   }
-  scrollbar-color: black black;
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  ::-webkit-scrollbar-thumb {
-    background-color: black;
-    border-radius: 6px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background-color: black;
-  }
-  * {
-    scrollbar-color: black black;
-  }
-  html::-webkit-scrollbar {
-    width: 12px;
-  }
-  html::-webkit-scrollbar-thumb {
-    background-color: black;
-    border-radius: 6px;
-  }
-  html::-webkit-scrollbar-thumb:hover {
-    background-color: black;
-  }
+  
+  /* Apply shared scrollbar styles */
+  ${scrollbarStyles}
   
   /* Optimize scrolling performance */
   contain: layout style paint;
