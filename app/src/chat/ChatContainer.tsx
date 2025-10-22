@@ -216,7 +216,7 @@ export default function ChatContainer({
         key: `temp-${Date.now()}`,
         timestamp: Date.now(),
         sender: getExecutorPublicKey() || "",
-        senderUsername: undefined,
+        senderUsername: localStorage.getItem("chat-username") || undefined,
         reactions: {},
         editedOn: undefined,
         mentions: mentions,
