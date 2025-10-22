@@ -14,6 +14,7 @@ export function useChatHandlers(
   activeChat: ActiveChat | null,
   mainMessages: {
     checkForNewMessages: (chat: ActiveChat, isDM: boolean) => Promise<any[]>;
+    addIncoming: (messages: any[]) => void;
   },
   playSoundForMessage: (messageId: string, type?: NotificationType, isMention?: boolean) => void,
   fetchDms: () => Promise<DMChatInfo[] | undefined>,
@@ -35,6 +36,9 @@ export function useChatHandlers(
       );
 
       if (newMessages.length > 0) {
+        // Add incoming messages to trigger UI update
+        mainMessages.addIncoming(newMessages);
+        
         // Mark messages as read (but don't await to prevent blocking)
         if (activeChat?.type === "channel") {
           const lastMessage = newMessages[newMessages.length - 1];
