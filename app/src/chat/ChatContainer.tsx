@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
+import { StorageHelper } from "../utils/storage";
+import { log } from "../utils/logger";
 import type {
   ActiveChat,
   ChatMessagesData,
@@ -193,7 +195,7 @@ export default function ChatContainer({
           }
         }
       } catch (error) {
-        console.error("Error updating reaction:", error);
+        log.error("ChatContainer", "Error updating reaction", error);
       }
     },
     []
@@ -236,7 +238,7 @@ export default function ChatContainer({
         key: `temp-${Date.now()}`,
         timestamp: Date.now(),
         sender: sender,
-        senderUsername: localStorage.getItem("chat-username") || undefined,
+        senderUsername: StorageHelper.getItem("chat-username") || undefined,
         reactions: {},
         editedOn: undefined,
         mentions: mentions,
@@ -249,7 +251,7 @@ export default function ChatContainer({
       try {
         addOptimisticMessage(optimisticMessage);
       } catch (error) {
-        console.error("Error adding optimistic message:", error);
+        log.error("ChatContainer", "Error adding optimistic message", error);
       }
     }
 

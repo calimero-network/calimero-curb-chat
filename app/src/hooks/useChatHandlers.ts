@@ -4,6 +4,8 @@ import type { ActiveChat } from "../types/Common";
 import type { DMChatInfo } from "../api/clientApi";
 import { getStoredSession } from "../utils/session";
 import type { NotificationType } from "../utils/notificationSound";
+import { log } from "../utils/logger";
+import type { WebSocketEvent, ExecutionEventData } from "../types/WebSocketTypes";
 
 /**
  * Custom hook for handling chat-related events (messages, DMs, channels)
@@ -54,17 +56,17 @@ export function useChatHandlers(
             new ClientApiDataSource().readMessage({
               channel: { name: activeChat?.name },
               timestamp: lastMessage.timestamp,
-            }).catch(console.error);
+            }).catch((error) => log.error("ChatHandlers", "Failed to mark message as read", error));
           }
           playSoundForMessage(lastMessage.id, 'message', false);
         } else {
           new ClientApiDataSource().readDm({
             other_user_id: activeChatRef.current?.name || "",
-          }).catch(console.error);
+          }).catch((error) => log.error("ChatHandlers", "Failed to mark DM as read", error));
         }
       }
     } catch (error) {
-      console.error("Error handling message updates:", error);
+      log.error("ChatHandlers", "Error handling message updates", error);
     } finally {
       isFetchingMessagesRef.current = false;
     }
@@ -76,8 +78,7 @@ export function useChatHandlers(
   /**
    * Handle DM-specific updates
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleDMUpdates = useCallback(async (sessionChat: any) => {
+  const handleDMUpdates = useCallback(async (sessionChat: ActiveChat | null) => {
     if (sessionChat?.type !== "direct_message") return;
 
     // Prevent rapid re-processing of the same DM
@@ -106,21 +107,50 @@ export function useChatHandlers(
         );
         
         // Only call onDMSelected if we actually found a matching DM
-        if (currentDM) {
+        if (currentDM && sessionChat.contextId) {
           lastDMUpdateRef.current = { contextId: sessionChat.contextId, timestamp: now };
           onDMSelected(currentDM, undefined, false);
         }
       }
     } catch (error) {
-      console.error("Error handling DM updates:", error);
+      log.error("ChatHandlers", "Error handling DM updates", error);
     }
   }, [fetchDms, onDMSelected]);
 
   /**
-   * Handle state mutation events (most common websocket event)
+   * Handle execution events inside StateMutation
+   * These are the specific events (MessageSent, ChannelCreated, etc.)
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleStateMutation = useCallback(async (_event: any) => {
+  const handleExecutionEvents = useCallback((executionEvents: ExecutionEventData[]) => {
+    // Track which actions we need to take to avoid duplicates
+    let needsChannelRefresh = false;
+    
+    for (const executionEvent of executionEvents) {
+      switch (executionEvent.kind) {
+        case "MessageSent":
+          // Skip - we handle this via optimistic updates and checkForNewMessages
+          break;
+        case "ChannelCreated":
+          needsChannelRefresh = true;
+          break;
+        case "UserJoined":
+        case "UserLeft":
+          // These will be handled by the general state mutation refresh
+          break;
+      }
+    }
+    
+    // Execute actions only once per batch
+    if (needsChannelRefresh) {
+      debouncedFetchChannels();
+    }
+  }, [debouncedFetchChannels]);
+
+  /**
+   * Handle state mutation events (most common websocket event)
+   * StateMutation contains an array of execution events in event.data.events
+   */
+  const handleStateMutation = useCallback(async (event: WebSocketEvent) => {
     const sessionChat = getStoredSession();
     const useDM = (sessionChat?.type === "direct_message" &&
       sessionChat?.account &&
@@ -130,8 +160,10 @@ export function useChatHandlers(
     // Only fetch messages for the current active chat - most common operation
     await handleMessageUpdates(useDM);
 
-    // Update channels list (debounced to avoid spam)
-    debouncedFetchChannels();
+    // Process specific execution events if present
+    if (event.data?.events && event.data.events.length > 0) {
+      handleExecutionEvents(event.data.events);
+    }
 
     // Handle DM updates (includes fetching DMs list)
     // For DMs, don't call handleDMUpdates on every event - it triggers cascading updates
@@ -144,36 +176,13 @@ export function useChatHandlers(
       // Only refetch members for channel chats (debounced to prevent spam)
       debouncedReFetchChannelMembers();
     }
-  }, [debouncedFetchChannels, debouncedFetchDms, handleMessageUpdates, debouncedReFetchChannelMembers]);
-
-  /**
-   * Handle execution events (channel created, message sent, etc.)
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleExecutionEvent = useCallback(async (event: any) => {
-    if (!event.data?.events || event.data.events.length === 0) {
-      return;
-    }
-
-    const executionEvents = event.data.events;
-    
-    for (const executionEvent of executionEvents) {
-      switch (executionEvent.kind) {
-        case "MessageSent":
-          // On sender node do nothing as this will only duplicate the message
-          break;
-        case "ChannelCreated":
-          debouncedFetchChannels();
-          break;
-      }
-    }
-  }, [debouncedFetchChannels]);
+  }, [handleMessageUpdates, handleExecutionEvents, debouncedFetchDms, debouncedReFetchChannelMembers]);
 
   return {
     handleMessageUpdates,
     handleDMUpdates,
     handleStateMutation,
-    handleExecutionEvent,
+    handleExecutionEvents,
   };
 }
 

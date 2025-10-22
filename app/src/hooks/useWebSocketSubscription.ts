@@ -1,5 +1,7 @@
 import { useRef, useCallback, useEffect } from "react";
 import type { CalimeroApp } from "@calimero-network/calimero-client";
+import { log } from '../utils/logger';
+import type { WebSocketEventCallback } from '../types/WebSocketTypes';
 
 /**
  * Custom hook for managing WebSocket event subscriptions
@@ -7,8 +9,7 @@ import type { CalimeroApp } from "@calimero-network/calimero-client";
  */
 export function useWebSocketSubscription(
   app: CalimeroApp | null | undefined,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eventCallback: ((event: any) => Promise<void>) | null
+  eventCallback: WebSocketEventCallback | null
 ) {
   const subscriptionContextIdRef = useRef<string>("");
   const eventCallbackRef = useRef(eventCallback);
@@ -33,9 +34,9 @@ export function useWebSocketSubscription(
         try {
           app.unsubscribeFromEvents([subscriptionContextIdRef.current]);
         } catch (error) {
-          console.error(
-            "Failed to unsubscribe from:",
-            subscriptionContextIdRef.current,
+          log.error(
+            "WebSocket",
+            `Failed to unsubscribe from: ${subscriptionContextIdRef.current}`,
             error
           );
         }
@@ -46,7 +47,7 @@ export function useWebSocketSubscription(
         app.subscribeToEvents([contextId], eventCallbackRef.current);
         subscriptionContextIdRef.current = contextId;
       } catch (error) {
-        console.error("Failed to subscribe to:", contextId, error);
+        log.error("WebSocket", `Failed to subscribe to: ${contextId}`, error);
       }
     },
     [app]
@@ -61,7 +62,7 @@ export function useWebSocketSubscription(
         app.unsubscribeFromEvents([subscriptionContextIdRef.current]);
         subscriptionContextIdRef.current = "";
       } catch (error) {
-        console.error("Failed to unsubscribe:", error);
+        log.error("WebSocket", "Failed to unsubscribe", error);
       }
     }
   }, [app]);
@@ -80,7 +81,7 @@ export function useWebSocketSubscription(
         try {
           app.unsubscribeFromEvents([subscriptionContextIdRef.current]);
         } catch (error) {
-          console.error("Failed to unsubscribe on unmount:", error);
+          log.error("WebSocket", "Failed to unsubscribe on unmount", error);
         }
       }
     };

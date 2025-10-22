@@ -1,3 +1,5 @@
+import { log } from '../../../utils/logger';
+
 class ImageRepository {
   private memCache: Map<string, string> = new Map<string, string>();
 
@@ -16,7 +18,7 @@ class ImageRepository {
         this.memCache.set(accountId, image || '');
         return image;
       } catch (error) {
-        console.error('Error fetching image:', error);
+        log.error('ImageRepository', 'Error fetching image', error);
         return null;
       }
     }

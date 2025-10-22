@@ -5,6 +5,7 @@ import type { Channels } from "../api/clientApi";
 import type { ChannelMeta } from "../types/Common";
 import { DEBOUNCE_FETCH_DELAY_MS } from "../constants/app";
 import { debounce } from "../utils/debounce";
+import { log } from "../utils/logger";
 
 /**
  * Custom hook for managing channels
@@ -49,7 +50,7 @@ export function useChannels() {
         setError(response.error.message || "Failed to fetch channels");
       }
     } catch (err) {
-      console.error("Error fetching channels:", err);
+      log.error("Channels", "Error fetching channels", err);
       setError("Failed to fetch channels");
     } finally {
       setLoading(false);

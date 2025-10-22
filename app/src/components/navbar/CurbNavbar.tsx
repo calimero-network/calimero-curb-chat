@@ -112,8 +112,13 @@ const FlexContainer = styled.div`
 
 export const CurbLogo = ({ isMobile }: { isMobile: boolean }) => {
   return (
-    <LogoContainer $isMobile={isMobile}>
-      <img src={CurbLogoIcon} alt="Calimero Logo" height="32px" width="auto" />
+    <LogoContainer $isMobile={isMobile} role="banner">
+      <img 
+        src={CurbLogoIcon} 
+        alt="Curb Chat Application Logo" 
+        height="32px" 
+        width="auto" 
+      />
       <CurbNameContainer></CurbNameContainer>
     </LogoContainer>
   );
@@ -121,7 +126,18 @@ export const CurbLogo = ({ isMobile }: { isMobile: boolean }) => {
 
 const BackIconContainer = ({ onClick }: { onClick: () => void }) => {
   return (
-    <IconWrapper onClick={onClick}>
+    <IconWrapper 
+      onClick={onClick}
+      role="button"
+      aria-label="Toggle sidebar"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <BackIcon
         xmlns="http://www.w3.org/2000/svg"
         width="16"
@@ -129,6 +145,7 @@ const BackIconContainer = ({ onClick }: { onClick: () => void }) => {
         fill="white"
         className="bi bi-chevron-left"
         viewBox="0 0 16 16"
+        aria-hidden="true"
       >
         <path
           fillRule="evenodd"
@@ -166,7 +183,7 @@ export default function CurbNavbar({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <NavigationBar $isSidebarOpen={isSidebarOpen}>
+    <NavigationBar $isSidebarOpen={isSidebarOpen} role="navigation" aria-label="Main navigation">
       <ItemsContainer $align={true}>
         <>
           <CurbLogo isMobile={false} />

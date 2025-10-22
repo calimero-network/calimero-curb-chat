@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { ListRange, VirtuosoHandle } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
 import styled from 'styled-components';
@@ -8,6 +8,7 @@ import type { UpdateDescriptor } from './MessageStore';
 import MessageStore from './MessageStore';
 import NoMessages from './NoMessages';
 import { OverlayDiv } from './OverlayDiv';
+import { log } from '../../../utils/logger';
 
 const VirtuosoWrapper = styled.div`
   scrollbar-color: black transparent;
@@ -118,7 +119,7 @@ const VirtualizedChat = <T extends Message>({
         scrollToBottom();
       }, 100);
     } catch (error) {
-      console.error('Failed to load initial messages:', error);
+      log.error('VirtualizedChat', 'Failed to load initial messages', error);
     } finally {
       setIsLoadingInitial(false);
       isInitialLoadingRef.current = false;
@@ -219,6 +220,25 @@ const VirtualizedChat = <T extends Message>({
     [render, chatId, firstItemIndex, store],
   );
 
+  // Memoize callbacks to prevent re-creating functions on every render
+  const handleEndReached = useCallback(() => {
+    setHasNewMessages(false);
+  }, []);
+
+  const handleIsScrolling = useCallback((scrolling: boolean) => {
+    isScrolling.current = scrolling;
+  }, []);
+
+  const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
+    isAtBottom.current = atBottom;
+  }, []);
+
+  // Memoize static objects to prevent re-creating on every render
+  const virtuosoStyle = useMemo(() => ({ height: '100%', width: '100%' }), []);
+  const initialTopMostIndex = useMemo(() => ({ index: 'LAST' as const, behavior: 'auto' as const }), []);
+  const overscanConfig = useMemo(() => ({ reverse: 500, main: 0 }), []);
+  const viewportConfig = useMemo(() => ({ top: 200, bottom: 200 }), []);
+
   const NewMessageIndicator = React.createElement(newMessageIndicator, {
     onClick: scrollToBottom,
   });
@@ -230,31 +250,22 @@ const VirtualizedChat = <T extends Message>({
       {hasNewMessages && NewMessageIndicator}
       {!isLoadingInitial && (
         <Virtuoso
-          style={{ height: '100%', width: '100%' }}
+          style={virtuosoStyle}
           itemContent={handleRenderItem}
           computeItemKey={(_, item) => store.computeKey(item)}
           followOutput={handleFollowOutput}
           data={messages}
-          initialTopMostItemIndex={{
-            index: 'LAST',
-            behavior: 'auto',
-          }}
+          initialTopMostItemIndex={initialTopMostIndex}
           startReached={handleLoadMore}
-          endReached={() => {
-            setHasNewMessages(false);
-          }}
+          endReached={handleEndReached}
           rangeChanged={reportLastRenderedItem}
           firstItemIndex={firstItemIndex}
           totalCount={totalCount}
-          isScrolling={(scrolling) => {
-            isScrolling.current = scrolling;
-          }}
-          atBottomStateChange={(atBottom) => {
-            isAtBottom.current = atBottom;
-          }}
+          isScrolling={handleIsScrolling}
+          atBottomStateChange={handleAtBottomStateChange}
           ref={listHandler}
-          overscan={{ reverse: 500, main: 0 }}
-          increaseViewportBy={{ top: 200, bottom: 200 }}
+          overscan={overscanConfig}
+          increaseViewportBy={viewportConfig}
         />
       )}
     </VirtuosoWrapper>

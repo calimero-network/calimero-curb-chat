@@ -1,12 +1,14 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Home from "./pages/Home";
 import { getAuthConfig, useCalimero } from "@calimero-network/calimero-client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { LoadingSpinner } from "./components/LoadingSpinner";
-import IdleTimeoutWrapper from "./components/IdleTimeoutWrapper";
-import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import { isSessionExpired, clearStoredSession, clearDmContextId, clearSessionActivity, updateSessionActivity } from "./utils/session";
+
+// Lazy load pages for better performance
+const Login = lazy(() => import("./pages/Login"));
+const Home = lazy(() => import("./pages/Home"));
+const IdleTimeoutWrapper = lazy(() => import("./components/IdleTimeoutWrapper"));
+const PWAInstallPrompt = lazy(() => import("./components/PWAInstallPrompt"));
 
 function App() {
   const { isAuthenticated, logout } = useCalimero();
@@ -46,7 +48,7 @@ function App() {
   }, [isAuthenticated, logout]);
 
   return (
-    <>
+    <Suspense fallback={<LoadingSpinner />}>
       <Routes>
         <Route
           path="/login"
@@ -78,7 +80,7 @@ function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
       <PWAInstallPrompt />
-    </>
+    </Suspense>
   );
 }
 

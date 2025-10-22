@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
+import { log } from "../utils/logger";
 
 /**
  * Custom hook for managing chat members
@@ -27,7 +28,7 @@ export function useChatMembers() {
         setError(response.error.message || "Failed to fetch chat members");
       }
     } catch (err) {
-      console.error("Error fetching chat members:", err);
+      log.error("ChatMembers", "Error fetching chat members", err);
       setError("Failed to fetch chat members");
     } finally {
       setLoading(false);

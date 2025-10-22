@@ -4,6 +4,7 @@ import type { ResponseData } from "@calimero-network/calimero-client";
 import type { DMChatInfo } from "../api/clientApi";
 import { DEBOUNCE_FETCH_DELAY_MS } from "../constants/app";
 import { debounce } from "../utils/debounce";
+import { log } from "../utils/logger";
 
 /**
  * Custom hook for managing Direct Messages
@@ -39,7 +40,7 @@ export function useDMs(playSoundForMessage?: (id: string, type: any, isCurrentCh
         return [];
       }
     } catch (err) {
-      console.error("Error fetching DMs:", err);
+      log.error("DMs", "Error fetching DMs", err);
       setError("Failed to fetch DMs");
       return [];
     } finally {

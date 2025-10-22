@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
+import { log } from "../utils/logger";
 
 /**
  * Custom hook for managing channel-specific members and non-invited users
@@ -27,7 +28,7 @@ export function useChannelMembers() {
         setError(response.error.message || "Failed to fetch channel members");
       }
     } catch (err) {
-      console.error("Error fetching channel members:", err);
+      log.error("ChannelMembers", "Error fetching channel members", err);
       setError("Failed to fetch channel members");
     } finally {
       setLoading(false);
@@ -50,7 +51,7 @@ export function useChannelMembers() {
         setError(response.error.message || "Failed to fetch non-invited users");
       }
     } catch (err) {
-      console.error("Error fetching non-invited users:", err);
+      log.error("ChannelMembers", "Error fetching non-invited users", err);
       setError("Failed to fetch non-invited users");
     } finally {
       setLoading(false);

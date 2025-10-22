@@ -5,14 +5,18 @@ import App from "./App.tsx";
 import { BrowserRouter } from "react-router-dom";
 import { AppMode, CalimeroProvider } from "@calimero-network/calimero-client";
 import { APPLICATION_ID, APPLICATION_PATH } from "./constants/config.ts";
+import ErrorBoundary from "./components/ErrorBoundary.tsx";
+import { log } from "./utils/logger.ts";
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((_registration) => {
+        log.info('ServiceWorker', 'Service worker registered successfully');
       })
-      .catch((_registrationError) => {
+      .catch((error) => {
+        log.error('ServiceWorker', 'Service worker registration failed', error);
       });
   });
 }
@@ -23,14 +27,18 @@ const AppWrapper = import.meta.env.DEV ? StrictMode : React.Fragment;
 
 createRoot(document.getElementById("root")!).render(
   <AppWrapper>
-    <BrowserRouter>
-    <CalimeroProvider
-      clientApplicationId={APPLICATION_ID}
-      mode={AppMode.MultiContext}
-      applicationPath={APPLICATION_PATH}
-    >
-      <App />
-    </CalimeroProvider>
-    </BrowserRouter>
+    <ErrorBoundary onError={(error, errorInfo) => {
+      log.error('App', 'Uncaught error in React tree', { error, errorInfo });
+    }}>
+      <BrowserRouter>
+        <CalimeroProvider
+          clientApplicationId={APPLICATION_ID}
+          mode={AppMode.MultiContext}
+          applicationPath={APPLICATION_PATH}
+        >
+          <App />
+        </CalimeroProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </AppWrapper>
 );

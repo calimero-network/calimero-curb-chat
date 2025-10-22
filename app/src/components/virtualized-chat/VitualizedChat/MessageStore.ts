@@ -68,12 +68,12 @@ class MessageStore<
     const idsToSkip = new Set<string>();
     
     // Build temp messages lookup map once - O(m) where m = existing messages
-    const tempMessagesMap = new Map<string, any>();
-    const tempMessagesByContent = new Map<string, any>();
+    const tempMessagesMap = new Map<string, T & { text?: string; sender?: string }>();
+    const tempMessagesByContent = new Map<string, Array<T & { text?: string; sender?: string }>>();
     
     for (const existingMsg of this.messages) {
-      if ((existingMsg as any).id.startsWith('temp-')) {
-        const msg = existingMsg as any;
+      const msg = existingMsg as T & { text?: string; sender?: string };
+      if (msg.id.startsWith('temp-')) {
         // Primary key: exact match on content and timestamp (rounded to second)
         const exactKey = `${msg.sender}:${msg.text}:${Math.floor(msg.timestamp / 1000)}`;
         tempMessagesMap.set(exactKey, msg);
@@ -83,7 +83,7 @@ class MessageStore<
         if (!tempMessagesByContent.has(contentKey)) {
           tempMessagesByContent.set(contentKey, []);
         }
-        tempMessagesByContent.get(contentKey).push(msg);
+        tempMessagesByContent.get(contentKey)!.push(msg);
       }
     }
     
@@ -96,7 +96,7 @@ class MessageStore<
       
       // Check if this is a real message that matches a temp message
       if (!msg.id.startsWith('temp-')) {
-        const realMsg = msg as any;
+        const realMsg = msg as T & { text?: string; sender?: string };
         const exactKey = `${realMsg.sender}:${realMsg.text}:${Math.floor(realMsg.timestamp / 1000)}`;
         let matchingTempMsg = tempMessagesMap.get(exactKey);
         
@@ -107,7 +107,7 @@ class MessageStore<
           
           if (candidates) {
             // Find first candidate within 10 second window
-            matchingTempMsg = candidates.find((tempMsg: any) => 
+            matchingTempMsg = candidates.find((tempMsg) => 
               Math.abs(tempMsg.timestamp - realMsg.timestamp) < 10000
             );
           }

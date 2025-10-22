@@ -19,6 +19,7 @@ import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 import EmojiSelectorPopup from "../emojiSelector/EmojiSelectorPopup";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { scrollbarStyles } from "../styles/scrollbar";
+import { StorageHelper } from "../utils/storage";
 
 interface ChatDisplaySplitProps {
   readMessage: (message: CurbMessage) => void;
@@ -195,8 +196,8 @@ export default function ChatDisplaySplit({
       const executorId = getExecutorPublicKey() ?? "";
       setAccountId(executorId);
       
-      // Check if we already have the username in localStorage
-      const cachedUsername = localStorage.getItem("chat-username");
+      // Check if we already have the username in storage
+      const cachedUsername = StorageHelper.getItem("chat-username");
       if (cachedUsername) {
         const normalizedClass = cachedUsername
           .replace(/\s+/g, "")

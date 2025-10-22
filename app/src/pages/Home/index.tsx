@@ -52,6 +52,8 @@ import {
   SUBSCRIPTION_INIT_DELAY_MS,
 } from "../../constants/app";
 import { debounce } from "../../utils/debounce";
+import { log } from "../../utils/logger";
+import type { WebSocketEvent } from "../../types/WebSocketTypes";
 import { useChannels } from "../../hooks/useChannels";
 import { useDMs } from "../../hooks/useDMs";
 import { useChatMembers } from "../../hooks/useChatMembers";
@@ -120,10 +122,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     };
   }, [playSound]);
 
-  // Refs to prevent infinite loops and track processing state
-  const isProcessingEvent = useRef(false);
-  const lastEventTime = useRef(0);
-  const eventQueue = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isConfigSet) {
@@ -248,7 +246,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         lastDMSelectionRef.current.contextId === contextId &&
         now - lastDMSelectionRef.current.timestamp < 1000
       ) {
-        console.log("onDMSelected: Skipping rapid re-selection of same DM");
+        log.debug("onDMSelected", "Skipping rapid re-selection of same DM");
         return;
       }
       
@@ -317,7 +315,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           // Refresh DM list to update unread counts
           await dmsHook.fetchDms();
         } catch (error) {
-          console.error("Error in onDMSelected:", error);
+          log.error("onDMSelected", "Error in DM selection", error);
         }
       }
     },
@@ -359,7 +357,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     handleMessageUpdates,
     handleDMUpdates,
     handleStateMutation,
-    handleExecutionEvent,
+    handleExecutionEvents,
   } = useChatHandlers(
     activeChatRef,
     activeChat,
@@ -372,34 +370,49 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     debouncedReFetchChannelMembers
   );
 
+  // Track event processing to prevent overlap
+  const isProcessingEventRef = useRef(false);
+  const eventBatchRef = useRef<WebSocketEvent[]>([]);
+  const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Process batched events efficiently
+   * Since we only get StateMutation events, batch them and only process the latest
+   */
+  const processBatchedEvents = useCallback(async () => {
+    if (isProcessingEventRef.current || eventBatchRef.current.length === 0) {
+      return;
+    }
+
+    isProcessingEventRef.current = true;
+    const events = [...eventBatchRef.current];
+    eventBatchRef.current = [];
+
+    if (batchTimerRef.current) {
+      clearTimeout(batchTimerRef.current);
+      batchTimerRef.current = null;
+    }
+
+    try {
+      // Since all events are StateMutations, only process the latest one
+      // (it will fetch all new messages anyway)
+      const latestEvent = events[events.length - 1];
+      
+      if (import.meta.env.DEV && events.length > 1) {
+        log.debug('WebSocket', `Batched ${events.length} StateMutations, processing only the latest`);
+      }
+
+      await handleStateMutation(latestEvent);
+    } catch (error) {
+      log.error('WebSocket', 'Error processing batched events', error);
+    } finally {
+      isProcessingEventRef.current = false;
+    }
+  }, [handleStateMutation]);
+
   // Create event callback for websocket subscription
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const eventCallbackFn = useCallback(async (event: any) => {
-    // Prevent infinite loops
-    if (isProcessingEvent.current) {
-      return;
-    }
-
-    // Rate limiting - prevent events from firing too frequently
-    const now = Date.now();
-    if (now - lastEventTime.current < EVENT_RATE_LIMIT_MS) {
-      return;
-    }
-    lastEventTime.current = now;
-
-    // Prevent duplicate events
-    const eventId = `${event.type}-${event.data?.timestamp || now}`;
-    if (eventQueue.current.has(eventId)) {
-      return;
-    }
-    eventQueue.current.add(eventId);
-
-    // Clean up old events from queue
-    if (eventQueue.current.size > EVENT_QUEUE_MAX_SIZE) {
-      const eventsArray = Array.from(eventQueue.current);
-      eventQueue.current = new Set(eventsArray.slice(-EVENT_QUEUE_CLEANUP_SIZE));
-    }
-
+  const eventCallbackFn = useCallback(async (event: WebSocketEvent) => {
+    // Validate context before processing
     const sessionChat = getStoredSession();
     const useDM = (sessionChat?.type === "direct_message" &&
       sessionChat?.account &&
@@ -411,29 +424,29 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     const currentContextId = (useDM ? dmContextId : contextId) || "";
 
     if (!currentContextId) {
-      eventQueue.current.delete(eventId);
-      return;
+      return; // Skip if no valid context
     }
 
-    isProcessingEvent.current = true;
+    // Add event to batch
+    eventBatchRef.current.push(event);
 
-    try {
-      switch (event.type) {
-        case "StateMutation":
-          await handleStateMutation(event);
-          break;
-        case "ExecutionEvent":
-          await handleExecutionEvent(event);
-          break;
-        default:
-      }
-    } catch (callbackError) {
-      console.error("Error in subscription callback:", callbackError);
-    } finally {
-      isProcessingEvent.current = false;
-      eventQueue.current.delete(eventId);
+    // Clear existing timer
+    if (batchTimerRef.current) {
+      clearTimeout(batchTimerRef.current);
     }
-  }, [handleStateMutation, handleExecutionEvent]);
+
+    // Check if we should process immediately or wait for more events
+    const shouldProcessNow = eventBatchRef.current.length >= 10; // Process if we have 10+ events
+
+    if (shouldProcessNow) {
+      processBatchedEvents();
+    } else {
+      // Wait 100ms for more events before processing
+      batchTimerRef.current = setTimeout(() => {
+        processBatchedEvents();
+      }, 100);
+    }
+  }, [processBatchedEvents]);
 
   // Use WebSocket subscription hook (pass callback directly, hook handles refs internally)
   const subscription = useWebSocketSubscription(app, eventCallbackFn);
@@ -460,7 +473,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         initialFetchDone.current = true;
         isFetchingInitial.current = false;
       }).catch(error => {
-        console.error("Error fetching initial data:", error);
+        log.error("Home", "Error fetching initial data", error);
         isFetchingInitial.current = false;
       });
     }
