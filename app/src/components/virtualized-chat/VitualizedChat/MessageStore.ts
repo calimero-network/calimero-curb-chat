@@ -184,7 +184,11 @@ class MessageStore<
   }
 
   computeKey(item: InternalMessage<T>): string {
-    return `${item.id}_${item.version ?? 0}`;
+    // Use timestamp and nonce as additional uniqueness factors
+    // Following Virtuoso best practice for stable, unique keys
+    const itemAny = item as any;
+    const nonce = itemAny.nonce || '';
+    return `${item.id}_${nonce}_${item.version ?? 0}`;
   }
 
   _applyUpdateFunction(oldId: string, updateFunction: UpdateFunction<T>) {

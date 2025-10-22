@@ -9,6 +9,7 @@ import MessageStore from './MessageStore';
 import NoMessages from './NoMessages';
 import { OverlayDiv } from './OverlayDiv';
 import LoadingHeader from './LoadingHeader';
+import ScrollToBottomButton from './ScrollToBottomButton';
 import { 
   useMessageLoader, 
   useScrollManager, 
@@ -66,7 +67,6 @@ export interface VirtualizedChatProps<T extends Message> {
   style?: React.CSSProperties;
   chatId: string;
   shouldTriggerNewItemIndicator?: (item: T) => boolean;
-  scrollToBottomOnSend?: boolean; // New prop for explicit control
 }
 
 const VirtualizedChat = <T extends Message>({
@@ -80,7 +80,6 @@ const VirtualizedChat = <T extends Message>({
   shouldTriggerNewItemIndicator,
   style,
   chatId,
-  scrollToBottomOnSend = true,
 }: VirtualizedChatProps<T>): React.ReactElement => {
   // Initialize message store
   const store = useRef(new MessageStore<T>()).current;
@@ -113,7 +112,7 @@ const VirtualizedChat = <T extends Message>({
     handleFollowOutput,
     handleIsScrolling,
     handleAtBottomStateChange,
-    resetScrollAwayFlag,
+    handleOwnMessageSent,
   } = useScrollManager({
     chatId,
     isLoadingInitial,
@@ -134,7 +133,7 @@ const VirtualizedChat = <T extends Message>({
     shouldTriggerNewItemIndicator,
     onMessagesUpdated: updateMessages,
     onNewMessagesWhileNotAtBottom: showNewMessageIndicator,
-    onOwnMessageSent: resetScrollAwayFlag, // Reset when user sends message
+    onOwnMessageSent: handleOwnMessageSent, // Scroll when user sends message
   });
 
   // Track last rendered item for notifications
@@ -187,6 +186,7 @@ const VirtualizedChat = <T extends Message>({
       {isLoadingInitial && <OverlayDiv type="loading" />}
       {!isLoadingInitial && messages?.length === 0 && <NoMessages />}
       {hasNewMessages && NewMessageIndicator}
+      <ScrollToBottomButton show={!isAtBottom && messages.length > 0} onClick={scrollToBottom} />
       {!isLoadingInitial && messages.length > 0 && (
         <Virtuoso
           key={chatId}

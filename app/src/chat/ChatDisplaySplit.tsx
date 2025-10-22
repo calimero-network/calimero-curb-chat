@@ -189,12 +189,18 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
   const hasLoadedUsername = useRef(false);
 
   useEffect(() => {
+    // Update accountId whenever activeChat changes (DM vs Channel have different IDs)
+    const isDM = activeChat?.type === "direct_message";
+    const currentAccountId = isDM 
+      ? (activeChat?.account || getExecutorPublicKey() || "")
+      : (getExecutorPublicKey() || "");
+    setAccountId(currentAccountId);
+    
     // Only fetch username once, not on every render
     if (hasLoadedUsername.current) return;
     
     const setUserInfo = async () => {
       const executorId = getExecutorPublicKey() ?? "";
-      setAccountId(executorId);
       
       // Check if we already have the username in storage
       const cachedUsername = StorageHelper.getItem("chat-username");
@@ -224,7 +230,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
       }
     }
     setUserInfo();
-  }, []);
+  }, [activeChat]);
 
   // const isModerator = useMemo(
   //   () =>

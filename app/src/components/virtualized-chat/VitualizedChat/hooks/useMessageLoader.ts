@@ -41,7 +41,6 @@ export function useMessageLoader<T extends Message>({
   const [totalCount, setTotalCount] = useState<number>(10000);
   
   const isInitialLoadingRef = useRef<boolean>(false);
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Keep refs updated to avoid including callbacks in dependency arrays
   const onLoadCompleteRef = useRef(onLoadComplete);
@@ -79,11 +78,6 @@ export function useMessageLoader<T extends Message>({
       return;
     }
 
-    // Clear any pending timeout
-    if (loadingTimeoutRef.current) {
-      clearTimeout(loadingTimeoutRef.current);
-    }
-
     setIsLoadingOlder(true);
     const oldestMessageId = messages[0]?.id;
 
@@ -98,22 +92,20 @@ export function useMessageLoader<T extends Message>({
         await loadPrevMessages(oldestMessageId);
 
       if (olderMessages.length > 0) {
-        // Following Virtuoso best practice: update index first, then prepend
-        // This maintains scroll position better (similar to scrollModifier: 'prepend')
+        // Following 'prepend' pattern from VirtuosoMessageList
+        // Update firstItemIndex to maintain scroll position
         setFirstItemIndex((prev) => prev - olderMessages.length);
         store.prepend(olderMessages);
-        
-        // Batch the state update to prevent render during scroll
         setMessages([...store.messages]);
+        
+        log.debug('useMessageLoader', `Prepended ${olderMessages.length} older messages`);
       }
       setHasMore(olderHasMore);
     } catch (error) {
       log.error('useMessageLoader', 'Failed to load older messages', error);
     } finally {
-      // Small delay before allowing next load to prevent rapid triggering
-      loadingTimeoutRef.current = setTimeout(() => {
-        setIsLoadingOlder(false);
-      }, 200);
+      // Set loading false immediately - no delay needed
+      setIsLoadingOlder(false);
     }
   }, [
     loadPrevMessages,
@@ -136,15 +128,6 @@ export function useMessageLoader<T extends Message>({
       fetchInitialMessages();
     }
   }, [chatId, fetchInitialMessages]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
-    };
-  }, []);
 
   return {
     messages,

@@ -16,7 +16,7 @@ interface UseScrollManagerReturn {
   handleIsScrolling: (scrolling: boolean) => void;
   handleAtBottomStateChange: (atBottom: boolean) => void;
   hasScrolledToBottom: boolean;
-  resetScrollAwayFlag: () => void; // Expose to allow parent to reset
+  handleOwnMessageSent: () => void; // Directly scroll when sending message
 }
 
 export function useScrollManager({
@@ -31,6 +31,7 @@ export function useScrollManager({
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSettlingRef = useRef<boolean>(false);
   const userHasScrolledAwayRef = useRef<boolean>(false); // Track if user intentionally left bottom
+  const forceScrollOnNextOutputRef = useRef<boolean>(false); // Force scroll on next followOutput call
   
   const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
 
@@ -41,34 +42,64 @@ export function useScrollManager({
     }
   }, []);
 
-  const resetScrollAwayFlag = useCallback(() => {
+  const handleOwnMessageSent = useCallback(() => {
+    // When user sends their own message, always scroll to bottom
+    // Reset flags to enable auto-scroll
     userHasScrolledAwayRef.current = false;
+    forceScrollOnNextOutputRef.current = true;
+    
+    log.debug('useScrollManager', 'Own message sent - scrolling to bottom');
+    
+    // Scroll immediately - Virtuoso handles the timing internally
+    if (listRef.current) {
+      listRef.current.scrollToIndex({
+        index: 'LAST',
+        behavior: 'smooth',
+        align: 'end',
+      });
+    }
   }, []);
 
   const scrollToBottom = useCallback((): void => {
-    // When user explicitly scrolls to bottom (like clicking button or sending message)
-    // Reset the scroll-away flag to re-enable auto-scroll
-    resetScrollAwayFlag();
+    // When user explicitly scrolls to bottom (like clicking button)
+    // Reset flags to re-enable auto-scroll
+    userHasScrolledAwayRef.current = false;
+    forceScrollOnNextOutputRef.current = false;
     listRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
-  }, [resetScrollAwayFlag]);
+    log.debug('useScrollManager', 'Explicit scroll to bottom');
+  }, []);
 
   const handleFollowOutput = useCallback((atBottom: boolean) => {
-    // During settling, don't auto-scroll
+    // Force scroll if requested (e.g., when user sends their own message)
+    // Keep the flag until we're actually at bottom to handle optimistic + real message
+    if (forceScrollOnNextOutputRef.current) {
+      log.debug('useScrollManager', 'Force scrolling to bottom');
+      // Only clear flag once we've reached bottom
+      if (atBottom) {
+        forceScrollOnNextOutputRef.current = false;
+        log.debug('useScrollManager', 'Force scroll completed - clearing flag');
+      }
+      return 'smooth';
+    }
+    
+    // During settling period after initial load, don't interfere
     if (isSettlingRef.current) {
       return false;
     }
     
-    // Following VirtuosoMessageList pattern: auto-scroll-to-bottom modifier
-    // If user has scrolled away but we're receiving new content
-    // Only scroll if we're already at bottom OR if the scroll-away flag is not set
-    if (userHasScrolledAwayRef.current && !atBottom) {
-      return false; // Don't scroll if user has left bottom
+    // If user has scrolled away, NEVER auto-scroll (until they send a message)
+    if (userHasScrolledAwayRef.current) {
+      return false;
     }
     
-    // Auto-scroll if at bottom or if scroll-away flag was just reset (by sending message)
-    if ((atBottom || !userHasScrolledAwayRef.current) && !isScrollingRef.current && isAtBottomRef.current) {
+    // Only auto-scroll if:
+    // 1. We're at bottom
+    // 2. User is not actively scrolling
+    // 3. Bottom state confirms we're at bottom
+    if (atBottom && !isScrollingRef.current && isAtBottomRef.current) {
       return 'smooth';
     }
+    
     return false;
   }, []);
 
@@ -80,7 +111,9 @@ export function useScrollManager({
       isSettlingRef.current = false;
       // Mark that user has taken control of scroll
       userHasScrolledAwayRef.current = true;
-      log.debug('useScrollManager', 'User is scrolling - disabled auto-scroll');
+      // Clear force scroll flag when user manually scrolls
+      forceScrollOnNextOutputRef.current = false;
+      log.debug('useScrollManager', 'User is scrolling - disabled auto-scroll & force flag');
     }
   }, []);
 
@@ -93,7 +126,9 @@ export function useScrollManager({
     if (!atBottom && wasAtBottom && hasScrolledToBottomRef.current) {
       isSettlingRef.current = false;
       userHasScrolledAwayRef.current = true;
-      log.debug('useScrollManager', 'User scrolled away from bottom');
+      // Clear force scroll flag when user scrolls away
+      forceScrollOnNextOutputRef.current = false;
+      log.debug('useScrollManager', 'User scrolled away from bottom - cleared force flag');
     }
     
     // If user scrolls back to bottom manually, reset the flag
@@ -112,6 +147,7 @@ export function useScrollManager({
     hasScrolledToBottomRef.current = false;
     isSettlingRef.current = false;
     userHasScrolledAwayRef.current = false; // Reset scroll-away flag
+    forceScrollOnNextOutputRef.current = false; // Reset force scroll flag
     clearScrollTimeout();
   }, [chatId, clearScrollTimeout]);
 
@@ -131,11 +167,11 @@ export function useScrollManager({
           });
           hasScrolledToBottomRef.current = true;
           
-          // Longer settling period to allow user to start scrolling
+          // Shorter settling period - just enough for initial render
           setTimeout(() => {
             isSettlingRef.current = false;
             log.debug('useScrollManager', 'Settling period complete');
-          }, 2000); // Increased from 1s to 2s
+          }, 500); // Reduced to 500ms for quicker response
         }
       }, 150);
       
@@ -151,7 +187,7 @@ export function useScrollManager({
     handleIsScrolling,
     handleAtBottomStateChange,
     hasScrolledToBottom: hasScrolledToBottomRef.current,
-    resetScrollAwayFlag,
+    handleOwnMessageSent,
   };
 }
 

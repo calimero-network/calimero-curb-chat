@@ -53,26 +53,25 @@ export function useMessageUpdates<T extends Message>({
       onMessagesUpdatedRef.current([...store.messages], addedCount);
       
       // Pattern from VirtuosoMessageList: distinguish between sent vs received messages
-      // shouldTriggerNewItemIndicator returns FALSE for own messages, TRUE for others
-      if (addedCount > 0) {
-        const lastMessage = store.messages[store.messages.length - 1];
-        const isOwnMessage = shouldTriggerNewItemIndicator 
-          ? !shouldTriggerNewItemIndicator(lastMessage)  // FALSE for own messages
+      // Check ANY new incoming message, not just added ones (handles optimistic -> real transition)
+      if (incomingMessages.length > 0) {
+        // Check the last incoming message
+        const lastIncomingMessage = incomingMessages[incomingMessages.length - 1];
+        const shouldTriggerIndicator = shouldTriggerNewItemIndicator 
+          ? shouldTriggerNewItemIndicator(lastIncomingMessage)
           : false;
+        const isOwnMessage = !shouldTriggerIndicator;  // Inverse of shouldTriggerNewItemIndicator
 
         if (isOwnMessage) {
-          // User sent a message - reset scroll-away flag to enable auto-scroll
-          // Following VirtuosoMessageList send pattern: always scroll to bottom when sending
+          // User sent a message - always scroll to bottom
+          // This handles both optimistic messages and real messages from server
           onOwnMessageSentRef.current?.();
-          log.debug('useMessageUpdates', 'Own message sent - enabling auto-scroll');
-        } else if (!isAtBottom) {
-          // Someone else's message and we're not at bottom - show indicator
+        } else if (!isAtBottom && addedCount > 0) {
+          // Someone else's NEW message and we're not at bottom - show indicator
+          // Only for added, not updated (reactions, etc)
           onNewMessagesWhileNotAtBottomRef.current();
-          log.debug('useMessageUpdates', 'Message from others - showing indicator');
         }
       }
-      // For updates (reactions, edits) - don't show indicator
-      // This follows the 'items-change' modifier pattern
     }
   }, [incomingMessages, store, isAtBottom, shouldTriggerNewItemIndicator]);
 

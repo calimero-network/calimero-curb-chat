@@ -159,7 +159,6 @@ export function useMessages() {
   const addIncoming = useCallback((newMessages: CurbMessage[]) => {
     if (newMessages.length > 0) {
       // Pass to VirtualizedChat - MessageStore handles deduplication
-      // Don't clear incomingMessages - it causes unnecessary re-renders
       setIncomingMessages(newMessages);
     }
   }, []);
