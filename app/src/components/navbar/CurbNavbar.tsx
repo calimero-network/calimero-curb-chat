@@ -6,6 +6,7 @@ import UsersButtonGroup from "./UsersButtonGroup";
 import { useState } from "react";
 import type { UserId } from "../../api/clientApi";
 import SettingsIcon from "./SettingsIcon";
+import NotificationCenterWidget from "./NotificationCenterWidget";
 import CurbLogoIcon from "/logo.svg";
 
 const NavigationBar = styled.div<{ $isSidebarOpen: boolean }>`
@@ -232,6 +233,7 @@ export default function CurbNavbar({
               />
             </ItemsContainer>
           )}
+        <NotificationCenterWidget />
         <SettingsIcon />
       </FlexContainer>
     </NavigationBar>

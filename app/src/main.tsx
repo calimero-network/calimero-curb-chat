@@ -4,6 +4,7 @@ import "./index.css";
 import App from "./App.tsx";
 import { BrowserRouter } from "react-router-dom";
 import { AppMode, CalimeroProvider } from "@calimero-network/calimero-client";
+import { ToastProvider } from "@calimero-network/mero-ui";
 import { APPLICATION_ID, APPLICATION_PATH } from "./constants/config.ts";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { log } from "./utils/logger.ts";
@@ -36,7 +37,9 @@ createRoot(document.getElementById("root")!).render(
           mode={AppMode.MultiContext}
           applicationPath={APPLICATION_PATH}
         >
-          <App />
+          <ToastProvider>
+            <App />
+          </ToastProvider>
         </CalimeroProvider>
       </BrowserRouter>
     </ErrorBoundary>
