@@ -99,6 +99,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   // Expose for compatibility with existing code
   const messagesRef = mainMessages.messagesRef;
   const incomingMessages = mainMessages.incomingMessages;
+  const addOptimisticMessage = mainMessages.addOptimistic;
 
   // Initialize audio context on first user interaction
   useEffect(() => {
@@ -135,7 +136,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   // Use channel members hook
   const getChannelUsers = channelMembersHook.fetchChannelMembers;
   const getNonInvitedUsers = channelMembersHook.fetchNonInvitedUsers;
-  
+
   const reFetchChannelMembers = async () => {
     const isDM = activeChatRef.current?.type === "direct_message";
     await getChannelUsers(
@@ -561,6 +562,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       openThread={openThread}
       setOpenThread={setOpenThread}
       currentOpenThreadRef={currentOpenThreadRef}
+      addOptimisticMessage={addOptimisticMessage}
     />
   );
 }

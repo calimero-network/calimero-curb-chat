@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useLayoutEffect } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FullMessageResponse } from "../api/clientApi";
@@ -16,8 +16,6 @@ export function useMessages() {
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(MESSAGE_PAGE_SIZE);
   const messagesRef = useRef<CurbMessage[]>([]);
-  const processedMessageIds = useRef<Set<string>>(new Set());
-  const incomingMessagesQueue = useRef<CurbMessage[]>([]);
 
   /**
    * Load initial messages for a chat
@@ -49,9 +47,6 @@ export function useMessages() {
       setMessages(messagesArray);
       setTotalCount(response.data.total_count);
       setOffset(MESSAGE_PAGE_SIZE);
-      
-      // Reset processed IDs when loading initial messages
-      processedMessageIds.current = new Set(messagesArray.map(m => m.id));
 
       return {
         messages: messagesArray,
@@ -134,21 +129,12 @@ export function useMessages() {
 
     if (!response.data) return [];
 
-    // Filter out messages we've already processed
-    const newMessages = response.data.messages
-      .filter((msg) => !processedMessageIds.current.has(msg.id))
-      .map((msg) => transformMessageToUI(msg));
+    // Transform messages - MessageStore will handle deduplication
+    const newMessages = response.data.messages.map((msg) => transformMessageToUI(msg));
 
     if (newMessages.length > 0) {
-      // Mark these messages as processed
-      newMessages.forEach((msg) => processedMessageIds.current.add(msg.id));
-      
+      // Only update ref, not state (MessageStore will deduplicate in VirtualizedChat)
       messagesRef.current = [...messagesRef.current, ...newMessages];
-      
-      // Replace incoming messages (don't append) to avoid duplicates
-      incomingMessagesQueue.current = newMessages;
-      setIncomingMessages(newMessages);
-      
       return newMessages;
     }
 
@@ -156,34 +142,21 @@ export function useMessages() {
   }, []);
 
   /**
-   * Add incoming messages (from websocket)
+   * Add incoming messages (from websocket) 
+   * Replaces any optimistic messages with the same text
    */
   const addIncoming = useCallback((newMessages: CurbMessage[]) => {
     if (newMessages.length > 0) {
-      // Filter out already processed messages
-      const trulyNewMessages = newMessages.filter(
-        msg => !processedMessageIds.current.has(msg.id)
-      );
-      
-      if (trulyNewMessages.length > 0) {
-        trulyNewMessages.forEach(msg => processedMessageIds.current.add(msg.id));
-        messagesRef.current = [...messagesRef.current, ...trulyNewMessages];
-        
-        // Replace incoming messages (don't append)
-        incomingMessagesQueue.current = trulyNewMessages;
-        setIncomingMessages(trulyNewMessages);
-      }
+      setIncomingMessages(newMessages);
     }
   }, []);
   
   /**
-   * Clear incoming messages queue (call after VirtualizedChat processes them)
+   * Add optimistic message (for messages being sent)
    */
-  const clearIncoming = useCallback(() => {
-    if (incomingMessagesQueue.current.length > 0) {
-      incomingMessagesQueue.current = [];
-      setIncomingMessages([]);
-    }
+  const addOptimistic = useCallback((message: CurbMessage) => {
+    // MessageStore will now handle deduplication automatically
+    setIncomingMessages([message]);
   }, []);
 
   /**
@@ -192,11 +165,9 @@ export function useMessages() {
   const clear = useCallback(() => {
     messagesRef.current = [];
     setMessages([]);
-    incomingMessagesQueue.current = [];
     setIncomingMessages([]);
     setTotalCount(0);
     setOffset(MESSAGE_PAGE_SIZE);
-    processedMessageIds.current.clear();
   }, []);
 
   /**
@@ -215,7 +186,7 @@ export function useMessages() {
     loadPrevious,
     checkForNewMessages,
     addIncoming,
-    clearIncoming,
+    addOptimistic,
     clear,
     getCurrent,
   };

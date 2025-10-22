@@ -7,7 +7,7 @@ import type {
   CurbMessage,
   UpdatedMessages,
 } from "../types/Common";
-import { DMSetupState } from "../types/Common";
+import { DMSetupState, MessageStatus } from "../types/Common";
 import JoinChannel from "./JoinChannel";
 import ChatDisplaySplit from "./ChatDisplaySplit";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
@@ -43,6 +43,7 @@ interface ChatContainerProps {
   currentOpenThreadRef: React.RefObject<CurbMessage | undefined>;
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat) => void;
   membersList: Map<string, string>;
+  addOptimisticMessage?: (message: CurbMessage) => void;
 }
 
 const ChatContainerWrapper = styled.div`
@@ -92,6 +93,7 @@ export default function ChatContainer({
   currentOpenThreadRef,
   onDMSelected,
   membersList,
+  addOptimisticMessage,
 }: ChatContainerProps) {
   const [updatedMessages, setUpdatedMessages] = useState<UpdatedMessages[]>([]);
   const [_updatedThreadMessages, setUpdatedThreadMessages] = useState<
@@ -204,6 +206,32 @@ export default function ChatContainer({
 
     const mentions: UserId[] = [...result.userIdMentions];
     const usernames: string[] = [...result.usernameMentions];
+
+    // Add optimistic message immediately (if function is provided)
+    if (addOptimisticMessage && !isThread) {
+      const optimisticMessage: CurbMessage = {
+        id: `temp-${Date.now()}`,
+        text: message,
+        nonce: Math.random().toString(36).substring(2, 15),
+        key: `temp-${Date.now()}`,
+        timestamp: Date.now(),
+        sender: getExecutorPublicKey() || "",
+        senderUsername: undefined,
+        reactions: {},
+        editedOn: undefined,
+        mentions: mentions,
+        files: [],
+        images: [],
+        editMode: false,
+        status: MessageStatus.sent,
+        deleted: false,
+      };
+      try {
+        addOptimisticMessage(optimisticMessage);
+      } catch (error) {
+        console.error("Error adding optimistic message:", error);
+      }
+    }
 
     await new ClientApiDataSource().sendMessage({
       group: {
@@ -390,10 +418,10 @@ export default function ChatContainer({
             loadInitialChatMessages={loadInitialChatMessages}
             incomingMessages={incomingMessages}
             loadPrevMessages={loadPrevMessages}
-            isEmojiSelectorVisible={isEmojiSelectorVisible}
-            setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
-            messageWithEmojiSelector={messageWithEmojiSelector}
-          />
+              isEmojiSelectorVisible={isEmojiSelectorVisible}
+              setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
+              messageWithEmojiSelector={messageWithEmojiSelector}
+            />
         );
 
       default:

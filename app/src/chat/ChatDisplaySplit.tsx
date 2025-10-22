@@ -13,7 +13,7 @@ import {
   messageRenderer,
   VirtualizedChat,
   type CurbMessage,
-} from "curb-virtualized-chat";
+} from "../components/virtualized-chat";
 import type { ChannelInfo } from "../api/clientApi";
 import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 import EmojiSelectorPopup from "../emojiSelector/EmojiSelectorPopup";
@@ -21,7 +21,7 @@ import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { scrollbarStyles } from "../styles/scrollbar";
 
 interface ChatDisplaySplitProps {
-  readMessage: (message: MessageWithReactions) => void;
+  readMessage: (message: CurbMessage) => void;
   handleReaction: (
     message: CurbMessage,
     emoji: string,
@@ -274,7 +274,7 @@ export default function ChatDisplaySplit({
           {openThread && isThread && (
             <ThreadHeader
               onClose={() => {
-                setOpenThread("");
+                setOpenThread(undefined as any); // Type mismatch - should accept undefined
                 if (currentOpenThreadRef) {
                   currentOpenThreadRef.current = undefined;
                 }
@@ -287,11 +287,11 @@ export default function ChatDisplaySplit({
             incomingMessages={incomingMessages}
             updatedMessages={updatedMessages}
             onItemNewItemRender={readMessage}
-            shouldTriggerNewItemIndicator={(message: MessageWithReactions) =>
+            shouldTriggerNewItemIndicator={(message: CurbMessage) =>
               message.sender !== accountId
             }
             render={renderMessage()}
-            chatId={isThread ? openThread?.id : (activeChat.type === "direct_message" ? activeChat.contextId : activeChat.id)}
+            chatId={isThread && openThread?.id ? openThread.id : (activeChat.type === "direct_message" && activeChat.contextId ? activeChat.contextId : activeChat.id || '')}
             style={currentChatStyle}
           />
         </ContainerPadding>
@@ -301,7 +301,7 @@ export default function ChatDisplaySplit({
           }
           sendMessage={sendMessage}
           resetImage={resetImage}
-          openThread={openThread}
+          openThread={openThread as any} // Type mismatch between CurbMessage and MessageWithReactions
           isThread={isThread}
           isReadOnly={isReadOnly}
           isOwner={isOwner}

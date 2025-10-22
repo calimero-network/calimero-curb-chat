@@ -16,7 +16,6 @@ export function useThreadMessages() {
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(MESSAGE_PAGE_SIZE);
   const messagesRef = useRef<CurbMessage[]>([]);
-  const incomingMessagesQueue = useRef<CurbMessage[]>([]);
 
   /**
    * Load initial thread messages
@@ -108,22 +107,11 @@ export function useThreadMessages() {
   }, [offset, totalCount]);
 
   /**
-   * Clear incoming messages queue
-   */
-  const clearIncoming = useCallback(() => {
-    if (incomingMessagesQueue.current.length > 0) {
-      incomingMessagesQueue.current = [];
-      setIncomingMessages([]);
-    }
-  }, []);
-
-  /**
    * Clear thread messages
    */
   const clear = useCallback(() => {
     messagesRef.current = [];
     setMessages([]);
-    incomingMessagesQueue.current = [];
     setIncomingMessages([]);
     setTotalCount(0);
     setOffset(MESSAGE_PAGE_SIZE);
@@ -136,7 +124,6 @@ export function useThreadMessages() {
     messagesRef,
     loadInitial,
     loadPrevious,
-    clearIncoming,
     clear,
   };
 }

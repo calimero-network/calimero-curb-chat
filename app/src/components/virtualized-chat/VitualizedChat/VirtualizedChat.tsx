@@ -1,0 +1,262 @@
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import type { ListRange, VirtuosoHandle } from 'react-virtuoso';
+import { Virtuoso } from 'react-virtuoso';
+import styled from 'styled-components';
+
+import DefaultNewMessageIndicator from './DefaultNewMessagesIndicator';
+import type { UpdateDescriptor } from './MessageStore';
+import MessageStore from './MessageStore';
+import NoMessages from './NoMessages';
+import { OverlayDiv } from './OverlayDiv';
+
+const VirtuosoWrapper = styled.div`
+  scrollbar-color: black transparent;
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: black;
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: black;
+  }
+  * {
+    scrollbar-color: black transparent;
+  }
+  html::-webkit-scrollbar {
+    width: 12px;
+  }
+  html::-webkit-scrollbar-thumb {
+    background-color: black;
+    border-radius: 6px;
+  }
+  html::-webkit-scrollbar-thumb:hover {
+    background-color: black;
+  }
+`;
+
+interface Message {
+  id: string;
+}
+
+interface NewMessageIndicatorProps {
+  onClick: () => void;
+}
+
+export interface VirtualizedChatProps<T extends Message> {
+  loadPrevMessages: (
+    id: string,
+  ) => Promise<{ messages: T[]; hasOlder: boolean }>;
+  loadInitialMessages: () => Promise<{ messages: T[]; totalCount: number }>;
+  incomingMessages?: T[];
+  updatedMessages?: { id: string; descriptor: UpdateDescriptor<T> }[];
+  render: (item: T, prevItem?: T) => React.ReactElement;
+  newMessageIndicator?: React.ComponentType<NewMessageIndicatorProps>;
+  onItemNewItemRender?: (item: T) => void;
+  style?: React.CSSProperties;
+  chatId: string;
+  shouldTriggerNewItemIndicator?: (item: T) => boolean;
+}
+
+const VirtualizedChat = <T extends Message>({
+  loadPrevMessages,
+  loadInitialMessages,
+  incomingMessages = [],
+  updatedMessages = [],
+  render,
+  newMessageIndicator = DefaultNewMessageIndicator,
+  onItemNewItemRender,
+  shouldTriggerNewItemIndicator,
+  style,
+  chatId,
+}: VirtualizedChatProps<T>): React.ReactElement => {
+  const [messages, setMessages] = useState<T[]>([]);
+  const [isLoadingOlder, setIsLoadingOlder] = useState<boolean>(false);
+  const [isLoadingInitial, setIsLoadingInitial] = useState<boolean>(true);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+  const [firstItemIndex, setFirstItemIndex] = useState<number>(10000);
+  const [totalCount, setTotalCount] = useState<number>(10000);
+  const listHandler = useRef<VirtuosoHandle>(null);
+  const [hasNewMessages, setHasNewMessages] = useState<boolean>(false);
+  const [oldestMessagerReported, setOldestMessageReported] =
+    useState<number>(-1);
+
+  const store = useRef(new MessageStore<T>()).current;
+  const isScrolling = useRef<boolean>(false);
+  const isAtBottom = useRef<boolean>(true);
+
+  const isInitialLoadingRef = useRef<boolean>(false);
+
+  const scrollToBottom = (): void => {
+    listHandler.current?.scrollToIndex({ index: 'LAST' });
+  };
+
+  const fetchInitialMessages = async () => {
+    // TODO:  This is a hack to prevent multiple initial fetches between re-renders
+    // caused by the component being unmounted and remounted during the
+    // initial fetch. Need to find a better way to do this.
+    isInitialLoadingRef.current = true;
+    setIsLoadingInitial(true);
+    setOldestMessageReported(-1);
+
+    try {
+      const initialMessagesResponse = await loadInitialMessages();
+      const { messages: initialMessages, totalCount: totalItems } =
+        initialMessagesResponse || {};
+
+      store.initial(initialMessages);
+      setMessages(store.messages);
+      setHasMore(totalItems > initialMessages.length);
+      setFirstItemIndex(totalItems - initialMessages.length);
+      setTotalCount(totalItems);
+
+      // Force a re-render after a short delay to ensure proper rendering
+      setTimeout(() => {
+        setMessages([...store.messages]);
+        scrollToBottom();
+      }, 100);
+    } catch (error) {
+      console.error('Failed to load initial messages:', error);
+    } finally {
+      setIsLoadingInitial(false);
+      isInitialLoadingRef.current = false;
+    }
+  };
+
+  const reportLastRenderedItem = (range: ListRange) => {
+    if (onItemNewItemRender && range.endIndex > oldestMessagerReported) {
+      const lastItem = store.getItem(range.endIndex - firstItemIndex);
+      onItemNewItemRender(lastItem);
+      setOldestMessageReported(range.endIndex);
+    }
+  };
+
+  const handleFollowOutput = (atBottom: boolean) => {
+    if (atBottom && !isScrolling.current) {
+      return 'smooth';
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    if (chatId && !isInitialLoadingRef.current) {
+      fetchInitialMessages();
+    }
+  }, [chatId]);
+
+  useEffect(() => {
+    if (incomingMessages.length > 0) {
+      const prevLength = store.messages.length;
+      store.append(incomingMessages);
+      const newLength = store.messages.length;
+      const actuallyAddedCount = newLength - prevLength;
+      
+      setMessages(store.messages);
+      setTotalCount((prevTotalCount) => prevTotalCount + actuallyAddedCount);
+      
+      if (
+        actuallyAddedCount > 0 &&
+        !isAtBottom.current &&
+        (shouldTriggerNewItemIndicator
+          ? shouldTriggerNewItemIndicator(
+              store.messages[store.messages.length - 1],
+            )
+          : true)
+      ) {
+        setHasNewMessages(true);
+      }
+    }
+  }, [incomingMessages]);
+
+  useEffect(() => {
+    store.updateMultiple(updatedMessages);
+    setMessages([...store.messages]); // TODO: Spread operator is a hack to force a re-render
+  }, [updatedMessages]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (!isLoadingOlder && hasMore && !isLoadingInitial) {
+      setIsLoadingOlder(true);
+
+      const oldestMessageId = messages[0]?.id;
+
+      if (oldestMessageId) {
+        const { messages: olderMessages, hasOlder: olderHasMore } =
+          await loadPrevMessages(messages[0].id);
+
+        if (olderMessages.length > 0) {
+          setFirstItemIndex(
+            (prevFirstItemIndex) => prevFirstItemIndex - olderMessages.length,
+          );
+          store.prepend(olderMessages);
+          setMessages(store.messages);
+        }
+        setHasMore(olderHasMore);
+      } else {
+        setHasMore(false);
+      }
+      setIsLoadingOlder(false);
+    }
+  }, [loadPrevMessages, isLoadingOlder, hasMore, messages, isLoadingInitial]);
+
+  const handleRenderItem = useCallback(
+    (index: number, item: T) => {
+      const prevMessageIndex = messages.length - (totalCount - index + 1);
+      if (prevMessageIndex < 0) {
+        return render(item);
+      }
+      const prevMessage = messages[prevMessageIndex];
+      return render(item, prevMessage);
+    },
+    [messages, render, firstItemIndex],
+  );
+
+  const NewMessageIndicator = React.createElement(newMessageIndicator, {
+    onClick: scrollToBottom,
+  });
+
+  return (
+    <VirtuosoWrapper style={{ position: 'relative', ...style }}>
+      {isLoadingInitial && <OverlayDiv type="loading" />}
+      {!isLoadingInitial && messages?.length === 0 && <NoMessages />}
+      {hasNewMessages && NewMessageIndicator}
+      {!isLoadingInitial && (
+        <Virtuoso
+          style={{ height: '100%', width: '100%' }}
+          itemContent={handleRenderItem}
+          computeItemKey={(_, item) => store.computeKey(item)}
+          followOutput={handleFollowOutput}
+          data={messages}
+          initialTopMostItemIndex={{
+            index: 'LAST',
+            behavior: 'auto',
+          }}
+          startReached={handleLoadMore}
+          endReached={() => {
+            setHasNewMessages(false);
+          }}
+          rangeChanged={reportLastRenderedItem}
+          firstItemIndex={firstItemIndex}
+          totalCount={totalCount}
+          isScrolling={(scrolling) => {
+            isScrolling.current = scrolling;
+          }}
+          atBottomStateChange={(atBottom) => {
+            isAtBottom.current = atBottom;
+          }}
+          ref={listHandler}
+          overscan={{ reverse: 500, main: 0 }}
+          increaseViewportBy={{ top: 200, bottom: 200 }}
+          totalListHeightChanged={(height) => {
+            // Force re-render when height changes
+            if (height > 0) {
+              setMessages([...store.messages]);
+            }
+          }}
+        />
+      )}
+    </VirtuosoWrapper>
+  );
+};
+
+export default VirtualizedChat;
