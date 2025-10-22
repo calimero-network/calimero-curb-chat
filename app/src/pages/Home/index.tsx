@@ -54,28 +54,27 @@ import { useChannels } from "../../hooks/useChannels";
 import { useDMs } from "../../hooks/useDMs";
 import { useChatMembers } from "../../hooks/useChatMembers";
 import { useChannelMembers } from "../../hooks/useChannelMembers";
+import { useMessages } from "../../hooks/useMessages";
+import { useThreadMessages } from "../../hooks/useThreadMessages";
+import { useWebSocketSubscription } from "../../hooks/useWebSocketSubscription";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
   const [isOpenSearchChannel, setIsOpenSearchChannel] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
-  const [incomingMessages, setIncomingMessages] = useState<CurbMessage[]>([]);
-  const [totalThreadMessageCount, setTotalThreadMessageCount] = useState(0);
-  const [threadMessagesOffset, setThreadMessagesOffset] = useState(MESSAGE_PAGE_SIZE);
-  const [incomingThreadMessages, _setIncomingThreadMessages] = useState<
-    CurbMessage[]
-  >([]);
   const [currentOpenThread, setCurrentOpenThread] = useState<
     CurbMessage | undefined
   >(undefined);
-  const messagesRef = useRef<CurbMessage[]>([]);
-  const messagesThreadRef = useRef<CurbMessage[]>([]);
   const activeChatRef = useRef<ActiveChat | null>(null);
   const currentOpenThreadRef = useRef<CurbMessage | undefined>(undefined);
   const [openThread, setOpenThread] = useState<CurbMessage | undefined>(
     undefined
   );
+
+  // Use message hooks for cleaner message management
+  const mainMessages = useMessages();
+  const threadMessages = useThreadMessages();
 
   const { playSoundForMessage, playSound } = useNotificationSound(
     {
@@ -92,6 +91,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const dmsHook = useDMs(playSoundForMessage);
   const chatMembersHook = useChatMembers();
   const channelMembersHook = useChannelMembers();
+  
+  // Expose for compatibility with existing code
+  const messagesRef = mainMessages.messagesRef;
+  const incomingMessages = mainMessages.messages;
 
   // Initialize audio context on first user interaction
   useEffect(() => {
@@ -110,41 +113,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     };
   }, [playSound]);
 
-  const [currentSubscriptionContextId, setCurrentSubscriptionContextId] =
-    useState<string>("");
-  const subscriptionContextIdRef = useRef<string>("");
+  // Placeholder for event callback (defined later)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const eventCallbackRef = useRef<((event: any) => Promise<void>) | null>(null);
-
-  const manageEventSubscription = useCallback(
-    (contextId: string) => {
-      if (!app || !contextId || !eventCallbackRef.current) return;
-
-      if (
-        subscriptionContextIdRef.current &&
-        subscriptionContextIdRef.current !== contextId
-      ) {
-        try {
-          app.unsubscribeFromEvents([subscriptionContextIdRef.current]);
-        } catch (error) {
-          console.error(
-            "Failed to unsubscribe from:",
-            subscriptionContextIdRef.current,
-            error
-          );
-        }
-      }
-
-      try {
-        app.subscribeToEvents([contextId], eventCallbackRef.current);
-        subscriptionContextIdRef.current = contextId;
-        setCurrentSubscriptionContextId(contextId);
-      } catch (error) {
-        console.error("Failed to subscribe to:", contextId, error);
-      }
-    },
-    [app]
-  );
+  const [eventCallback, setEventCallback] = useState<((event: any) => Promise<void>) | null>(null);
+  
+  // Use WebSocket subscription hook
+  const subscription = useWebSocketSubscription(app, eventCallback);
 
   useEffect(() => {
     if (!isConfigSet) {
@@ -174,11 +148,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       selectedChat.channelType = channelMeta.channelType;
     }
     
-    // First, clear all message state completely
-    messagesRef.current = [];
-    setIncomingMessages([]);
-    setMessagesOffset(MESSAGE_PAGE_SIZE);
-    setTotalMessageCount(0);
+    // Clear message state using hooks
+    mainMessages.clear();
+    threadMessages.clear();
     setOpenThread(undefined);
     setCurrentOpenThread(undefined);
     
@@ -203,7 +175,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       const dmContextId = getDmContextId();
       const currentContextId = (useDM ? dmContextId : contextId) || "";
       if (currentContextId) {
-        manageEventSubscription(currentContextId);
+        subscription.subscribe(currentContextId);
       }
     }
   };
@@ -222,14 +194,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     activeChatRef.current = chatToUse;
     getChannelUsers(chatToUse.name);
     getNonInvitedUsers(chatToUse.name);
-    setMessagesOffset(MESSAGE_PAGE_SIZE);
-    setTotalMessageCount(0);
+    mainMessages.clear();
+    threadMessages.clear();
 
     // Delay to ensure app is ready before subscribing
     setTimeout(() => {
       updateSelectedActiveChat(chatToUse);
     }, SUBSCRIPTION_INIT_DELAY_MS);
-  }, [app, manageEventSubscription]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onDMSelected = useCallback(
     async (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => {
@@ -281,6 +254,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       // Set DM context BEFORE calling updateSelectedActiveChat
       // This is critical for DMs to work properly
       setDmContextId(sc?.contextId || dm?.context_id || "");
+      mainMessages.clear();
+      threadMessages.clear();
       
       // Let updateSelectedActiveChat handle all the state updates and message loading
       // Don't duplicate state setting here - it causes issues
@@ -313,24 +288,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     if (!activeChatRef.current) return;
 
     try {
-      // Only fetch a small number of recent messages to check for new ones
-      // This significantly reduces load compared to fetching 20 every time
-      const reFetchedMessages: ResponseData<FullMessageResponse> =
-        await new ClientApiDataSource().getMessages({
-          group: {
-            name: (useDM ? "private_dm" : activeChatRef.current?.name) || "",
-          },
-          limit: RECENT_MESSAGES_CHECK_SIZE,
-          offset: 0,
-          is_dm: useDM,
-          dm_identity: activeChatRef.current?.account,
-        });
-
-      if (!reFetchedMessages.data) return;
-
-      const newMessages = getNewMessages(
-        reFetchedMessages.data.messages,
-        messagesRef.current
+      const newMessages = await mainMessages.checkForNewMessages(
+        activeChatRef.current,
+        useDM
       );
 
       if (newMessages.length > 0) {
@@ -349,14 +309,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
             other_user_id: activeChatRef.current?.name || "",
           }).catch(console.error);
         }
-
-        setIncomingMessages(newMessages);
-        messagesRef.current = [...messagesRef.current, ...newMessages];
       }
     } catch (error) {
       console.error("Error handling message updates:", error);
     }
-  }, [activeChat, playSoundForMessage]);
+  }, [activeChat, playSoundForMessage, mainMessages]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDMUpdates = useCallback(async (sessionChat: any) => {
@@ -430,7 +387,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   }, [debouncedFetchChannels]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const eventCallback = useCallback(async (event: any) => {
+  const eventCallbackFn = useCallback(async (event: any) => {
     // Prevent infinite loops
     if (isProcessingEvent.current) {
       return;
@@ -491,60 +448,26 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
   }, [handleStateMutation, handleExecutionEvent]);
 
-  // Keep the ref up to date with the latest callback
+  // Set the event callback for the subscription hook
   useEffect(() => {
-    eventCallbackRef.current = eventCallback;
-  }, [eventCallback]);
+    setEventCallback(() => eventCallbackFn);
+  }, [eventCallbackFn]);
 
-  const loadInitialChatMessages = async (): Promise<ChatMessagesData> => {
-    if (!activeChat?.name) {
-      return {
-        messages: [],
-        totalCount: 0,
-        hasMore: false,
-      };
-    }
-    const isDM = activeChat?.type === "direct_message";
-    const messages: ResponseData<FullMessageResponse> =
-      await new ClientApiDataSource().getMessages({
-        group: { name: (isDM ? "private_dm" : activeChat?.name) || "" },
-        limit: MESSAGE_PAGE_SIZE,
-        offset: 0,
-        is_dm: isDM,
-        dm_identity: activeChat?.account,
-      });
-    if (messages.data) {
-      const messagesArray = transformMessagesToUI(messages.data.messages);
+  const loadInitialChatMessages = useCallback(async (): Promise<ChatMessagesData> => {
+    const result = await mainMessages.loadInitial(activeChat);
 
-      messagesRef.current = messagesArray;
-      setTotalMessageCount(messages.data.total_count);
-
-      if (activeChat?.type === "channel") {
-        const messages = messagesRef.current;
-        if (
-          messages &&
-          messages.length > 0 &&
-          messages[messages.length - 1]?.timestamp
-        ) {
-          const lastMessageTimestamp = messages[messages.length - 1].timestamp;
-          await new ClientApiDataSource().readMessage({
-            channel: { name: activeChat?.name },
-            timestamp: lastMessageTimestamp,
-          });
-        }
+    if (activeChat?.type === "channel" && result.messages.length > 0) {
+      const lastMessage = result.messages[result.messages.length - 1];
+      if (lastMessage?.timestamp) {
+        await new ClientApiDataSource().readMessage({
+          channel: { name: activeChat.name },
+          timestamp: lastMessage.timestamp,
+        });
       }
-      return {
-        messages: messagesArray,
-        totalCount: messages.data.total_count,
-        hasMore: messages.data.start_position < messages.data.total_count,
-      };
     }
-    return {
-      messages: [],
-      totalCount: 0,
-      hasMore: false,
-    };
-  };
+
+    return result;
+  }, [activeChat, mainMessages]);
 
   // Use custom hooks instead of local state + fetch functions
   const channels = channelsHook.channels;
@@ -574,17 +497,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       });
     }
 
-    // Cleanup: unsubscribe from events when component unmounts
-    return () => {
-      if (app && subscriptionContextIdRef.current) {
-        try {
-          app.unsubscribeFromEvents([subscriptionContextIdRef.current]);
-        } catch (error) {
-          console.error("Failed to unsubscribe on unmount:", error);
-        }
-      }
-    };
-  }, [app]);
+    // Cleanup is handled by useWebSocketSubscription hook
+  }, []);
 
   const onJoinedChat = async () => {
     let canJoin = false;
@@ -603,7 +517,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           const dmContextId = getDmContextId();
           const currentContextId = (useDM ? dmContextId : contextId) || "";
           if (currentContextId) {
-            manageEventSubscription(currentContextId);
+            subscription.subscribe(currentContextId);
           }
         }
       } else {
@@ -625,47 +539,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     activeChatRef.current = activeChatCopy as ActiveChat;
   };
 
-  const [messagesOffset, setMessagesOffset] = useState(MESSAGE_PAGE_SIZE);
-  const [totalMessageCount, setTotalMessageCount] = useState(0);
-
-  const loadPrevMessages = async (
-    _id: string
-  ): Promise<ChatMessagesDataWithOlder> => {
-    if (messagesOffset >= totalMessageCount) {
-      return {
-        messages: [],
-        totalCount: totalMessageCount,
-        hasOlder: false,
-      };
-    }
-
-    const isDM = activeChat?.type === "direct_message";
-    const messages: ResponseData<FullMessageResponse> =
-      await new ClientApiDataSource().getMessages({
-        group: {
-          name: (isDM ? "private_dm" : activeChatRef.current?.name) || "",
-        },
-        limit: MESSAGE_PAGE_SIZE,
-        offset: messagesOffset,
-        is_dm: isDM,
-        dm_identity: activeChat?.account,
-      });
-    if (messages.data) {
-      const messagesArray = transformMessagesToUI(messages.data.messages);
-      setMessagesOffset(messagesOffset + MESSAGE_PAGE_SIZE);
-      return {
-        messages: messagesArray,
-        totalCount: messages.data.total_count,
-        hasOlder: messages.data.start_position < messages.data.total_count,
-      };
-    } else {
-      return {
-        messages: [],
-        totalCount: 0,
-        hasOlder: false,
-      };
-    }
-  };
+  const loadPrevMessages = useCallback(
+    async (chatId: string): Promise<ChatMessagesDataWithOlder> => {
+      return await mainMessages.loadPrevious(activeChat, chatId);
+    },
+    [activeChat, mainMessages]
+  );
 
   const createDM = async (value: string): Promise<CreateContextResult> => {
     // @ts-expect-error - chatMembers is a Map<string, string>
@@ -718,42 +597,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
   };
 
-  const loadInitialThreadMessages = async (
-    parentMessageId: string
-  ): Promise<ChatMessagesData> => {
-    if (!activeChat?.name) {
-      return {
-        messages: [],
-        totalCount: 0,
-        hasMore: false,
-      };
-    }
-    const messages: ResponseData<FullMessageResponse> =
-      await new ClientApiDataSource().getMessages({
-        group: { name: activeChat?.name || "" },
-        limit: MESSAGE_PAGE_SIZE,
-        offset: 0,
-        parent_message: parentMessageId,
-        is_dm: activeChat?.type === "direct_message",
-        dm_identity: activeChat?.account,
-      });
-    if (messages.data) {
-      const messagesArray = transformMessagesToUI(messages.data.messages);
-
-      messagesThreadRef.current = messagesArray;
-      setTotalThreadMessageCount(messages.data.total_count);
-      return {
-        messages: messagesArray,
-        totalCount: messages.data.total_count,
-        hasMore: messages.data.start_position < messages.data.total_count,
-      };
-    }
-    return {
-      messages: [],
-      totalCount: 0,
-      hasMore: false,
-    };
-  };
+  const loadInitialThreadMessages = useCallback(
+    async (parentMessageId: string): Promise<ChatMessagesData> => {
+      return await threadMessages.loadInitial(activeChat, parentMessageId);
+    },
+    [activeChat, threadMessages]
+  );
 
   const updateCurrentOpenThread = useCallback(
     (thread: CurbMessage | undefined) => {
@@ -762,42 +611,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     []
   );
 
-  const loadPrevThreadMessages = async (
-    parentMessageId: string
-  ): Promise<ChatMessagesDataWithOlder> => {
-    if (threadMessagesOffset >= totalThreadMessageCount) {
-      return {
-        messages: [],
-        totalCount: totalThreadMessageCount,
-        hasOlder: false,
-      };
-    }
-
-    const messages: ResponseData<FullMessageResponse> =
-      await new ClientApiDataSource().getMessages({
-        group: { name: activeChatRef.current?.name || "" },
-        limit: MESSAGE_PAGE_SIZE,
-        offset: threadMessagesOffset,
-        parent_message: parentMessageId,
-        is_dm: activeChat?.type === "direct_message",
-        dm_identity: activeChat?.account,
-      });
-    if (messages.data) {
-      const messagesArray = transformMessagesToUI(messages.data.messages);
-      setThreadMessagesOffset(threadMessagesOffset + MESSAGE_PAGE_SIZE);
-      return {
-        messages: messagesArray,
-        totalCount: messages.data.total_count,
-        hasOlder: messages.data.start_position < messages.data.total_count,
-      };
-    } else {
-      return {
-        messages: [],
-        totalCount: 0,
-        hasOlder: false,
-      };
-    }
-  };
+  const loadPrevThreadMessages = useCallback(
+    async (parentMessageId: string): Promise<ChatMessagesDataWithOlder> => {
+      return await threadMessages.loadPrevious(activeChat, parentMessageId);
+    },
+    [activeChat, threadMessages]
+  );
 
   return (
     <AppContainer
@@ -813,7 +632,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       nonInvitedUserList={channelMembersHook.nonInvitedUsers}
       onDMSelected={onDMSelected}
       loadInitialChatMessages={loadInitialChatMessages}
-      incomingMessages={incomingMessages}
+      incomingMessages={mainMessages.messages}
       channels={channels}
       fetchChannels={fetchChannels}
       onJoinedChat={onJoinedChat}
@@ -822,7 +641,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       createDM={createDM}
       privateDMs={privateDMs}
       loadInitialThreadMessages={loadInitialThreadMessages}
-      incomingThreadMessages={incomingThreadMessages}
+      incomingThreadMessages={threadMessages.messages}
       loadPrevThreadMessages={loadPrevThreadMessages}
       updateCurrentOpenThread={updateCurrentOpenThread}
       openThread={openThread}
