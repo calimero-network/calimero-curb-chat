@@ -113,12 +113,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     };
   }, [playSound]);
 
-  // Placeholder for event callback (defined later)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [eventCallback, setEventCallback] = useState<((event: any) => Promise<void>) | null>(null);
-  
-  // Use WebSocket subscription hook
-  const subscription = useWebSocketSubscription(app, eventCallback);
+  // Refs to prevent infinite loops and track processing state
+  const isProcessingEvent = useRef(false);
+  const lastEventTime = useRef(0);
+  const eventQueue = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isConfigSet) {
@@ -273,11 +271,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     },
     [updateSelectedActiveChat]
   );
-
-  // Refs to prevent infinite loops and track processing state
-  const isProcessingEvent = useRef(false);
-  const lastEventTime = useRef(0);
-  const eventQueue = useRef<Set<string>>(new Set());
 
   // Use debounced fetch methods from custom hooks
   const debouncedFetchChannels = channelsHook.debouncedFetchChannels;
@@ -448,10 +441,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
   }, [handleStateMutation, handleExecutionEvent]);
 
-  // Set the event callback for the subscription hook
-  useEffect(() => {
-    setEventCallback(() => eventCallbackFn);
-  }, [eventCallbackFn]);
+  // Use WebSocket subscription hook (pass callback directly, hook handles refs internally)
+  const subscription = useWebSocketSubscription(app, eventCallbackFn);
 
   const loadInitialChatMessages = useCallback(async (): Promise<ChatMessagesData> => {
     const result = await mainMessages.loadInitial(activeChat);
