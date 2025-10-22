@@ -6,6 +6,7 @@ import type { ActiveChat, CurbMessage, ChatMessagesData, ChatMessagesDataWithOld
 import { transformMessageToUI, transformMessagesToUI } from "../utils/messageTransformers";
 import { MESSAGE_PAGE_SIZE, RECENT_MESSAGES_CHECK_SIZE } from "../constants/app";
 import { log } from "../utils/logger";
+import { parseErrorMessage } from "../utils/errorParser";
 
 /**
  * Custom hook for managing thread messages
@@ -26,7 +27,7 @@ export function useThreadMessages() {
   }, [messages]);
   
   useEffect(() => {
-    log.debug('useThreadMessages', `incomingMessages state changed, length: ${incomingMessages.length}`);
+    log.debug('useThreadMessages', `incomingMessages state changed, length: ${incomingMessages.length}`, incomingMessages);
   }, [incomingMessages]);
 
   /**
@@ -46,15 +47,33 @@ export function useThreadMessages() {
       };
     }
 
+    const isDM = activeChat.type === "direct_message";
+    const groupName = isDM ? "private_dm" : (activeChat.name || "");
+    
+    log.debug('useThreadMessages', `Calling API with params:`, {
+      group: groupName,
+      parent_message: parentMessageId,
+      is_dm: isDM,
+      dm_identity: activeChat.account
+    });
+    
     const response: ResponseData<FullMessageResponse> =
       await new ClientApiDataSource().getMessages({
-        group: { name: activeChat.name || "" },
+        group: { name: groupName },
         limit: MESSAGE_PAGE_SIZE,
         offset: 0,
         parent_message: parentMessageId,
-        is_dm: activeChat.type === "direct_message",
+        is_dm: isDM,
         dm_identity: activeChat.account,
       });
+
+    log.debug('useThreadMessages', `API response:`, response);
+    
+    if (response.error) {
+      const parsedError = parseErrorMessage(response.error.message);
+      log.error('useThreadMessages', `API returned error:`, response.error);
+      log.error('useThreadMessages', `Parsed error message: ${parsedError}`);
+    }
 
     if (response.data) {
       const messagesArray = transformMessagesToUI(response.data.messages);
@@ -94,13 +113,16 @@ export function useThreadMessages() {
       };
     }
 
+    const isDM = activeChat.type === "direct_message";
+    const groupName = isDM ? "private_dm" : (activeChat.name || "");
+    
     const response: ResponseData<FullMessageResponse> =
       await new ClientApiDataSource().getMessages({
-        group: { name: activeChat.name || "" },
+        group: { name: groupName },
         limit: MESSAGE_PAGE_SIZE,
         offset,
         parent_message: parentMessageId,
-        is_dm: activeChat.type === "direct_message",
+        is_dm: isDM,
         dm_identity: activeChat.account,
       });
 
@@ -130,6 +152,8 @@ export function useThreadMessages() {
     const newMessages = [...messagesRef.current, message];
     messagesRef.current = newMessages;
     setMessages(newMessages);
+    // Also add to incomingMessages for VirtualizedChat to display
+    setIncomingMessages(prev => [...prev, message]);
     log.debug('useThreadMessages', `Total thread messages after optimistic add: ${newMessages.length}`);
   }, []);
 
@@ -153,14 +177,17 @@ export function useThreadMessages() {
     }
     lastThreadCheckRef.current = now;
 
+    const isDM = activeChat.type === "direct_message";
+    const groupName = isDM ? "private_dm" : (activeChat.name || "");
+    
     log.debug('useThreadMessages', `Fetching thread messages for parent: ${parentMessageId}`);
     const response: ResponseData<FullMessageResponse> =
       await new ClientApiDataSource().getMessages({
-        group: { name: activeChat.name || "" },
+        group: { name: groupName },
         limit: RECENT_MESSAGES_CHECK_SIZE,
         offset: 0,
         parent_message: parentMessageId,
-        is_dm: activeChat.type === "direct_message",
+        is_dm: isDM,
         dm_identity: activeChat.account,
       });
 

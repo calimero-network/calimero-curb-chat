@@ -20,6 +20,7 @@ import EmojiSelectorPopup from "../emojiSelector/EmojiSelectorPopup";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { scrollbarStyles } from "../styles/scrollbar";
 import { StorageHelper } from "../utils/storage";
+import { log } from "../utils/logger";
 
 interface ChatDisplaySplitProps {
   readMessage: (message: CurbMessage) => void;
@@ -30,6 +31,7 @@ interface ChatDisplaySplitProps {
   ) => void;
   openThread: CurbMessage | undefined;
   setOpenThread: (message: CurbMessage) => void;
+  closeThread?: () => void;
   activeChat: ActiveChat;
   updatedMessages: UpdatedMessages[];
   resetImage: () => void;
@@ -160,6 +162,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
   handleReaction,
   openThread,
   setOpenThread,
+  closeThread,
   activeChat,
   updatedMessages,
   resetImage,
@@ -268,6 +271,13 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
     currentChatStyle.overflow = "hidden";
   }
 
+  // Debug logging for incomingMessages
+  useEffect(() => {
+    if (isThread) {
+      log.debug('ChatDisplaySplit', `Thread component received incomingMessages:`, incomingMessages);
+    }
+  }, [incomingMessages, isThread]);
+
   const renderMessage = (message: CurbMessage, prevMessage?: CurbMessage) => {
     const params: MessageRendererProps = {
       accountId: username,
@@ -301,7 +311,11 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
           {openThread && isThread && (
             <ThreadHeader
               onClose={() => {
-                setOpenThread(undefined as any); // Type mismatch - should accept undefined
+                if (closeThread) {
+                  closeThread();
+                } else {
+                  setOpenThread(undefined as any); // Fallback
+                }
                 if (currentOpenThreadRef) {
                   currentOpenThreadRef.current = undefined;
                 }

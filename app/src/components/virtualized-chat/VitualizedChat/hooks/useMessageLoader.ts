@@ -44,8 +44,11 @@ export function useMessageLoader<T extends Message>({
 
   // Keep refs updated to avoid including callbacks in dependency arrays
   const onLoadCompleteRef = useRef(onLoadComplete);
+  const loadInitialMessagesRef = useRef(loadInitialMessages);
+  
   useEffect(() => {
     onLoadCompleteRef.current = onLoadComplete;
+    loadInitialMessagesRef.current = loadInitialMessages;
   });
 
   const fetchInitialMessages = useCallback(async () => {
@@ -56,7 +59,7 @@ export function useMessageLoader<T extends Message>({
 
     try {
       const { messages: initialMessages, totalCount: totalItems } = 
-        await loadInitialMessages();
+        await loadInitialMessagesRef.current();
 
       store.initial(initialMessages);
       setMessages(store.messages);
@@ -70,7 +73,7 @@ export function useMessageLoader<T extends Message>({
       isInitialLoadingRef.current = false;
       onLoadCompleteRef.current?.();
     }
-  }, [loadInitialMessages, store]);
+  }, [store]);
 
   const handleLoadMore = useCallback(async () => {
     // Prevent concurrent loads and respect loading state
