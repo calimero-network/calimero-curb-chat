@@ -188,11 +188,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       }
     }
     
-    // Refresh channels list after a short delay to show updated unread counts
-    // This ensures the UI reflects that messages have been read
+    // Refresh channels list after a delay to show updated unread counts
+    // Use longer delay to reduce API calls during rapid channel switching
     setTimeout(() => {
       debouncedFetchChannels();
-    }, 500);
+    }, 1000);
     
     // Subscribe to websocket events for this chat
     if (app && subscriptionRef.current) {
@@ -442,15 +442,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
 
     // Check if we should process immediately or wait for more events
-    const shouldProcessNow = eventBatchRef.current.length >= 10; // Process if we have 10+ events
+    const shouldProcessNow = eventBatchRef.current.length >= 20; // Increase to 20 to batch more
 
     if (shouldProcessNow) {
       processBatchedEvents();
     } else {
-      // Wait 100ms for more events before processing
+      // Increase timer to 300ms to batch more events together and reduce processing frequency
       batchTimerRef.current = setTimeout(() => {
         processBatchedEvents();
-      }, 100);
+      }, 300);
     }
   }, [processBatchedEvents]);
 

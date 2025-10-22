@@ -112,31 +112,14 @@ const VirtualizedChat = <T extends Message>({
       setHasMore(totalItems > initialMessages.length);
       setFirstItemIndex(totalItems - initialMessages.length);
       setTotalCount(totalItems);
+      
     } catch (error) {
       log.error('VirtualizedChat', 'Failed to load initial messages', error);
     } finally {
+      // Set loading to false to render the list
+      // The useEffect will handle scrolling after render
       setIsLoadingInitial(false);
       isInitialLoadingRef.current = false;
-      
-      // Scroll to bottom after loading is complete and component has rendered
-      // Use multiple attempts to ensure scroll happens
-      requestAnimationFrame(() => {
-        if (listHandler.current) {
-          listHandler.current.scrollToIndex({ index: 'LAST', behavior: 'auto' });
-        }
-      });
-      
-      setTimeout(() => {
-        if (listHandler.current) {
-          listHandler.current.scrollToIndex({ index: 'LAST', behavior: 'auto' });
-        }
-      }, 100);
-      
-      setTimeout(() => {
-        if (listHandler.current) {
-          listHandler.current.scrollToIndex({ index: 'LAST', behavior: 'auto' });
-        }
-      }, 300);
     }
   };
 
@@ -160,6 +143,27 @@ const VirtualizedChat = <T extends Message>({
       fetchInitialMessages();
     }
   }, [chatId]);
+  
+  // Ensure scroll to bottom after messages are loaded and component is rendered
+  useEffect(() => {
+    if (!isLoadingInitial && messages.length > 0) {
+      // Multiple scroll attempts with increasing delays to ensure it works
+      const scrollAttempts = [50, 100, 200, 400];
+      
+      scrollAttempts.forEach((delay) => {
+        setTimeout(() => {
+          if (listHandler.current) {
+            log.debug('VirtualizedChat', `Scroll attempt at ${delay}ms for chat ${chatId}`);
+            listHandler.current.scrollToIndex({ 
+              index: messages.length - 1,
+              align: 'end',
+              behavior: 'auto'
+            });
+          }
+        }, delay);
+      });
+    }
+  }, [isLoadingInitial, chatId]);
 
   useEffect(() => {
     if (incomingMessages.length > 0) {
@@ -231,7 +235,7 @@ const VirtualizedChat = <T extends Message>({
       
       return render(item, prevMessage);
     },
-    [render, chatId, firstItemIndex, store],
+    [render, firstItemIndex, store],
   );
 
   // Memoize callbacks to prevent re-creating functions on every render
@@ -249,11 +253,6 @@ const VirtualizedChat = <T extends Message>({
 
   // Memoize static objects to prevent re-creating on every render
   const virtuosoStyle = useMemo(() => ({ height: '100%', width: '100%' }), []);
-  // Force scroll to bottom on every chat change by including chatId in dependency
-  const initialTopMostIndex = useMemo(() => ({ 
-    index: messages.length > 0 ? messages.length - 1 : 0, 
-    behavior: 'auto' as const 
-  }), [chatId, messages.length]);
   const overscanConfig = useMemo(() => ({ reverse: 500, main: 0 }), []);
   const viewportConfig = useMemo(() => ({ top: 200, bottom: 200 }), []);
 
@@ -266,7 +265,7 @@ const VirtualizedChat = <T extends Message>({
       {isLoadingInitial && <OverlayDiv type="loading" />}
       {!isLoadingInitial && messages?.length === 0 && <NoMessages />}
       {hasNewMessages && NewMessageIndicator}
-      {!isLoadingInitial && (
+      {!isLoadingInitial && messages.length > 0 && (
         <Virtuoso
           key={chatId}
           style={virtuosoStyle}
@@ -274,7 +273,7 @@ const VirtualizedChat = <T extends Message>({
           computeItemKey={(_, item) => store.computeKey(item)}
           followOutput={handleFollowOutput}
           data={messages}
-          initialTopMostItemIndex={initialTopMostIndex}
+          alignToBottom
           startReached={handleLoadMore}
           endReached={handleEndReached}
           rangeChanged={reportLastRenderedItem}

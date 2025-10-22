@@ -7,7 +7,7 @@ import type {
   MessageRendererProps,
   UpdatedMessages,
 } from "../types/Common";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 import MessageInput from "./MessageInput";
 import {
   messageRenderer,
@@ -155,7 +155,7 @@ const ThreadHeader = ({ onClose }: { onClose: () => void }) => (
   </ThreadContainer>
 );
 
-export default function ChatDisplaySplit({
+const ChatDisplaySplit = memo(function ChatDisplaySplit({
   readMessage,
   handleReaction,
   openThread,
@@ -341,4 +341,6 @@ export default function ChatDisplaySplit({
       )}
     </>
   );
-}
+});
+
+export default ChatDisplaySplit;

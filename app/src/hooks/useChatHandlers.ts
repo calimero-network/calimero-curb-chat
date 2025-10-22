@@ -39,9 +39,9 @@ export function useChatHandlers(
     // Prevent concurrent message fetches
     if (isFetchingMessagesRef.current) return;
     
-    // Throttle message checks to max once per 500ms (batching should handle most cases)
+    // Increase throttle to 2 seconds to reduce API calls
     const now = Date.now();
-    if (now - lastMessageCheckRef.current < 500) {
+    if (now - lastMessageCheckRef.current < 2000) {
       return;
     }
     lastMessageCheckRef.current = now;
