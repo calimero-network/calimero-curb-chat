@@ -112,17 +112,31 @@ const VirtualizedChat = <T extends Message>({
       setHasMore(totalItems > initialMessages.length);
       setFirstItemIndex(totalItems - initialMessages.length);
       setTotalCount(totalItems);
-
-      // Force a re-render after a short delay to ensure proper rendering
-      setTimeout(() => {
-        setMessages([...store.messages]);
-        scrollToBottom();
-      }, 100);
     } catch (error) {
       log.error('VirtualizedChat', 'Failed to load initial messages', error);
     } finally {
       setIsLoadingInitial(false);
       isInitialLoadingRef.current = false;
+      
+      // Scroll to bottom after loading is complete and component has rendered
+      // Use multiple attempts to ensure scroll happens
+      requestAnimationFrame(() => {
+        if (listHandler.current) {
+          listHandler.current.scrollToIndex({ index: 'LAST', behavior: 'auto' });
+        }
+      });
+      
+      setTimeout(() => {
+        if (listHandler.current) {
+          listHandler.current.scrollToIndex({ index: 'LAST', behavior: 'auto' });
+        }
+      }, 100);
+      
+      setTimeout(() => {
+        if (listHandler.current) {
+          listHandler.current.scrollToIndex({ index: 'LAST', behavior: 'auto' });
+        }
+      }, 300);
     }
   };
 
@@ -235,7 +249,11 @@ const VirtualizedChat = <T extends Message>({
 
   // Memoize static objects to prevent re-creating on every render
   const virtuosoStyle = useMemo(() => ({ height: '100%', width: '100%' }), []);
-  const initialTopMostIndex = useMemo(() => ({ index: 'LAST' as const, behavior: 'auto' as const }), []);
+  // Force scroll to bottom on every chat change by including chatId in dependency
+  const initialTopMostIndex = useMemo(() => ({ 
+    index: messages.length > 0 ? messages.length - 1 : 0, 
+    behavior: 'auto' as const 
+  }), [chatId, messages.length]);
   const overscanConfig = useMemo(() => ({ reverse: 500, main: 0 }), []);
   const viewportConfig = useMemo(() => ({ top: 200, bottom: 200 }), []);
 
@@ -250,6 +268,7 @@ const VirtualizedChat = <T extends Message>({
       {hasNewMessages && NewMessageIndicator}
       {!isLoadingInitial && (
         <Virtuoso
+          key={chatId}
           style={virtuosoStyle}
           itemContent={handleRenderItem}
           computeItemKey={(_, item) => store.computeKey(item)}
