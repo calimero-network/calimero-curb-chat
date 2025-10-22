@@ -155,7 +155,9 @@ export function useMessages() {
    * Add optimistic message (for messages being sent)
    */
   const addOptimistic = useCallback((message: CurbMessage) => {
-    // MessageStore will now handle deduplication automatically
+    // Add to ref immediately for local tracking
+    messagesRef.current = [...messagesRef.current, message];
+    // Set incomingMessages to trigger VirtualizedChat update
     setIncomingMessages([message]);
   }, []);
 
