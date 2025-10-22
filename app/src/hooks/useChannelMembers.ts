@@ -39,7 +39,7 @@ export function useChannelMembers() {
     setError(null);
     
     try {
-      const response: ResponseData<UserId[]> =
+      const response: ResponseData<string[]> =
         await new ClientApiDataSource().getNonMemberUsers({
           channel: { name: channelId },
         });

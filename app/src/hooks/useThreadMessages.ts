@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FullMessageResponse } from "../api/clientApi";
@@ -16,17 +16,7 @@ export function useThreadMessages() {
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(MESSAGE_PAGE_SIZE);
   const messagesRef = useRef<CurbMessage[]>([]);
-
-  // Auto-clear incoming messages immediately after render
-  // This prevents duplicate rendering in VirtualizedChat
-  useEffect(() => {
-    if (incomingMessages.length > 0) {
-      // Use queueMicrotask to clear after VirtualizedChat has seen them
-      queueMicrotask(() => {
-        setIncomingMessages([]);
-      });
-    }
-  }, [incomingMessages]);
+  const incomingMessagesQueue = useRef<CurbMessage[]>([]);
 
   /**
    * Load initial thread messages
@@ -118,11 +108,22 @@ export function useThreadMessages() {
   }, [offset, totalCount]);
 
   /**
+   * Clear incoming messages queue
+   */
+  const clearIncoming = useCallback(() => {
+    if (incomingMessagesQueue.current.length > 0) {
+      incomingMessagesQueue.current = [];
+      setIncomingMessages([]);
+    }
+  }, []);
+
+  /**
    * Clear thread messages
    */
   const clear = useCallback(() => {
     messagesRef.current = [];
     setMessages([]);
+    incomingMessagesQueue.current = [];
     setIncomingMessages([]);
     setTotalCount(0);
     setOffset(MESSAGE_PAGE_SIZE);
@@ -135,6 +136,7 @@ export function useThreadMessages() {
     messagesRef,
     loadInitial,
     loadPrevious,
+    clearIncoming,
     clear,
   };
 }

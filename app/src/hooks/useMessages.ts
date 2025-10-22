@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FullMessageResponse } from "../api/clientApi";
@@ -17,17 +17,7 @@ export function useMessages() {
   const [offset, setOffset] = useState(MESSAGE_PAGE_SIZE);
   const messagesRef = useRef<CurbMessage[]>([]);
   const processedMessageIds = useRef<Set<string>>(new Set());
-
-  // Auto-clear incoming messages immediately after render
-  // This prevents duplicate rendering in VirtualizedChat
-  useEffect(() => {
-    if (incomingMessages.length > 0) {
-      // Use queueMicrotask to clear after VirtualizedChat has seen them
-      queueMicrotask(() => {
-        setIncomingMessages([]);
-      });
-    }
-  }, [incomingMessages]);
+  const incomingMessagesQueue = useRef<CurbMessage[]>([]);
 
   /**
    * Load initial messages for a chat
@@ -154,7 +144,11 @@ export function useMessages() {
       newMessages.forEach((msg) => processedMessageIds.current.add(msg.id));
       
       messagesRef.current = [...messagesRef.current, ...newMessages];
+      
+      // Replace incoming messages (don't append) to avoid duplicates
+      incomingMessagesQueue.current = newMessages;
       setIncomingMessages(newMessages);
+      
       return newMessages;
     }
 
@@ -174,8 +168,21 @@ export function useMessages() {
       if (trulyNewMessages.length > 0) {
         trulyNewMessages.forEach(msg => processedMessageIds.current.add(msg.id));
         messagesRef.current = [...messagesRef.current, ...trulyNewMessages];
+        
+        // Replace incoming messages (don't append)
+        incomingMessagesQueue.current = trulyNewMessages;
         setIncomingMessages(trulyNewMessages);
       }
+    }
+  }, []);
+  
+  /**
+   * Clear incoming messages queue (call after VirtualizedChat processes them)
+   */
+  const clearIncoming = useCallback(() => {
+    if (incomingMessagesQueue.current.length > 0) {
+      incomingMessagesQueue.current = [];
+      setIncomingMessages([]);
     }
   }, []);
 
@@ -185,6 +192,7 @@ export function useMessages() {
   const clear = useCallback(() => {
     messagesRef.current = [];
     setMessages([]);
+    incomingMessagesQueue.current = [];
     setIncomingMessages([]);
     setTotalCount(0);
     setOffset(MESSAGE_PAGE_SIZE);
@@ -207,6 +215,7 @@ export function useMessages() {
     loadPrevious,
     checkForNewMessages,
     addIncoming,
+    clearIncoming,
     clear,
     getCurrent,
   };

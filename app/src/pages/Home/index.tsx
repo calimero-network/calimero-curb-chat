@@ -57,6 +57,7 @@ import { useChannelMembers } from "../../hooks/useChannelMembers";
 import { useMessages } from "../../hooks/useMessages";
 import { useThreadMessages } from "../../hooks/useThreadMessages";
 import { useWebSocketSubscription } from "../../hooks/useWebSocketSubscription";
+import { useChatHandlers } from "../../hooks/useChatHandlers";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
@@ -71,6 +72,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const [openThread, setOpenThread] = useState<CurbMessage | undefined>(
     undefined
   );
+  
+  // Ref for subscription to avoid circular dependency
+  const subscriptionRef = useRef<{ subscribe: (contextId: string) => void } | null>(null);
 
   // Use message hooks for cleaner message management
   const mainMessages = useMessages();
@@ -164,7 +168,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     getNonInvitedUsers(selectedChat.id);
     
     // Subscribe to websocket events for this chat
-    if (app) {
+    if (app && subscriptionRef.current) {
       const useDM = (selectedChat.type === "direct_message" &&
         selectedChat.account &&
         !selectedChat.canJoin &&
@@ -173,7 +177,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       const dmContextId = getDmContextId();
       const currentContextId = (useDM ? dmContextId : contextId) || "";
       if (currentContextId) {
-        subscription.subscribe(currentContextId);
+        subscriptionRef.current.subscribe(currentContextId);
       }
     }
   };
@@ -276,109 +280,51 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const debouncedFetchChannels = channelsHook.debouncedFetchChannels;
   const debouncedFetchDms = dmsHook.debouncedFetchDms;
 
-  // Self-contained function to handle message updates
-  const handleMessageUpdates = useCallback(async (useDM: boolean) => {
-    if (!activeChatRef.current) return;
+  const loadInitialChatMessages = useCallback(async (): Promise<ChatMessagesData> => {
+    const result = await mainMessages.loadInitial(activeChat);
 
-    try {
-      const newMessages = await mainMessages.checkForNewMessages(
-        activeChatRef.current,
-        useDM
-      );
-
-      if (newMessages.length > 0) {
-        // Mark messages as read (but don't await to prevent blocking)
-        if (activeChat?.type === "channel") {
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage?.timestamp) {
-            new ClientApiDataSource().readMessage({
-              channel: { name: activeChat?.name },
-              timestamp: lastMessage.timestamp,
-            }).catch(console.error);
-          }
-          playSoundForMessage(lastMessage.id, 'message', false);
-        } else {
-          new ClientApiDataSource().readDm({
-            other_user_id: activeChatRef.current?.name || "",
-          }).catch(console.error);
-        }
-      }
-    } catch (error) {
-      console.error("Error handling message updates:", error);
-    }
-  }, [activeChat, playSoundForMessage, mainMessages]);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleDMUpdates = useCallback(async (sessionChat: any) => {
-    if (sessionChat?.type !== "direct_message") return;
-
-    try {
-      const updatedDMs = await fetchDms();
-      
-      if (
-        !sessionChat?.isFinal &&
-        updatedDMs?.length &&
-        (sessionChat?.canJoin ||
-          !sessionChat?.isSynced ||
-          !sessionChat?.account ||
-          !sessionChat?.otherIdentityNew)
-      ) {
-        const currentDM = updatedDMs.find(
-          (dm) => dm.context_id === sessionChat.contextId
-        );
-        onDMSelected(currentDM, undefined, false);
-      }
-    } catch (error) {
-      console.error("Error handling DM updates:", error);
-    }
-  }, []);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleStateMutation = useCallback(async (_event: any) => {
-    const sessionChat = getStoredSession();
-    const useDM = (sessionChat?.type === "direct_message" &&
-      sessionChat?.account &&
-      !sessionChat?.canJoin &&
-      sessionChat?.otherIdentityNew) as boolean;
-
-    // Only fetch messages for the current active chat - most common operation
-    await handleMessageUpdates(useDM);
-
-    // Update channels list (debounced to avoid spam)
-    debouncedFetchChannels();
-
-    // Handle DM updates (includes fetching DMs list)
-    if (sessionChat?.type === "direct_message") {
-      await handleDMUpdates(sessionChat);
-    } else {
-      // Only update DM list if not currently in a DM
-      debouncedFetchDms();
-      // Only refetch members for channel chats
-      await reFetchChannelMembers();
-    }
-  }, [debouncedFetchChannels, debouncedFetchDms, handleDMUpdates, handleMessageUpdates, reFetchChannelMembers]);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleExecutionEvent = useCallback(async (event: any) => {
-    
-    if (!event.data?.events || event.data.events.length === 0) {
-      return;
-    }
-
-    const executionEvents = event.data.events;
-    
-    for (const executionEvent of executionEvents) {
-      switch (executionEvent.kind) {
-        case "MessageSent":
-          // On sender node do nothing as this will only duplicate the message
-          break;
-        case "ChannelCreated":
-          debouncedFetchChannels();
-          break;
+    if (activeChat?.type === "channel" && result.messages.length > 0) {
+      const lastMessage = result.messages[result.messages.length - 1];
+      if (lastMessage?.timestamp) {
+        await new ClientApiDataSource().readMessage({
+          channel: { name: activeChat.name },
+          timestamp: lastMessage.timestamp,
+        });
       }
     }
-  }, [debouncedFetchChannels]);
 
+    return result;
+  }, [activeChat, mainMessages]);
+
+  // Use custom hooks instead of local state + fetch functions
+  const channels = channelsHook.channels;
+  const fetchChannels = channelsHook.fetchChannels;
+  
+  const privateDMs = dmsHook.dms;
+  const fetchDms = dmsHook.fetchDms;
+  
+  const chatMembers = chatMembersHook.members;
+  const fetchChatMembers = chatMembersHook.fetchMembers;
+
+  // Use chat handlers hook to manage all event-related logic
+  const {
+    handleMessageUpdates,
+    handleDMUpdates,
+    handleStateMutation,
+    handleExecutionEvent,
+  } = useChatHandlers(
+    activeChatRef,
+    activeChat,
+    mainMessages,
+    playSoundForMessage,
+    fetchDms,
+    onDMSelected,
+    debouncedFetchChannels,
+    debouncedFetchDms,
+    reFetchChannelMembers
+  );
+
+  // Create event callback for websocket subscription
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eventCallbackFn = useCallback(async (event: any) => {
     // Prevent infinite loops
@@ -443,32 +389,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   // Use WebSocket subscription hook (pass callback directly, hook handles refs internally)
   const subscription = useWebSocketSubscription(app, eventCallbackFn);
-
-  const loadInitialChatMessages = useCallback(async (): Promise<ChatMessagesData> => {
-    const result = await mainMessages.loadInitial(activeChat);
-
-    if (activeChat?.type === "channel" && result.messages.length > 0) {
-      const lastMessage = result.messages[result.messages.length - 1];
-      if (lastMessage?.timestamp) {
-        await new ClientApiDataSource().readMessage({
-          channel: { name: activeChat.name },
-          timestamp: lastMessage.timestamp,
-        });
-      }
-    }
-
-    return result;
-  }, [activeChat, mainMessages]);
-
-  // Use custom hooks instead of local state + fetch functions
-  const channels = channelsHook.channels;
-  const fetchChannels = channelsHook.fetchChannels;
   
-  const privateDMs = dmsHook.dms;
-  const fetchDms = dmsHook.fetchDms;
-  
-  const chatMembers = chatMembersHook.members;
-  const fetchChatMembers = chatMembersHook.fetchMembers;
+  // Store subscription in ref for updateSelectedActiveChat
+  subscriptionRef.current = subscription;
 
   // Track if initial fetch has been done
   const initialFetchDone = useRef(false);
@@ -623,7 +546,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       nonInvitedUserList={channelMembersHook.nonInvitedUsers}
       onDMSelected={onDMSelected}
       loadInitialChatMessages={loadInitialChatMessages}
-      incomingMessages={mainMessages.incomingMessages}
+      incomingMessages={[]}
       channels={channels}
       fetchChannels={fetchChannels}
       onJoinedChat={onJoinedChat}
