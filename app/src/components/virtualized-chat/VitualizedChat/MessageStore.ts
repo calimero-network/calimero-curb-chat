@@ -94,6 +94,14 @@ class MessageStore<
           tempMessagesByContent.set(contentKey, []);
         }
         tempMessagesByContent.get(contentKey)!.push(msg);
+        
+        console.log('[MessageStore] Tracked temp message:', {
+          id: msg.id,
+          exactKey,
+          contentKey,
+          sender: msg.sender,
+          timestamp: msg.timestamp,
+        });
       }
     }
 
@@ -125,15 +133,42 @@ class MessageStore<
         }
 
         if (matchingTempMsg) {
-          // Update temp message in place
-          const { id, ...realDataWithoutId } = realMsg;
+          // Update temp message in place, INCLUDING the new ID
+          console.log('[MessageStore] Replacing optimistic message:', {
+            tempId: matchingTempMsg.id,
+            realId: msg.id,
+            sender: realMsg.sender,
+            text: realMsg.text?.substring(0, 50),
+          });
+          
+          // Remove the old temp ID from the map
+          const oldTempId = matchingTempMsg.id;
+          this.messageMap.delete(oldTempId);
+          
+          // Update the message with ALL fields including the new ID
           this._updateWithoutVersion(
-            matchingTempMsg.id,
-            realDataWithoutId as Partial<T>,
+            oldTempId,
+            realMsg as Partial<T>,
           );
+          
+          // Add the new real ID to the map pointing to the same index
+          const messageIndex = this.messages.findIndex(m => m.id === oldTempId);
+          if (messageIndex !== -1) {
+            this.messageMap.set(msg.id, this.startOffset + messageIndex);
+          }
+          
           updatedCount++;
           idsToSkip.add(msg.id);
           continue;
+        } else if (msg.id && !msg.id.startsWith("temp-")) {
+          // Real message but no matching temp message found
+          console.log('[MessageStore] No matching temp message found for real message:', {
+            realId: msg.id,
+            sender: realMsg.sender,
+            text: realMsg.text?.substring(0, 50),
+            timestamp: realMsg.timestamp,
+            exactKey,
+          });
         }
       }
 

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import { useToast, useNotifications } from "@calimero-network/mero-ui";
+import { useToast } from "@calimero-network/mero-ui";
+import { useNotifications } from "../contexts/NotificationsContext";
 import { useNotificationSound } from "./useNotificationSound";
 import type { NotificationType } from "../utils/notificationSound";
 
@@ -9,6 +10,16 @@ export interface AppNotification {
   type?: NotificationType;
   duration?: number;
   playSound?: boolean;
+  metadata?: {
+    messageId?: string;
+    channelId?: string;
+    channelName?: string;
+    dmUserId?: string;
+    dmUsername?: string;
+    senderId?: string;
+    senderUsername?: string;
+    isMention?: boolean;
+  };
 }
 
 /**
@@ -43,6 +54,7 @@ export function useAppNotifications(currentChatId?: string) {
         type = "message",
         duration = 5000,
         playSound: shouldPlaySound = true,
+        metadata,
       } = notification;
 
       // Determine variant based on notification type
@@ -68,6 +80,10 @@ export function useAppNotifications(currentChatId?: string) {
         priority,
         status: "unread",
         category: type === "dm" ? "user" : "system",
+        metadata: {
+          ...metadata,
+          type,
+        },
       });
 
       // Play sound if enabled
@@ -113,7 +129,7 @@ export function useAppNotifications(currentChatId?: string) {
    * Notify for a new DM
    */
   const notifyDM = useCallback(
-    (messageId: string, sender: string, text: string) => {
+    (messageId: string, sender: string, text: string, senderId?: string) => {
       const truncatedText =
         text.length > 100 ? `${text.substring(0, 100)}...` : text;
 
@@ -121,6 +137,14 @@ export function useAppNotifications(currentChatId?: string) {
         title: `New DM from ${sender}`,
         message: truncatedText,
         type: "dm",
+        metadata: {
+          messageId,
+          dmUserId: senderId,
+          dmUsername: sender,
+          senderId,
+          senderUsername: sender,
+          isMention: false,
+        },
       });
 
       playSoundForMessage(messageId, "dm", false);
@@ -132,17 +156,25 @@ export function useAppNotifications(currentChatId?: string) {
    * Notify for a new channel message
    */
   const notifyChannel = useCallback(
-    (messageId: string, channelName: string, sender: string, text: string) => {
+    (messageId: string, channelName: string, sender: string, text: string, senderId?: string, isMention?: boolean) => {
       const truncatedText =
         text.length > 100 ? `${text.substring(0, 100)}...` : text;
 
       notify({
-        title: `${sender} in #${channelName}`,
+        title: isMention ? `${sender} mentioned you in #${channelName}` : `${sender} in #${channelName}`,
         message: truncatedText,
-        type: "channel",
+        type: isMention ? "mention" : "channel",
+        metadata: {
+          messageId,
+          channelId: channelName,
+          channelName,
+          senderId,
+          senderUsername: sender,
+          isMention: isMention || false,
+        },
       });
 
-      playSoundForMessage(messageId, "channel", false);
+      playSoundForMessage(messageId, isMention ? "mention" : "channel", isMention || false);
     },
     [notify, playSoundForMessage],
   );

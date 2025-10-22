@@ -1,5 +1,4 @@
 import { styled } from "styled-components";
-import { type MessageWithReactions } from "../types/Common";
 import type {
   ActiveChat,
   ChatMessagesData,
@@ -44,10 +43,10 @@ interface ChatDisplaySplitProps {
   //channelUserList: User[];
   setOpenMobileReactions: (reactions: string) => void;
   openMobileReactions: string;
-  onMessageDeletion: (message: CurbMessage) => void;
+  onMessageDeletion: (message: CurbMessage, isThread: boolean) => void;
   onEditModeRequested: (message: CurbMessage, isThread: boolean) => void;
-  onEditModeCancelled: (message: CurbMessage) => void;
-  onMessageUpdated: (message: CurbMessage) => void;
+  onEditModeCancelled: (message: CurbMessage, isThread: boolean) => void;
+  onMessageUpdated: (message: CurbMessage, isThread: boolean) => void;
   loadInitialChatMessages: () => Promise<ChatMessagesData>;
   incomingMessages: CurbMessage[];
   loadPrevMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
@@ -293,20 +292,66 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
       toggleEmojiSelector: toggleEmojiSelector,
       openMobileReactions: openMobileReactions,
       setOpenMobileReactions: setOpenMobileReactions,
-      editable: (message: CurbMessage) =>
-        message.sender ===
-        (activeChat.type === "direct_message"
-          ? activeChat.account
-          : getExecutorPublicKey()),
-      deleteable: (message: CurbMessage) =>
-        message.sender ===
-        (activeChat.type === "direct_message"
-          ? activeChat.account
-          : getExecutorPublicKey()),
-      onEditModeRequested: onEditModeRequested,
-      onEditModeCancelled: onEditModeCancelled,
-      onMessageUpdated: onMessageUpdated,
-      onDeleteMessageRequested: onMessageDeletion,
+      editable: (message: CurbMessage): boolean => {
+        // Can't edit optimistic messages (not yet confirmed by server)
+        if (message.id?.startsWith("temp-")) {
+          return false;
+        }
+        
+        if (!message.sender) {
+          return false;
+        }
+        
+        // For DMs, check both the DM-specific identity and main identity
+        const currentUserId = getExecutorPublicKey();
+        const currentDMIdentity = activeChat.type === "direct_message" ? activeChat.account : null;
+        
+        if (!currentUserId && !currentDMIdentity) {
+          return false;
+        }
+        
+        // Normalize IDs for robust comparison
+        const normalizedSenderId = String(message.sender).trim();
+        const normalizedCurrentUserId = currentUserId ? String(currentUserId).trim() : '';
+        const normalizedDMIdentity = currentDMIdentity ? String(currentDMIdentity).trim() : '';
+        
+        return normalizedSenderId === normalizedCurrentUserId ||
+          (normalizedDMIdentity !== '' && normalizedSenderId === normalizedDMIdentity);
+      },
+      deleteable: (message: CurbMessage): boolean => {
+        // Can't delete optimistic messages (not yet confirmed by server)
+        if (message.id?.startsWith("temp-")) {
+          return false;
+        }
+        
+        if (!message.sender) {
+          return false;
+        }
+        
+        // For DMs, check both the DM-specific identity and main identity
+        const currentUserId = getExecutorPublicKey();
+        const currentDMIdentity = activeChat.type === "direct_message" ? activeChat.account : null;
+        
+        if (!currentUserId && !currentDMIdentity) {
+          return false;
+        }
+        
+        // Normalize IDs for robust comparison
+        const normalizedSenderId = String(message.sender).trim();
+        const normalizedCurrentUserId = currentUserId ? String(currentUserId).trim() : '';
+        const normalizedDMIdentity = currentDMIdentity ? String(currentDMIdentity).trim() : '';
+        
+        return normalizedSenderId === normalizedCurrentUserId ||
+          (normalizedDMIdentity !== '' && normalizedSenderId === normalizedDMIdentity);
+      },
+      onEditModeRequested: (message: CurbMessage) =>
+        onEditModeRequested(message, isThread),
+      onEditModeCancelled: (message: CurbMessage) =>
+        onEditModeCancelled(message, isThread),
+      onMessageUpdated: (message: CurbMessage) =>
+        onMessageUpdated(message, isThread),
+      onDeleteMessageRequested: (message: CurbMessage) =>
+        onMessageDeletion(message, isThread),
       fetchAccounts: (_prefix: string) => {},
       autocompleteAccounts: [],
       authToken: undefined,
@@ -325,8 +370,6 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
               onClose={() => {
                 if (closeThread) {
                   closeThread();
-                } else {
-                  setOpenThread(undefined as any); // Fallback
                 }
                 if (currentOpenThreadRef) {
                   currentOpenThreadRef.current = undefined;
@@ -358,7 +401,8 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
           }
           sendMessage={sendMessage}
           resetImage={resetImage}
-          openThread={openThread as any} // Type mismatch between CurbMessage and MessageWithReactions
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          openThread={openThread as any}
           isThread={isThread}
           isReadOnly={isReadOnly}
           isOwner={isOwner}

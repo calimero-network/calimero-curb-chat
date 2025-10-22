@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ActiveChat } from "../types/Common";
 import type { DMChatInfo } from "../api/clientApi";
@@ -9,6 +9,7 @@ import type {
   WebSocketEvent,
   ExecutionEventData,
 } from "../types/WebSocketTypes";
+import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 
 /**
  * Custom hook for handling chat-related events (messages, DMs, channels)
@@ -29,6 +30,27 @@ interface ChatHandlersRefs {
   }>;
   playSoundForMessage: React.MutableRefObject<
     (messageId: string, type?: NotificationType, isMention?: boolean) => void
+  >;
+  notifyMessage: React.MutableRefObject<
+    (
+      messageId: string,
+      sender: string,
+      text: string,
+      isMention?: boolean,
+    ) => void
+  >;
+  notifyDM: React.MutableRefObject<
+    (messageId: string, sender: string, text: string, senderId?: string) => void
+  >;
+  notifyChannel: React.MutableRefObject<
+    (
+      messageId: string,
+      channelName: string,
+      sender: string,
+      text: string,
+      senderId?: string,
+      isMention?: boolean,
+    ) => void
   >;
   fetchDms: React.MutableRefObject<() => Promise<DMChatInfo[] | undefined>>;
   onDMSelected: React.MutableRefObject<
@@ -112,12 +134,64 @@ export function useChatHandlers(
                     ),
                   );
               }
-              refs.playSoundForMessage.current(
-                lastMessage.id,
-                "message",
-                false,
-              );
+              
+              // Only trigger notifications for messages from other users
+              const currentUserId = getExecutorPublicKey();
+              
+              // Check all new messages, not just the last one
+              for (const message of newMessages) {
+                // Skip optimistic messages (they're not from server yet)
+                if (message.id?.startsWith("temp-")) {
+                  log.debug(
+                    "ChatHandlers",
+                    `Skipping notification for optimistic channel message: ${message.id}`,
+                  );
+                  continue;
+                }
+                
+                // Skip if message doesn't have required fields
+                if (!message || !message.sender || !message.senderUsername || !message.text) {
+                  continue;
+                }
+                
+                // Normalize IDs for comparison (trim whitespace, ensure same format)
+                const normalizedSenderId = String(message.sender).trim();
+                const normalizedCurrentUserId = String(currentUserId).trim();
+                
+                const isFromCurrentUser = normalizedSenderId === normalizedCurrentUserId;
+                
+                log.debug(
+                  "ChatHandlers",
+                  `Channel message check: sender=${normalizedSenderId}, current=${normalizedCurrentUserId}, isOwn=${isFromCurrentUser}`,
+                );
+
+                if (!isFromCurrentUser) {
+                  // Check if current user is mentioned in this message
+                  const isMentioned = message.mentions?.includes(currentUserId) || 
+                    message.mentionsUsernames?.includes("everyone") ||
+                    message.mentionsUsernames?.includes("here");
+                  
+                  refs.notifyChannel.current(
+                    message.id,
+                    activeChat.name,
+                    message.senderUsername,
+                    message.text,
+                    message.sender,
+                    isMentioned,
+                  );
+                  // Only play sound once for all new messages
+                  if (message === newMessages[newMessages.length - 1]) {
+                    refs.playSoundForMessage.current(
+                      message.id,
+                      isMentioned ? "mention" : "message",
+                      isMentioned,
+                    );
+                  }
+                  break; // Only notify for the first message from another user
+                }
+              }
             } else {
+              const lastMessage = newMessages[newMessages.length - 1];
               new ClientApiDataSource()
                 .readDm({
                   other_user_id: activeChatRef.current?.name || "",
@@ -128,6 +202,61 @@ export function useChatHandlers(
                 .catch((error) =>
                   log.error("ChatHandlers", "Failed to mark DM as read", error),
                 );
+
+              // Only trigger notifications for messages from other users
+              // For DMs, check both the main identity and the DM-specific identity
+              const currentUserId = getExecutorPublicKey();
+              const currentDMIdentity = activeChatRef.current?.account;
+              
+              // Check all new messages, not just the last one
+              for (const message of newMessages) {
+                // Skip optimistic messages (they're not from server yet)
+                if (message.id?.startsWith("temp-")) {
+                  log.debug(
+                    "ChatHandlers",
+                    `Skipping notification for optimistic DM message: ${message.id}`,
+                  );
+                  continue;
+                }
+                
+                // Skip if message doesn't have required fields
+                if (!message || !message.sender || !message.senderUsername || !message.text) {
+                  continue;
+                }
+                
+                // Normalize IDs for comparison (trim whitespace, ensure same format)
+                const normalizedSenderId = String(message.sender).trim();
+                const normalizedCurrentUserId = String(currentUserId).trim();
+                const normalizedDMIdentity = currentDMIdentity ? String(currentDMIdentity).trim() : null;
+                
+                const isFromCurrentUser =
+                  normalizedSenderId === normalizedCurrentUserId ||
+                  (normalizedDMIdentity && normalizedSenderId === normalizedDMIdentity);
+                
+                log.debug(
+                  "ChatHandlers",
+                  `DM message check: sender=${normalizedSenderId}, current=${normalizedCurrentUserId}, dmIdentity=${normalizedDMIdentity}, isOwn=${isFromCurrentUser}`,
+                );
+
+                // Trigger notification for DM from another user
+                if (!isFromCurrentUser) {
+                  refs.notifyDM.current(
+                    message.id,
+                    message.senderUsername,
+                    message.text,
+                    message.sender,
+                  );
+                  // Only play sound once for all new messages
+                  if (message === newMessages[newMessages.length - 1]) {
+                    refs.playSoundForMessage.current(
+                      message.id,
+                      "dm",
+                      false,
+                    );
+                  }
+                  break; // Only notify for the first message from another user
+                }
+              }
             }
           }
         }

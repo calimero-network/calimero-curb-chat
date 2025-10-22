@@ -179,6 +179,13 @@ export function useMessages() {
    */
   const addIncoming = useCallback((newMessages: CurbMessage[]) => {
     if (newMessages.length > 0) {
+      console.log('[useMessages] Adding incoming messages:', newMessages.map(m => ({
+        id: m.id,
+        sender: m.sender,
+        text: m.text?.substring(0, 50),
+        timestamp: m.timestamp,
+        isTemp: m.id?.startsWith('temp-'),
+      })));
       // Pass to VirtualizedChat - MessageStore handles deduplication
       setIncomingMessages(newMessages);
     }
@@ -188,6 +195,12 @@ export function useMessages() {
    * Add optimistic message (for messages being sent)
    */
   const addOptimistic = useCallback((message: CurbMessage) => {
+    console.log('[useMessages] Adding optimistic message:', {
+      id: message.id,
+      sender: message.sender,
+      text: message.text?.substring(0, 50),
+      timestamp: message.timestamp,
+    });
     // Add to ref immediately for local tracking
     messagesRef.current = [...messagesRef.current, message];
     // Set incomingMessages to trigger VirtualizedChat update

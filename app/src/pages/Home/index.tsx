@@ -32,7 +32,7 @@ import {
 import type { MessageWithReactions } from "../../api/clientApi";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
 import { generateDMParams } from "../../utils/dmSetupState";
-import useNotificationSound from "../../hooks/useNotificationSound";
+import { useAppNotifications } from "../../hooks/useAppNotifications";
 import { SUBSCRIPTION_INIT_DELAY_MS } from "../../constants/app";
 import { log } from "../../utils/logger";
 import type { WebSocketEvent } from "../../types/WebSocketTypes";
@@ -68,16 +68,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const mainMessages = useMessages();
   const threadMessages = useThreadMessages();
 
-  // Simplified - no complex callback stabilization needed
-  const { playSoundForMessage, playSound } = useNotificationSound(
-    {
-      enabled: false,
-      volume: 0.5,
-      respectFocus: true,
-      respectMute: true,
-    },
-    activeChat?.id,
-  );
+  // App notifications with toast and notification center
+  const {
+    notifyMessage,
+    notifyDM,
+    notifyChannel,
+    playSoundForMessage,
+    playSound,
+  } = useAppNotifications(activeChat?.id);
 
   // Use custom hooks for data management - simplified, no props needed
   const channelsHook = useChannels();
@@ -281,6 +279,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const mainMessagesRef = useRef(mainMessages);
   const threadMessagesRef = useRef(threadMessages);
   const playSoundForMessageRef = useRef(playSoundForMessage);
+  const notifyMessageRef = useRef(notifyMessage);
+  const notifyDMRef = useRef(notifyDM);
+  const notifyChannelRef = useRef(notifyChannel);
   const onDMSelectedRef = useRef<
     (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void
   >(() => {});
@@ -289,11 +290,17 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   mainMessagesRef.current = mainMessages;
   threadMessagesRef.current = threadMessages;
   playSoundForMessageRef.current = playSoundForMessage;
+  notifyMessageRef.current = notifyMessage;
+  notifyDMRef.current = notifyDM;
+  notifyChannelRef.current = notifyChannel;
 
   const chatHandlersRefs = useRef({
     mainMessages: mainMessagesRef,
     threadMessages: threadMessagesRef,
     playSoundForMessage: playSoundForMessageRef,
+    notifyMessage: notifyMessageRef,
+    notifyDM: notifyDMRef,
+    notifyChannel: notifyChannelRef,
     fetchDms: fetchDmsRef,
     onDMSelected: onDMSelectedRef,
     fetchChannels: { current: debouncedFetchChannels },
@@ -418,6 +425,53 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const privateDMs = dmsHook.dms;
   const fetchDms = dmsHook.fetchDms;
+
+  // Handle navigation from notification clicks
+  useEffect(() => {
+    const handleNavigateFromNotification = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { type, channelName, dmUserId, dmUsername } = customEvent.detail;
+      
+      log.info("Home", "Navigating from notification:", { type, channelName, dmUserId });
+
+      if (type === "dm" && dmUserId) {
+        // Find the DM in the privateDMs list
+        const targetDM = privateDMs.find(
+          (dm) => dm.other_identity_old === dmUserId || dm.other_identity_new === dmUserId
+        );
+
+        if (targetDM) {
+          log.debug("Home", "Found DM to navigate to:", targetDM);
+          onDMSelected(targetDM, undefined, false);
+        } else {
+          log.warn("Home", "DM not found for user:", dmUserId);
+        }
+      } else if (channelName) {
+        // Find the channel in the channels list
+        const targetChannel = channels.find((ch: ChannelMeta) => ch.name === channelName);
+
+        if (targetChannel) {
+          log.debug("Home", "Found channel to navigate to:", targetChannel);
+          const activeChat: ActiveChat = {
+            type: "channel" as ChatType,
+            id: channelName,
+            name: channelName,
+            channelType: targetChannel.channelType,
+            readOnly: targetChannel.read_only,
+          };
+          updateSelectedActiveChat(activeChat);
+        } else {
+          log.warn("Home", "Channel not found:", channelName);
+        }
+      }
+    };
+
+    window.addEventListener("navigate-from-notification", handleNavigateFromNotification);
+    
+    return () => {
+      window.removeEventListener("navigate-from-notification", handleNavigateFromNotification);
+    };
+  }, [privateDMs, channels, onDMSelected]);
 
   const chatMembers = chatMembersHook.members;
   const fetchChatMembers = chatMembersHook.fetchMembers;

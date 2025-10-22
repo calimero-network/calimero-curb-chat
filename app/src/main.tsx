@@ -8,6 +8,7 @@ import { ToastProvider } from "@calimero-network/mero-ui";
 import { APPLICATION_ID, APPLICATION_PATH } from "./constants/config.ts";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { log } from "./utils/logger.ts";
+import { NotificationsProvider } from "./contexts/NotificationsContext.tsx";
 
 // Register service worker for PWA
 if ("serviceWorker" in navigator) {
@@ -40,9 +41,11 @@ createRoot(document.getElementById("root")!).render(
           mode={AppMode.MultiContext}
           applicationPath={APPLICATION_PATH}
         >
-          <ToastProvider>
-            <App />
-          </ToastProvider>
+          <NotificationsProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </NotificationsProvider>
         </CalimeroProvider>
       </BrowserRouter>
     </ErrorBoundary>
