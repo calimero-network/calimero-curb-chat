@@ -83,6 +83,10 @@ const ContainerPadding = styled.div`
   html::-webkit-scrollbar-thumb:hover {
     background-color: black;
   }
+  
+  /* Optimize scrolling performance */
+  contain: layout style paint;
+  overflow-anchor: none;
 `;
 
 const ThreadTitle = styled.div`
@@ -117,6 +121,10 @@ const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
   height: calc(100% - 20px);
+  /* GPU acceleration for smoother rendering */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  
   @media (max-width: 1024px) {
     width: 100% !important;
   }
@@ -303,7 +311,7 @@ export default function ChatDisplaySplit({
               message.sender !== accountId
             }
             render={renderMessage()}
-            chatId={isThread ? openThread?.id : activeChat}
+            chatId={isThread ? openThread?.id : (activeChat.type === "direct_message" ? activeChat.contextId : activeChat.id)}
             style={currentChatStyle}
           />
         </ContainerPadding>

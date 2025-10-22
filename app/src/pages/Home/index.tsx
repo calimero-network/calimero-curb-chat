@@ -108,34 +108,38 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const [currentSubscriptionContextId, setCurrentSubscriptionContextId] =
     useState<string>("");
+  const subscriptionContextIdRef = useRef<string>("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const eventCallbackRef = useRef<((event: any) => Promise<void>) | null>(null);
 
   const manageEventSubscription = useCallback(
     (contextId: string) => {
-      if (!app || !contextId) return;
+      if (!app || !contextId || !eventCallbackRef.current) return;
 
       if (
-        currentSubscriptionContextId &&
-        currentSubscriptionContextId !== contextId
+        subscriptionContextIdRef.current &&
+        subscriptionContextIdRef.current !== contextId
       ) {
         try {
-          app.unsubscribeFromEvents([currentSubscriptionContextId]);
+          app.unsubscribeFromEvents([subscriptionContextIdRef.current]);
         } catch (error) {
           console.error(
             "Failed to unsubscribe from:",
-            currentSubscriptionContextId,
+            subscriptionContextIdRef.current,
             error
           );
         }
       }
 
       try {
-        app.subscribeToEvents([contextId], eventCallback);
+        app.subscribeToEvents([contextId], eventCallbackRef.current);
+        subscriptionContextIdRef.current = contextId;
         setCurrentSubscriptionContextId(contextId);
       } catch (error) {
         console.error("Failed to subscribe to:", contextId, error);
       }
     },
-    [app, currentSubscriptionContextId]
+    [app]
   );
 
   useEffect(() => {
@@ -177,7 +181,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
     // Find the channel metadata to get channelType
-    const channelMeta = channels.find(ch => ch.name === selectedChat.name);
+    const channelMeta = channels.find((ch: ChannelMeta) => ch.name === selectedChat.name);
     if (channelMeta && selectedChat.type === "channel") {
       selectedChat.channelType = channelMeta.channelType;
     }
@@ -205,6 +209,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     setTotalMessageCount(0);
     setOpenThread(undefined);
     setCurrentOpenThread(undefined);
+    
+    // Clear messages to prepare for new chat
+    // VirtualizedChat will call loadInitialMessages automatically when chatId changes
+    messagesRef.current = [];
+    setIncomingMessages([]);
+    
     if (selectedChat.type === "channel") {
       const messages = messagesRef.current;
       if (
@@ -235,15 +245,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     activeChatRef.current = chatToUse;
     getChannelUsers(chatToUse.name);
     getNonInvitedUsers(chatToUse.name);
+    setMessagesOffset(20);
+    setTotalMessageCount(0);
 
-
+    // Delay to ensure app is ready before subscribing
     setTimeout(() => {
       updateSelectedActiveChat(chatToUse);
     }, 500);
-
-    setMessagesOffset(20);
-    setTotalMessageCount(0);
-    updateSelectedActiveChat(chatToUse);
   }, [app, manageEventSubscription]);
 
   const onDMSelected = useCallback(
@@ -293,16 +301,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         };
       }
 
+      // Set DM context BEFORE calling updateSelectedActiveChat
+      // This is critical for DMs to work properly
       setDmContextId(sc?.contextId || dm?.context_id || "");
-      setIsOpenSearchChannel(false);
-      setActiveChat(selectedChat);
-      activeChatRef.current = selectedChat;
-      setIsSidebarOpen(false);
-      setMessagesOffset(20);
-      setTotalMessageCount(0);
-      setOpenThread(undefined);
-      setCurrentOpenThread(undefined);
-      updateSelectedActiveChat(selectedChat);
+      
+      // Let updateSelectedActiveChat handle all the state updates and message loading
+      // Don't duplicate state setting here - it causes issues
+      await updateSelectedActiveChat(selectedChat);
 
       if (refetch) {
         try {
@@ -314,7 +319,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         }
       }
     },
-    []
+    [updateSelectedActiveChat]
   );
 
   // Refs to prevent infinite loops and track processing state
@@ -323,17 +328,18 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const eventQueue = useRef<Set<string>>(new Set());
 
   // Debounced function to prevent rapid-fire events
+  // Increased debounce time to reduce load on the node
   const debouncedFetchChannels = useCallback(
     debounce(() => {
       fetchChannels();
-    }, 300),
+    }, 1000), // Increased from 300ms to 1000ms
     []
   );
 
   const debouncedFetchDms = useCallback(
     debounce(() => {
       fetchDms();
-    }, 300),
+    }, 1000), // Increased from 300ms to 1000ms
     []
   );
 
@@ -342,12 +348,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     if (!activeChatRef.current) return;
 
     try {
+      // Only fetch a small number of recent messages to check for new ones
+      // This significantly reduces load compared to fetching 20 every time
       const reFetchedMessages: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({
           group: {
             name: (useDM ? "private_dm" : activeChatRef.current?.name) || "",
           },
-          limit: 20,
+          limit: 5, // Reduced from 20 - only fetch latest few messages
           offset: 0,
           is_dm: useDM,
           dm_identity: activeChatRef.current?.account,
@@ -407,7 +415,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     } catch (error) {
       console.error("Error handling message updates:", error);
     }
-  }, [activeChat]);
+  }, [activeChat, playSoundForMessage]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDMUpdates = useCallback(async (sessionChat: any) => {
@@ -442,20 +450,21 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       !sessionChat?.canJoin &&
       sessionChat?.otherIdentityNew) as boolean;
 
-    // Update channels and DMs
+    // Only fetch messages for the current active chat - most common operation
+    await handleMessageUpdates(useDM);
+
+    // Update channels list (debounced to avoid spam)
     debouncedFetchChannels();
-    debouncedFetchDms();
 
-    // Handle DM-specific updates
-    await handleDMUpdates(sessionChat);
-
-    // Handle channel member updates for non-DM chats
-    if (sessionChat?.type !== "direct_message") {
+    // Handle DM updates (includes fetching DMs list)
+    if (sessionChat?.type === "direct_message") {
+      await handleDMUpdates(sessionChat);
+    } else {
+      // Only update DM list if not currently in a DM
+      debouncedFetchDms();
+      // Only refetch members for channel chats
       await reFetchChannelMembers();
     }
-
-    // Handle message updates
-    await handleMessageUpdates(useDM);
   }, [debouncedFetchChannels, debouncedFetchDms, handleDMUpdates, handleMessageUpdates, reFetchChannelMembers]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -540,6 +549,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       eventQueue.current.delete(eventId);
     }
   }, [handleStateMutation, handleExecutionEvent]);
+
+  // Keep the ref up to date with the latest callback
+  useEffect(() => {
+    eventCallbackRef.current = eventCallback;
+  }, [eventCallback]);
 
   const loadInitialChatMessages = async (): Promise<ChatMessagesData> => {
     if (!activeChat?.name) {
@@ -675,7 +689,18 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     fetchChannels();
     fetchDms();
     fetchChatMembers();
-  }, []);
+
+    // Cleanup: unsubscribe from events when component unmounts
+    return () => {
+      if (app && subscriptionContextIdRef.current) {
+        try {
+          app.unsubscribeFromEvents([subscriptionContextIdRef.current]);
+        } catch (error) {
+          console.error("Failed to unsubscribe on unmount:", error);
+        }
+      }
+    };
+  }, [app]);
 
   const onJoinedChat = async () => {
     let canJoin = false;

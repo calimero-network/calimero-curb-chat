@@ -29,8 +29,8 @@ export function usePersistentState<T>(
       }
     };
     
-    // Check for changes periodically (since we can't use custom events easily)
-    const interval = setInterval(handleStorageChange, 50);
+    // Check for changes less frequently to reduce CPU usage (500ms instead of 50ms)
+    const interval = setInterval(handleStorageChange, 500);
     
     return () => clearInterval(interval);
   }, [key, state]);

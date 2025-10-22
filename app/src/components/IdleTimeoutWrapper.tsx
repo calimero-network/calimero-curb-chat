@@ -52,10 +52,12 @@ export default function IdleTimeoutWrapper({
 
   useEffect(() => {
     if (isAuthenticated) {
-      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+      // Essential events for both desktop and mobile
+      // mousedown (desktop clicks), touchstart (mobile taps), keypress (typing), mousemove (mouse activity)
+      const events = ['mousedown', 'touchstart', 'keypress', 'mousemove'];
       
       events.forEach(event => {
-        document.addEventListener(event, handleUserActivity, true);
+        document.addEventListener(event, handleUserActivity, { capture: true, passive: true });
       });
 
       resetTimeout();
