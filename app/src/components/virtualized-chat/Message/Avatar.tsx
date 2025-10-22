@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, memo } from 'react';
 
 export interface AvatarProps {
   src?: string;
@@ -11,6 +11,23 @@ export interface AvatarProps {
   style?: React.CSSProperties;
 }
 
+// Define size map outside component to avoid recreating
+const sizeMap = {
+  xs: 24,
+  sm: 32,
+  md: 40,
+  lg: 48,
+  xl: 64,
+  '2xl': 80,
+} as const;
+
+// Define static image style outside component
+const imageStyle = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover' as const,
+};
+
 export const Avatar: React.FC<AvatarProps> = ({
   src,
   alt,
@@ -21,18 +38,10 @@ export const Avatar: React.FC<AvatarProps> = ({
   className = '',
   style = {},
 }) => {
-  const sizeMap = {
-    xs: 24,
-    sm: 32,
-    md: 40,
-    lg: 48,
-    xl: 64,
-    '2xl': 80,
-  };
-
   const avatarSize = sizeMap[size];
 
-  const baseStyle = {
+  // Memoize styles to prevent object recreation on every render
+  const baseStyle = useMemo(() => ({
     width: avatarSize,
     height: avatarSize,
     borderRadius: shape === 'circle' ? '50%' : '12px',
@@ -43,28 +52,24 @@ export const Avatar: React.FC<AvatarProps> = ({
     overflow: 'hidden',
     flexShrink: 0,
     ...style,
-  };
+  }), [avatarSize, shape, style]);
 
-  const imageStyle = {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover' as const,
-  };
-
-  const fallbackStyle = {
+  const fallbackStyle = useMemo(() => ({
     fontSize: avatarSize * 0.4,
     fontWeight: 600,
     color: '#C8C8C8',
     textTransform: 'uppercase' as const,
-  };
+  }), [avatarSize]);
 
-  const getInitials = (nameg: string) => {
-    return nameg
+  // Memoize initials calculation
+  const initials = useMemo(() => {
+    if (!name) return '';
+    return name
       .split(' ')
       .map((word) => word.charAt(0))
       .join('')
       .slice(0, 2);
-  };
+  }, [name]);
 
   const renderFallback = () => {
     if (fallback) {
@@ -72,7 +77,7 @@ export const Avatar: React.FC<AvatarProps> = ({
     }
 
     if (name) {
-      return <span style={fallbackStyle}>{getInitials(name)}</span>;
+      return <span style={fallbackStyle}>{initials}</span>;
     }
 
     return (
@@ -108,3 +113,6 @@ export const Avatar: React.FC<AvatarProps> = ({
     </div>
   );
 };
+
+// Memoize Avatar component to prevent unnecessary re-renders
+export default memo(Avatar);

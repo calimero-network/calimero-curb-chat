@@ -89,6 +89,9 @@ const VirtualizedChat = <T extends Message>({
   const isAtBottom = useRef<boolean>(true);
 
   const isInitialLoadingRef = useRef<boolean>(false);
+  const hasScrolledToBottomRef = useRef<boolean>(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSettlingRef = useRef<boolean>(false); // Prevent jumping during initial settling period
 
   const scrollToBottom = (): void => {
     listHandler.current?.scrollToIndex({ index: 'LAST' });
@@ -101,6 +104,14 @@ const VirtualizedChat = <T extends Message>({
     isInitialLoadingRef.current = true;
     setIsLoadingInitial(true);
     setOldestMessageReported(-1);
+    hasScrolledToBottomRef.current = false;
+    isSettlingRef.current = false; // Reset settling flag for new chat
+    
+    // Clear any pending scroll timeouts from previous chat
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
 
     try {
       const initialMessagesResponse = await loadInitialMessages();
@@ -131,12 +142,22 @@ const VirtualizedChat = <T extends Message>({
     }
   };
 
-  const handleFollowOutput = (atBottom: boolean) => {
-    if (atBottom && !isScrolling.current) {
+  const handleFollowOutput = useCallback((atBottom: boolean) => {
+    // During the initial settling period (first ~1 second after load),
+    // disable followOutput to prevent jumping as heights are calculated
+    if (isSettlingRef.current) {
+      return false;
+    }
+    
+    // Only auto-scroll to bottom if:
+    // 1. User is already at the bottom
+    // 2. User is not actively scrolling
+    // This prevents jumping back to bottom when user is reading older messages
+    if (atBottom && !isScrolling.current && isAtBottom.current) {
       return 'smooth';
     }
     return false;
-  };
+  }, []);
 
   useEffect(() => {
     if (chatId && !isInitialLoadingRef.current) {
@@ -144,23 +165,44 @@ const VirtualizedChat = <T extends Message>({
     }
   }, [chatId]);
   
-  // Ensure scroll to bottom after messages are loaded and component is rendered
+  // Simplified scroll to bottom - only once after initial load
   useEffect(() => {
-    if (!isLoadingInitial && messages.length > 0 && listHandler.current) {
-      // Use requestAnimationFrame to ensure DOM is ready, then scroll after a short delay
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (listHandler.current) {
-            log.debug('VirtualizedChat', `Scrolling to bottom for chat ${chatId} with ${messages.length} messages`);
-            // Use LAST index which is more reliable than counting messages
-            listHandler.current.scrollToIndex({ 
-              index: 'LAST',
-              align: 'end',
-              behavior: 'auto'
-            });
-          }
-        }, 100);
-      });
+    if (!isLoadingInitial && messages.length > 0 && !hasScrolledToBottomRef.current) {
+      // Mark as settling to prevent followOutput from interfering
+      isSettlingRef.current = true;
+      
+      // Clear any existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      // Wait a bit longer for initial render to stabilize
+      scrollTimeoutRef.current = setTimeout(() => {
+        if (listHandler.current && !hasScrolledToBottomRef.current) {
+          log.debug('VirtualizedChat', `Scrolling to bottom for chat ${chatId} with ${messages.length} messages`);
+          listHandler.current.scrollToIndex({ 
+            index: 'LAST',
+            align: 'end',
+            behavior: 'auto'
+          });
+          hasScrolledToBottomRef.current = true;
+          
+          // Keep settling flag active for a bit longer to prevent jumping
+          // as message heights are still being calculated
+          setTimeout(() => {
+            isSettlingRef.current = false;
+            log.debug('VirtualizedChat', 'Settling period complete');
+          }, 1000); // Additional 1 second settling period
+        }
+      }, 150); // Increased from 50ms to 150ms to let DOM stabilize
+      
+      // Cleanup timeout on unmount
+      return () => {
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+        isSettlingRef.current = false;
+      };
     }
   }, [isLoadingInitial, messages.length, chatId]);
 
@@ -178,6 +220,8 @@ const VirtualizedChat = <T extends Message>({
           setTotalCount((prevTotalCount) => prevTotalCount + addedCount);
         }
         
+        // If user is not at bottom and we received new messages,
+        // show the new message indicator instead of auto-scrolling
         if (
           addedCount > 0 &&
           !isAtBottom.current &&
@@ -188,15 +232,20 @@ const VirtualizedChat = <T extends Message>({
             : true)
         ) {
           setHasNewMessages(true);
+          log.debug('VirtualizedChat', 'New messages received while not at bottom, showing indicator');
         }
       }
     }
-  }, [incomingMessages]);
+  }, [incomingMessages, shouldTriggerNewItemIndicator, store]);
 
   useEffect(() => {
-    store.updateMultiple(updatedMessages);
-    setMessages([...store.messages]); // TODO: Spread operator is a hack to force a re-render
-  }, [updatedMessages]);
+    if (updatedMessages.length > 0) {
+      store.updateMultiple(updatedMessages);
+      // Force re-render by creating new array reference
+      // This is necessary because MessageStore mutates the array internally
+      setMessages([...store.messages]);
+    }
+  }, [updatedMessages, store]);
 
   const handleLoadMore = useCallback(async () => {
     if (!isLoadingOlder && hasMore && !isLoadingInitial) {
@@ -244,16 +293,31 @@ const VirtualizedChat = <T extends Message>({
 
   const handleIsScrolling = useCallback((scrolling: boolean) => {
     isScrolling.current = scrolling;
+    
+    // If user starts scrolling, they're intentionally navigating
+    // Mark that we shouldn't auto-scroll them back
+    if (scrolling) {
+      // User is actively scrolling, respect their intent
+      log.debug('VirtualizedChat', 'User is scrolling, disabling auto-scroll');
+    }
   }, []);
 
   const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
+    const wasAtBottom = isAtBottom.current;
     isAtBottom.current = atBottom;
+    
+    // Log state changes for debugging
+    if (wasAtBottom !== atBottom) {
+      log.debug('VirtualizedChat', `Bottom state changed: ${wasAtBottom} -> ${atBottom}`);
+    }
   }, []);
 
   // Memoize static objects to prevent re-creating on every render
   const virtuosoStyle = useMemo(() => ({ height: '100%', width: '100%' }), []);
-  const overscanConfig = useMemo(() => ({ reverse: 500, main: 0 }), []);
-  const viewportConfig = useMemo(() => ({ top: 200, bottom: 200 }), []);
+  // Reduced overscan from 500 to 200 to reduce off-screen rendering and jumping
+  const overscanConfig = useMemo(() => ({ reverse: 200, main: 100 }), []);
+  // Reduced viewport buffer to minimize layout shifts
+  const viewportConfig = useMemo(() => ({ top: 100, bottom: 100 }), []);
 
   const NewMessageIndicator = React.createElement(newMessageIndicator, {
     onClick: scrollToBottom,
@@ -281,9 +345,12 @@ const VirtualizedChat = <T extends Message>({
           totalCount={totalCount}
           isScrolling={handleIsScrolling}
           atBottomStateChange={handleAtBottomStateChange}
+          atBottomThreshold={100}
           ref={listHandler}
           overscan={overscanConfig}
           increaseViewportBy={viewportConfig}
+          defaultItemHeight={100}
+          skipAnimationFrameInResizeObserver={true}
         />
       )}
     </VirtuosoWrapper>

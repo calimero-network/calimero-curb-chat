@@ -1,5 +1,5 @@
 import { useLongPress } from '@uidotdev/usehooks';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, memo } from 'react';
 import styled from 'styled-components';
 
 import { MessageActions } from '..';
@@ -377,19 +377,50 @@ const Message = (props: MessageProps) => {
     return <DeletedMessage />;
   }
 
-  function messageStatus(status: MessageStatus) {
-    return status === MessageStatus.sending ? (
+  // Memoize message status icon to prevent recreating on every render
+  const statusIcon = useMemo(() => {
+    return props.message.status === MessageStatus.sending ? (
       <MessageSendingIcon />
     ) : (
       <MessageSentIcon />
     );
-  }
+  }, [props.message.status]);
+
+  // Memoize formatted time to avoid recalculating on every render
+  const formattedTime = useMemo(() => {
+    return formatTimeAgo(props.message.timestamp / 1000, false);
+  }, [props.message.timestamp]);
+
+  // Memoize accountId transformation for CSS class names
+  const escapedAccountId = useMemo(() => {
+    return props.accountId.replace(/\./g, '\\.').replace(/_/g, '\\_');
+  }, [props.accountId]);
+
+  // Memoize global mention check
+  const hasGlobalMention = useMemo(() => {
+    return (
+      text?.includes('mention-everyone') ||
+      text?.includes('mention-here') ||
+      text?.includes(`mention-user-${props.accountId}`)
+    );
+  }, [text, props.accountId]);
 
   useEffect(() => {
-    if (window) {
+    const handleResize = () => {
       setScreenSize(window.innerWidth);
-    }
-  }, [window]);
+    };
+    
+    // Set initial size
+    setScreenSize(window.innerWidth);
+    
+    // Add resize listener
+    window.addEventListener('resize', handleResize);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []); // Empty deps - only run once on mount
 
   useEffect(() => {
     const container = document.getElementById(
@@ -472,7 +503,7 @@ const Message = (props: MessageProps) => {
               {props.message.senderUsername}
             </NameContainerSender>
             <MessageTime>
-              {formatTimeAgo(props.message.timestamp / 1000, false)}
+              {formattedTime}
             </MessageTime>
           </SenderInfoContainer>
         )}
@@ -489,20 +520,14 @@ const Message = (props: MessageProps) => {
         ) : (
           <MessageContentContainer>
             <MessageText
-              $globalMention={
-                text?.includes('mention-everyone') ||
-                text?.includes('mention-here') ||
-                text?.includes(`mention-user-${props.accountId}`)
-              }
-              $accountId={props.accountId
-                .replace(/\./g, '\\.')
-                .replace(/_/g, '\\_')}
+              $globalMention={hasGlobalMention}
+              $accountId={escapedAccountId}
             >
               <RenderHtml html={text} />
             </MessageText>
             <Tick>
               {props.message.editedOn && '(edited) '}
-              {messageStatus(props.message.status)}
+              {statusIcon}
             </Tick>
           </MessageContentContainer>
         )}
@@ -564,7 +589,94 @@ const Message = (props: MessageProps) => {
   );
 };
 
-export default Message;
+/**
+ * Custom comparison function for React.memo
+ * Only re-render if relevant props have changed
+ */
+const arePropsEqual = (prevProps: MessageProps, nextProps: MessageProps): boolean => {
+  // If message IDs are different, definitely re-render
+  if (prevProps.message.id !== nextProps.message.id) {
+    return false;
+  }
+
+  // Check if message content changed
+  if (
+    prevProps.message.text !== nextProps.message.text ||
+    prevProps.message.editMode !== nextProps.message.editMode ||
+    prevProps.message.deleted !== nextProps.message.deleted ||
+    prevProps.message.editedOn !== nextProps.message.editedOn ||
+    prevProps.message.status !== nextProps.message.status ||
+    prevProps.message.threadCount !== nextProps.message.threadCount ||
+    prevProps.message.threadLastTimestamp !== nextProps.message.threadLastTimestamp
+  ) {
+    return false;
+  }
+
+  // Check reactions - deep comparison needed
+  // Reactions is HashMap<string, string[]> (e.g., { "👍": ["user1", "user2"] })
+  if (prevProps.message.reactions !== nextProps.message.reactions) {
+    // If one is undefined/null and the other isn't
+    if (!prevProps.message.reactions !== !nextProps.message.reactions) {
+      return false;
+    }
+    // If both exist, check if they're different objects
+    if (prevProps.message.reactions && nextProps.message.reactions) {
+      const prevKeys = Object.keys(prevProps.message.reactions);
+      const nextKeys = Object.keys(nextProps.message.reactions);
+      
+      // Check if number of reactions changed
+      if (prevKeys.length !== nextKeys.length) {
+        return false;
+      }
+      
+      // Check if any reaction emoji or accounts changed
+      for (const emoji of prevKeys) {
+        const prevAccounts = prevProps.message.reactions[emoji];
+        const nextAccounts = nextProps.message.reactions[emoji];
+        
+        if (!nextAccounts || prevAccounts.length !== nextAccounts.length) {
+          return false;
+        }
+      }
+    }
+  }
+
+  // Check if previous message changed (affects header display)
+  if (prevProps.prevMessage?.id !== nextProps.prevMessage?.id ||
+      prevProps.prevMessage?.sender !== nextProps.prevMessage?.sender ||
+      prevProps.prevMessage?.timestamp !== nextProps.prevMessage?.timestamp ||
+      prevProps.prevMessage?.deleted !== nextProps.prevMessage?.deleted) {
+    return false;
+  }
+
+  // Check if mobile reactions state changed for this message
+  const prevIsOpen = prevProps.openMobileReactions === prevProps.message.id;
+  const nextIsOpen = nextProps.openMobileReactions === nextProps.message.id;
+  if (prevIsOpen !== nextIsOpen) {
+    return false;
+  }
+
+  // Check if editable/deletable permissions changed
+  if (prevProps.editable !== nextProps.editable || prevProps.deletable !== nextProps.deletable) {
+    return false;
+  }
+
+  // Check if accountId changed (affects mentions)
+  if (prevProps.accountId !== nextProps.accountId) {
+    return false;
+  }
+
+  // Check if autocompleteAccounts changed (for edit mode)
+  if (prevProps.autocompleteAccounts.length !== nextProps.autocompleteAccounts.length) {
+    return false;
+  }
+
+  // All other props are callbacks that should be stable
+  // Don't compare them to avoid unnecessary re-renders
+  return true;
+};
+
+export default memo(Message, arePropsEqual);
 
 // const hasMention =
 //   normalText.includes(`@${context.accountId}`) ||
