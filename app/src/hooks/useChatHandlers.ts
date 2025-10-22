@@ -17,6 +17,10 @@ interface ChatHandlersRefs {
     checkForNewMessages: (chat: ActiveChat, isDM: boolean) => Promise<any[]>;
     addIncoming: (messages: any[]) => void;
   }>;
+  threadMessages: React.MutableRefObject<{
+    checkForNewThreadMessages: (chat: ActiveChat, parentMessageId: string) => Promise<any[]>;
+    addIncoming: (messages: any[]) => void;
+  }>;
   playSoundForMessage: React.MutableRefObject<(messageId: string, type?: NotificationType, isMention?: boolean) => void>;
   fetchDms: React.MutableRefObject<() => Promise<DMChatInfo[] | undefined>>;
   onDMSelected: React.MutableRefObject<(dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void>;
@@ -34,7 +38,9 @@ export function useChatHandlers(
 
   // Track if we're already fetching messages to prevent concurrent calls
   const isFetchingMessagesRef = useRef(false);
+  const isFetchingThreadMessagesRef = useRef(false);
   const lastMessageCheckRef = useRef<number>(0);
+  const lastThreadMessageCheckRef = useRef<number>(0);
   const lastReadMessageRef = useRef<{ chatId: string; timestamp: number }>({ chatId: '', timestamp: 0 });
   
   /**
@@ -99,6 +105,51 @@ export function useChatHandlers(
       isFetchingMessagesRef.current = false;
     }
   }, [activeChatRef, activeChat, refs]);
+
+  /**
+   * Handle thread message updates from websocket events
+   */
+  const handleThreadMessageUpdates = useCallback(async (useDM: boolean, parentMessageId: string) => {
+    if (!activeChatRef.current || !parentMessageId) {
+      log.debug('ChatHandlers', 'Skipping thread message check - no active chat or parent message ID');
+      return;
+    }
+    
+    // Prevent concurrent message fetches
+    if (isFetchingThreadMessagesRef.current) {
+      log.debug('ChatHandlers', 'Skipping thread message check - already fetching thread messages');
+      return;
+    }
+    
+    // Aggressive throttle to 5 seconds to prevent API hammering
+    const now = Date.now();
+    if (now - lastThreadMessageCheckRef.current < 5000) {
+      log.debug('ChatHandlers', 'Skipping thread message check - throttled');
+      return;
+    }
+    lastThreadMessageCheckRef.current = now;
+
+    try {
+      isFetchingThreadMessagesRef.current = true;
+      log.debug('ChatHandlers', `Checking for new thread messages for parent: ${parentMessageId}`);
+      
+      const newThreadMessages = await refs.threadMessages.current.checkForNewThreadMessages(
+        activeChatRef.current,
+        parentMessageId
+      );
+
+      if (newThreadMessages.length > 0) {
+        log.debug('ChatHandlers', `Found ${newThreadMessages.length} new thread messages`);
+        refs.threadMessages.current.addIncoming(newThreadMessages);
+      } else {
+        log.debug('ChatHandlers', 'No new thread messages found');
+      }
+    } catch (error) {
+      log.error('ChatHandlers', 'Error fetching thread messages', error);
+    } finally {
+      isFetchingThreadMessagesRef.current = false;
+    }
+  }, [refs]);
 
   // Track last DM update to prevent infinite loops
   const lastDMUpdateRef = useRef<{ contextId: string; timestamp: number } | null>(null);
@@ -251,6 +302,7 @@ export function useChatHandlers(
 
   return {
     handleMessageUpdates,
+    handleThreadMessageUpdates,
     handleDMUpdates,
     handleStateMutation,
     handleExecutionEvents,

@@ -51,6 +51,7 @@ interface AppContainerProps {
   setOpenThread: (thread: CurbMessage | undefined) => void;
   currentOpenThreadRef: React.RefObject<CurbMessage | undefined>;
   addOptimisticMessage?: (message: CurbMessage) => void;
+  addOptimisticThreadMessage?: (message: CurbMessage) => void;
 }
 function AppContainer({
   activeChat,
@@ -81,6 +82,7 @@ function AppContainer({
   setOpenThread,
   currentOpenThreadRef,
   addOptimisticMessage,
+  addOptimisticThreadMessage,
 }: AppContainerProps) {
   return (
     <>
@@ -130,6 +132,7 @@ function AppContainer({
                 onDMSelected={onDMSelected}
                 membersList={chatMembers}
                 addOptimisticMessage={addOptimisticMessage}
+                addOptimisticThreadMessage={addOptimisticThreadMessage}
               />
             )}
             {isOpenSearchChannel && (

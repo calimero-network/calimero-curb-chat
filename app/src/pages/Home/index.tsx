@@ -94,6 +94,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const messagesRef = mainMessages.messagesRef;
   const incomingMessages = mainMessages.incomingMessages;
   const addOptimisticMessage = mainMessages.addOptimistic;
+  const addOptimisticThreadMessage = threadMessages.addOptimistic;
 
   // Initialize audio context on first user interaction
   useEffect(() => {
@@ -267,15 +268,18 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   // Create refs for handlers
   const mainMessagesRef = useRef(mainMessages);
+  const threadMessagesRef = useRef(threadMessages);
   const playSoundForMessageRef = useRef(playSoundForMessage);
   const onDMSelectedRef = useRef<(dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void>(() => {});
   
   // Update refs every render (no useEffect to avoid triggering extra renders)
   mainMessagesRef.current = mainMessages;
+  threadMessagesRef.current = threadMessages;
   playSoundForMessageRef.current = playSoundForMessage;
   
   const chatHandlersRefs = useRef({
     mainMessages: mainMessagesRef,
+    threadMessages: threadMessagesRef,
     playSoundForMessage: playSoundForMessageRef,
     fetchDms: fetchDmsRef,
     onDMSelected: onDMSelectedRef,
@@ -288,8 +292,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const updateSelectedActiveChatRef = useRef(updateSelectedActiveChat);
   updateSelectedActiveChatRef.current = updateSelectedActiveChat;
   
-  const threadMessagesRef = useRef(threadMessages);
-  threadMessagesRef.current = threadMessages;
   
   const onDMSelected = useCallback(
     async (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => {
@@ -405,6 +407,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   // Use chat handlers hook - simplified with refs
   const {
     handleMessageUpdates,
+    handleThreadMessageUpdates,
     handleDMUpdates,
     handleStateMutation,
     handleExecutionEvents,
@@ -447,12 +450,23 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       }
 
       await handleStateMutation(latestEvent);
+      
+      // Also handle thread messages if a thread is open
+      if (openThread) {
+        const sessionChat = getStoredSession();
+        const useDM = (sessionChat?.type === "direct_message" &&
+          sessionChat?.account &&
+          !sessionChat?.canJoin &&
+          sessionChat?.otherIdentityNew) as boolean;
+        
+        await handleThreadMessageUpdates(useDM, openThread.id);
+      }
     } catch (error) {
       log.error('WebSocket', 'Error processing batched events', error);
     } finally {
       isProcessingEventRef.current = false;
     }
-  }, [handleStateMutation]);
+  }, [handleStateMutation, handleThreadMessageUpdates, openThread]);
 
   // Create event callback for websocket subscription
   const eventCallbackFn = useCallback(async (event: WebSocketEvent) => {
@@ -624,7 +638,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const loadInitialThreadMessages = useCallback(
     async (parentMessageId: string): Promise<ChatMessagesData> => {
-      return await threadMessagesRef.current.loadInitial(activeChatRef.current, parentMessageId);
+      log.debug('Home', `loadInitialThreadMessages called for parent: ${parentMessageId}`);
+      const result = await threadMessagesRef.current.loadInitial(activeChatRef.current, parentMessageId);
+      log.debug('Home', `loadInitialThreadMessages result:`, result);
+      return result;
     },
     [] // NO DEPENDENCIES
   );
@@ -666,13 +683,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       createDM={createDM}
       privateDMs={privateDMs}
       loadInitialThreadMessages={loadInitialThreadMessages}
-      incomingThreadMessages={threadMessages.messages}
+      incomingThreadMessages={threadMessages.incomingMessages}
       loadPrevThreadMessages={loadPrevThreadMessages}
       updateCurrentOpenThread={updateCurrentOpenThread}
       openThread={openThread}
       setOpenThread={setOpenThread}
       currentOpenThreadRef={currentOpenThreadRef}
       addOptimisticMessage={addOptimisticMessage}
+      addOptimisticThreadMessage={addOptimisticThreadMessage}
     />
   );
 }

@@ -136,6 +136,7 @@ export function useMessages() {
         offset: 0,
         is_dm: isDM,
         dm_identity: activeChat.account,
+        parent_message: undefined, // Only get main chat messages, not thread messages
       });
 
     if (!response.data) return [];

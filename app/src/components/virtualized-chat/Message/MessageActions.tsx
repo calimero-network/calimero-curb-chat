@@ -3,7 +3,7 @@ import styled from 'styled-components';
 
 import { ElementPosition } from '../types/curbTypes';
 
-// import ChatTextIcon from './Icons/ChatTextIcon';
+import ChatTextIcon from './Icons/ChatTextIcon';
 import EditMessageIcon from './Icons/EditMessageIcon';
 import EmojiWinkIcon from './Icons/EmojiWinkIcon';
 import ThreeDotsIcon from './Icons/ThreeDotsIcon';
@@ -132,6 +132,7 @@ const ActionsPopup: React.FC<{
   popupPosition: ElementPosition;
 }> = ({
   toggleReaction,
+  setThread,
   toggleEmojiSelector,
   editMessage,
   deleteMessage,
@@ -175,10 +176,10 @@ const ActionsPopup: React.FC<{
       icon: <EmojiWinkIcon />,
       onClick: toggleEmojiSelector,
     },
-    // {
-    //   icon: <ChatTextIcon />,
-    //   onClick: () => setThread(),
-    // },
+    {
+      icon: <ChatTextIcon />,
+      onClick: () => setThread(),
+    },
     {
       icon: <ThreeDotsIcon />,
       onClick: toggleMoreAction,

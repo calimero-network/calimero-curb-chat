@@ -46,6 +46,7 @@ interface ChatContainerProps {
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat) => void;
   membersList: Map<string, string>;
   addOptimisticMessage?: (message: CurbMessage) => void;
+  addOptimisticThreadMessage?: (message: CurbMessage) => void;
 }
 
 const ChatContainerWrapper = styled.div`
@@ -62,22 +63,22 @@ const ChatContainerWrapper = styled.div`
   }
 `;
 
-// const ThreadWrapper = styled.div`
-//   height: 100%;
-//   flex: 1;
-//   border-left: 2px solid #282933;
-//   padding-left: 20px;
-//   @media (max-width: 1024px) {
-//     border-left: none;
-//     position: fixed;
-//     left: 0;
-//     right: 0; /* Set both left and right to 0 to stretch to full width */
-//     top: 50%; /* Vertically center the element */
-//     transform: translateY(-50%); /* Center it vertically */
-//     z-index: 30;
-//     background-color: #0e0e10;
-//   }
-// `;
+const ThreadWrapper = styled.div`
+  height: 100%;
+  flex: 1;
+  border-left: 2px solid #282933;
+  padding-left: 20px;
+  @media (max-width: 1024px) {
+    border-left: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 30;
+    background-color: #0e0e10;
+  }
+`;
 
 function ChatContainer({
   activeChat,
@@ -86,9 +87,9 @@ function ChatContainer({
   loadInitialChatMessages,
   incomingMessages,
   loadPrevMessages,
-  // loadInitialThreadMessages,
-  // incomingThreadMessages,
-  // loadPrevThreadMessages,
+  loadInitialThreadMessages,
+  incomingThreadMessages,
+  loadPrevThreadMessages,
   updateCurrentOpenThread,
   openThread,
   setOpenThread,
@@ -96,6 +97,7 @@ function ChatContainer({
   onDMSelected,
   membersList,
   addOptimisticMessage,
+  addOptimisticThreadMessage,
 }: ChatContainerProps) {
   const [updatedMessages, setUpdatedMessages] = useState<UpdatedMessages[]>([]);
   const [_updatedThreadMessages, setUpdatedThreadMessages] = useState<
@@ -226,7 +228,9 @@ function ChatContainer({
     const usernames: string[] = [...result.usernameMentions];
 
     // Add optimistic message immediately (if function is provided)
-    if (addOptimisticMessage && !isThread) {
+    const optimisticFunction = isThread ? addOptimisticThreadMessage : addOptimisticMessage;
+    log.debug('ChatContainer', `sendMessage called - isThread: ${isThread}, optimisticFunction: ${optimisticFunction ? 'provided' : 'missing'}`);
+    if (optimisticFunction) {
       // For DMs, use the DM-specific identity (activeChat.account)
       // For Channels, use the main identity (getExecutorPublicKey)
       const sender = isDM ? (activeChatRef.current?.account || getExecutorPublicKey() || "") : (getExecutorPublicKey() || "");
@@ -249,7 +253,9 @@ function ChatContainer({
         deleted: false,
       };
       try {
-        addOptimisticMessage(optimisticMessage);
+        log.debug('ChatContainer', `Adding optimistic ${isThread ? 'thread' : 'main'} message:`, optimisticMessage);
+        optimisticFunction(optimisticMessage);
+        log.debug('ChatContainer', `Optimistic ${isThread ? 'thread' : 'main'} message added successfully`);
       } catch (error) {
         log.error("ChatContainer", "Error adding optimistic message", error);
       }
@@ -375,10 +381,24 @@ function ChatContainer({
   );
 
   const selectThread = (message: CurbMessage) => {
+    log.debug('ChatContainer', `Opening thread for message: ${message.id}`, message);
+    log.debug('ChatContainer', `Message details:`, {
+      id: message.id,
+      text: message.text,
+      sender: message.sender,
+      timestamp: message.timestamp
+    });
     setOpenThread(message);
     updateCurrentOpenThread(message);
     setUpdatedThreadMessages([]);
   };
+
+  // Debug logging for thread state
+  useEffect(() => {
+    if (openThread) {
+      log.debug('ChatContainer', `Thread component should be visible for message: ${openThread.id}`);
+    }
+  }, [openThread]);
 
   const dmSetupState = getDMSetupState(activeChat);
 
@@ -413,55 +433,7 @@ function ChatContainer({
 
       case DMSetupState.ACTIVE:
         return (
-          <ChatDisplaySplit
-            readMessage={() => {}}
-            handleReaction={handleReaction}
-            openThread={openThread}
-            setOpenThread={selectThread}
-            activeChat={activeChat}
-            updatedMessages={updatedMessages}
-            resetImage={() => {}}
-            sendMessage={(message: string) => sendMessage(message, false)}
-            getIconFromCache={getIconFromCache}
-            isThread={false}
-            isReadOnly={activeChat.readOnly ?? false}
-            toggleEmojiSelector={toggleEmojiSelector}
-            channelMeta={channelMeta}
-            //channelUserList={channelUserList}
-            openMobileReactions={openMobileReactions}
-            setOpenMobileReactions={setOpenMobileReactions}
-            onMessageDeletion={handleDeleteMessage}
-            onEditModeRequested={handleEditMode}
-            onEditModeCancelled={handleEditMode}
-            onMessageUpdated={handleEditedMessage}
-            loadInitialChatMessages={loadInitialChatMessages}
-            incomingMessages={incomingMessages}
-            loadPrevMessages={loadPrevMessages}
-              isEmojiSelectorVisible={isEmojiSelectorVisible}
-              setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
-              messageWithEmojiSelector={messageWithEmojiSelector}
-            />
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <ChatContainerWrapper>
-      {activeChat.type === "direct_message" ? (
-        renderDMContent()
-      ) : (
-        <>
-          {activeChat.canJoin ? (
-            <JoinChannel
-              channelMeta={channelMeta}
-              activeChat={activeChat}
-              setIsOpenSearchChannel={setIsOpenSearchChannel}
-              onJoinedChat={onJoinedChat}
-            />
-          ) : (
+          <>
             <ChatDisplaySplit
               readMessage={() => {}}
               handleReaction={handleReaction}
@@ -486,10 +458,133 @@ function ChatContainer({
               loadInitialChatMessages={loadInitialChatMessages}
               incomingMessages={incomingMessages}
               loadPrevMessages={loadPrevMessages}
+              currentOpenThreadRef={currentOpenThreadRef}
               isEmojiSelectorVisible={isEmojiSelectorVisible}
               setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
               messageWithEmojiSelector={messageWithEmojiSelector}
             />
+            {openThread && (
+              <ThreadWrapper>
+                <ChatDisplaySplit
+                  readMessage={() => {}}
+                  handleReaction={handleReaction}
+                  openThread={openThread}
+                  setOpenThread={selectThread}
+                  activeChat={activeChat}
+                  updatedMessages={_updatedThreadMessages}
+                  resetImage={() => {}}
+                  sendMessage={(message: string) => sendMessage(message, true)}
+                  getIconFromCache={getIconFromCache}
+                  isThread={true}
+                  isReadOnly={activeChat.readOnly ?? false}
+                  toggleEmojiSelector={toggleEmojiSelector}
+                  channelMeta={channelMeta}
+                  openMobileReactions={openMobileReactions}
+                  setOpenMobileReactions={setOpenMobileReactions}
+                  onMessageDeletion={handleDeleteMessage}
+                  onEditModeRequested={handleEditMode}
+                  onEditModeCancelled={handleEditMode}
+                  onMessageUpdated={handleEditedMessage}
+                  loadInitialChatMessages={() => {
+                    log.debug('ChatContainer', `Thread loadInitialChatMessages called with openThread.id: ${openThread.id}`);
+                    return loadInitialThreadMessages(openThread.id);
+                  }}
+                  incomingMessages={incomingThreadMessages}
+                  loadPrevMessages={(id: string) => loadPrevThreadMessages(id)}
+                  currentOpenThreadRef={currentOpenThreadRef}
+                  isEmojiSelectorVisible={isEmojiSelectorVisible}
+                  setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
+                  messageWithEmojiSelector={messageWithEmojiSelector}
+                />
+              </ThreadWrapper>
+            )}
+          </>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <ChatContainerWrapper>
+      {activeChat.type === "direct_message" ? (
+        renderDMContent()
+      ) : (
+        <>
+          {activeChat.canJoin ? (
+            <JoinChannel
+              channelMeta={channelMeta}
+              activeChat={activeChat}
+              setIsOpenSearchChannel={setIsOpenSearchChannel}
+              onJoinedChat={onJoinedChat}
+            />
+          ) : (
+            <>
+              <ChatDisplaySplit
+                readMessage={() => {}}
+                handleReaction={handleReaction}
+                openThread={openThread}
+                setOpenThread={selectThread}
+                activeChat={activeChat}
+                updatedMessages={updatedMessages}
+                resetImage={() => {}}
+                sendMessage={(message: string) => sendMessage(message, false)}
+                getIconFromCache={getIconFromCache}
+                isThread={false}
+                isReadOnly={activeChat.readOnly ?? false}
+                toggleEmojiSelector={toggleEmojiSelector}
+                channelMeta={channelMeta}
+                openMobileReactions={openMobileReactions}
+                setOpenMobileReactions={setOpenMobileReactions}
+                onMessageDeletion={handleDeleteMessage}
+                onEditModeRequested={handleEditMode}
+                onEditModeCancelled={handleEditMode}
+                onMessageUpdated={handleEditedMessage}
+                loadInitialChatMessages={loadInitialChatMessages}
+                incomingMessages={incomingMessages}
+                loadPrevMessages={loadPrevMessages}
+                currentOpenThreadRef={currentOpenThreadRef}
+                isEmojiSelectorVisible={isEmojiSelectorVisible}
+                setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
+                messageWithEmojiSelector={messageWithEmojiSelector}
+              />
+              {openThread && (
+                <ThreadWrapper>
+                  <ChatDisplaySplit
+                    readMessage={() => {}}
+                    handleReaction={handleReaction}
+                    openThread={openThread}
+                    setOpenThread={selectThread}
+                    activeChat={activeChat}
+                    updatedMessages={_updatedThreadMessages}
+                    resetImage={() => {}}
+                    sendMessage={(message: string) => sendMessage(message, true)}
+                    getIconFromCache={getIconFromCache}
+                    isThread={true}
+                    isReadOnly={activeChat.readOnly ?? false}
+                    toggleEmojiSelector={toggleEmojiSelector}
+                    channelMeta={channelMeta}
+                    openMobileReactions={openMobileReactions}
+                    setOpenMobileReactions={setOpenMobileReactions}
+                    onMessageDeletion={handleDeleteMessage}
+                    onEditModeRequested={handleEditMode}
+                    onEditModeCancelled={handleEditMode}
+                    onMessageUpdated={handleEditedMessage}
+                    loadInitialChatMessages={() => {
+                      log.debug('ChatContainer', `Thread loadInitialChatMessages called with openThread.id: ${openThread.id}`);
+                      return loadInitialThreadMessages(openThread.id);
+                    }}
+                    incomingMessages={incomingThreadMessages}
+                    loadPrevMessages={(id: string) => loadPrevThreadMessages(id)}
+                    currentOpenThreadRef={currentOpenThreadRef}
+                    isEmojiSelectorVisible={isEmojiSelectorVisible}
+                    setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
+                    messageWithEmojiSelector={messageWithEmojiSelector}
+                  />
+                </ThreadWrapper>
+              )}
+            </>
           )}
         </>
       )}
@@ -504,7 +599,7 @@ export default memo(ChatContainer, (prevProps, nextProps) => {
     prevProps.activeChat.id === nextProps.activeChat.id &&
     prevProps.activeChat.contextId === nextProps.activeChat.contextId &&
     prevProps.incomingMessages === nextProps.incomingMessages &&
-    prevProps.updatedMessages === nextProps.updatedMessages &&
+    prevProps.incomingThreadMessages === nextProps.incomingThreadMessages &&
     prevProps.openThread?.id === nextProps.openThread?.id
   );
 });

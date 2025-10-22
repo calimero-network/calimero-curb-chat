@@ -517,9 +517,9 @@ export default function MessageInput({
       boxSizing: "border-box" as const,
     };
     if (openThread && !isThread) {
-      style.width = "calc(60% - 262px)";
+      style.width = "100%"; // Main chat input should use full width when thread is open
     } else if (openThread && isThread) {
-      style.width = "calc(40% - 212px)";
+      style.width = "100%"; // Thread input should use full width
     }
     return style;
   }, [openThread, isThread]);
