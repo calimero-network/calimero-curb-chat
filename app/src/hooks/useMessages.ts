@@ -147,7 +147,8 @@ export function useMessages() {
    */
   const addIncoming = useCallback((newMessages: CurbMessage[]) => {
     if (newMessages.length > 0) {
-      // Just pass to VirtualizedChat - MessageStore will handle cleanup
+      // Pass to VirtualizedChat - MessageStore handles deduplication
+      // Don't clear incomingMessages - it causes unnecessary re-renders
       setIncomingMessages(newMessages);
     }
   }, []);
@@ -159,6 +160,7 @@ export function useMessages() {
     // Add to ref immediately for local tracking
     messagesRef.current = [...messagesRef.current, message];
     // Set incomingMessages to trigger VirtualizedChat update
+    // MessageStore will handle deduplication when real message arrives
     setIncomingMessages([message]);
   }, []);
 

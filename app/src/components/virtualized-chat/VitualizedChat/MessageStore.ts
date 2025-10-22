@@ -53,41 +53,46 @@ class MessageStore<
     this.append(messages);
   }
 
-  append(messages: T[]): void {
+  append(messages: T[]): { addedCount: number; updatedCount: number } {
     // Filter out messages that already exist in the store
     let newMessages = messages.filter(msg => !this.messageMap.has(msg.id));
+    let updatedCount = 0;
     
-    // Also remove optimistic messages that match real messages by content
-    // This handles the case where an optimistic temp-123 message should be replaced by real message
+    // Replace optimistic messages with real messages by updating in place (no flicker)
+    // This handles the case where an optimistic temp-123 message should become a real message
     if (newMessages.length > 0) {
-      const hasRealMessages = newMessages.some(msg => !msg.id.startsWith('temp-'));
+      const realMessages = newMessages.filter(msg => !msg.id.startsWith('temp-'));
       
-      if (hasRealMessages) {
-        // Remove any temp- messages that match the content of real messages
-        const realMessages = newMessages.filter(msg => !msg.id.startsWith('temp-'));
-        this.messages = this.messages.filter(existingMsg => {
-          // Keep non-temp messages
-          if (!existingMsg.id.startsWith('temp-')) return true;
-          
-          // Remove temp message if we have a real one with same text and similar timestamp
-          const hasMatchingReal = realMessages.some((realMsg: any) => 
-            realMsg.text === (existingMsg as any).text && 
-            Math.abs((realMsg as any).timestamp - (existingMsg as any).timestamp) < 5000
+      if (realMessages.length > 0) {
+        // Find and update optimistic messages that match real messages
+        realMessages.forEach((realMsg: any) => {
+          const matchingTempMsg = this.messages.find((existingMsg: any) => 
+            existingMsg.id.startsWith('temp-') &&
+            existingMsg.text === realMsg.text && 
+            Math.abs(existingMsg.timestamp - realMsg.timestamp) < 5000
           );
           
-          if (hasMatchingReal) {
-            // Remove from messageMap too
-            this.messageMap.delete(existingMsg.id);
-            return false;
+          if (matchingTempMsg) {
+            // Update the temp message in place WITHOUT changing the ID
+            // This keeps the React key stable and prevents remounting/flicker
+            const { id, ...realDataWithoutId } = realMsg;
+            this._updateWithoutVersion(matchingTempMsg.id, realDataWithoutId as Partial<T>);
+            updatedCount++;
+            // Remove this real message from newMessages since we updated the temp one
+            newMessages = newMessages.filter(m => m.id !== id);
           }
-          return true;
         });
       }
       
-      this.updateLookup(newMessages);
-      this.messages = this.messages.concat(newMessages);
-      this.endOffset += newMessages.length;
+      // Add any remaining new messages that weren't updates
+      if (newMessages.length > 0) {
+        this.updateLookup(newMessages);
+        this.messages = this.messages.concat(newMessages);
+        this.endOffset += newMessages.length;
+      }
     }
+    
+    return { addedCount: newMessages.length, updatedCount };
   }
 
   _update(oldId: string, updatedFields: Partial<T>): void {
@@ -117,6 +122,19 @@ class MessageStore<
       this.messageMap.delete(oldId);
       this.messageMap.set(updatedFields.id, globalIndex);
     }
+  }
+
+  _updateWithoutVersion(oldId: string, updatedFields: Partial<T>): void {
+    const globalIndex = this.messageMap.get(oldId);
+    if (globalIndex == undefined) return;
+    const localIndex = globalIndex - this.startOffset;
+    const existingMessage = this.messages[localIndex];
+
+    // Update without incrementing version to keep React key stable
+    this.messages[localIndex] = {
+      ...existingMessage,
+      ...updatedFields,
+    };
   }
 
   computeKey(item: InternalMessage<T>): string {

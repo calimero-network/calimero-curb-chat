@@ -147,25 +147,27 @@ const VirtualizedChat = <T extends Message>({
 
   useEffect(() => {
     if (incomingMessages.length > 0) {
-      const prevLength = store.messages.length;
-      store.append(incomingMessages);
-      const newLength = store.messages.length;
-      const actuallyAddedCount = newLength - prevLength;
+      const { addedCount, updatedCount } = store.append(incomingMessages);
       
-      setMessages(store.messages);
-      setTotalCount((prevTotalCount) => prevTotalCount + actuallyAddedCount);
-      
-      if (
-        actuallyAddedCount > 0 &&
-        !isAtBottom.current &&
-        (shouldTriggerNewItemIndicator
-          ? shouldTriggerNewItemIndicator(
-              store.messages[store.messages.length - 1],
-            )
-          : true)
-      ) {
-        setHasNewMessages(true);
+      // Only update state if we added new messages
+      // For in-place updates, don't call setMessages to avoid flicker
+      if (addedCount > 0) {
+        setMessages(store.messages);
+        setTotalCount((prevTotalCount) => prevTotalCount + addedCount);
+        
+        if (
+          !isAtBottom.current &&
+          (shouldTriggerNewItemIndicator
+            ? shouldTriggerNewItemIndicator(
+                store.messages[store.messages.length - 1],
+              )
+            : true)
+        ) {
+          setHasNewMessages(true);
+        }
       }
+      // Don't call setMessages for updates - the mutation is enough
+      // and avoids re-rendering which causes flicker
     }
   }, [incomingMessages]);
 
