@@ -221,6 +221,30 @@ const addIncoming = useCallback((newMessages: CurbMessage[]) => {
 
 ---
 
+### 7. Optimistic UI Implementation ✅
+**Problem**: Messages sent by the user weren't appearing instantly in the chat.
+
+**Solution**: 
+- Updated `addOptimistic` in `useMessages.ts` to add message to both `messagesRef.current` and `incomingMessages`
+- Optimistic messages now appear immediately with a temporary ID (`temp-${timestamp}`)
+- MessageStore automatically deduplicates when the real message arrives from the websocket
+- Real messages replace optimistic ones seamlessly
+
+**Files Changed**:
+- `app/src/hooks/useMessages.ts`
+- `app/src/chat/ChatContainer.tsx`
+
+```typescript
+const addOptimistic = useCallback((message: CurbMessage) => {
+  // Add to ref immediately for local tracking
+  messagesRef.current = [...messagesRef.current, message];
+  // Set incomingMessages to trigger VirtualizedChat update
+  setIncomingMessages([message]);
+}, []);
+```
+
+---
+
 ## Conclusion
 
 The refactoring successfully achieved its goals:
@@ -229,6 +253,7 @@ The refactoring successfully achieved its goals:
 3. **Reduced complexity** in the main Home component
 4. **Better maintainability** with separated concerns
 5. **Full control** over the virtualized-chat component
+6. **Optimistic UI** - messages appear instantly when sent
 
-The application now has a cleaner architecture, better performance, and no duplicate message issues.
+The application now has a cleaner architecture, better performance, no duplicate message issues, and instant message feedback.
 

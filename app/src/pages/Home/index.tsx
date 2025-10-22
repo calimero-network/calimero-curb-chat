@@ -547,7 +547,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       nonInvitedUserList={channelMembersHook.nonInvitedUsers}
       onDMSelected={onDMSelected}
       loadInitialChatMessages={loadInitialChatMessages}
-      incomingMessages={[]}
+      incomingMessages={mainMessages.incomingMessages}
       channels={channels}
       fetchChannels={fetchChannels}
       onJoinedChat={onJoinedChat}
