@@ -91,7 +91,7 @@ export function useChatHandlers(
   const handleMessageUpdates = useCallback(
     async (useDM: boolean, group: string, contextId: string) => {
       if (!activeChatRef.current || !group) return;
-
+      
       // Prevent concurrent message fetches
       if (isFetchingMessagesRef.current) return;
 
@@ -107,6 +107,8 @@ export function useChatHandlers(
           group,
           contextId
         );
+
+        console.log("newMessages: ", newMessages);
 
         if (newMessages.length > 0) {
           // Check if messages belong to the currently active chat
@@ -124,6 +126,8 @@ export function useChatHandlers(
             messagesBelongToActiveChat =
               lastMessageTest.group === activeChatName;
           }
+
+          console.log("messagesBelongToActiveChat: ", messagesBelongToActiveChat);
 
           // Always show notifications for all messages (even if not in active chat)
           const lastMessage = newMessages[newMessages.length - 1];
@@ -395,10 +399,25 @@ export function useChatHandlers(
             actions.fetchMessages = true;
             break;
 
-          case "ReactionUpdated":
+          case "ReactionUpdated": {
             // Fetch messages to get updated reactions
+            // Get the currently open chat
+            const currentChat = activeChatRef.current;
+
+            console.log("currentChat: ", currentChat);
+            if (currentChat) {
+              // You can access properties like:
+              // currentChat.type, currentChat.name, currentChat.id, etc.
+              // For example, determine if it's a DM:
+              actions.isDM = currentChat.type === "direct_message";
+              // Set the message group based on chat type
+              if (currentChat.type === "channel") {
+                actions.fetchMessageGroup = currentChat.name;
+              }
+            }
             actions.fetchMessages = true;
             break;
+          }
 
           case "ChannelCreated":
             // Refresh channel list only
@@ -473,7 +492,6 @@ export function useChatHandlers(
             break;
         }
       }
-
       // Execute only the necessary actions with proper sequencing
       if (actions.fetchMessages) {
         handleMessageUpdates(
