@@ -89,18 +89,28 @@ export function useChatHandlers(
    * Handle message updates from websocket events
    */
   const handleMessageUpdates = useCallback(
-    async (useDM: boolean, group: string, contextId: string, shouldNotifyMessage: boolean) => {
+    async (
+      useDM: boolean,
+      group: string,
+      contextId: string,
+      shouldNotifyMessage: boolean
+    ) => {
       if (!activeChatRef.current || !group) return;
-      
+
+      // group is private_dm
+      // useDM is true
+      // shouldNotify is false
+      // with this combination it means we are getting
+      // a reaction back meaning we should apply all new messages to the
+      // active chat
+
       // Prevent concurrent message fetches
       if (isFetchingMessagesRef.current) return;
 
       // Removed throttling to allow real-time message updates
       const now = Date.now();
-
       try {
         isFetchingMessagesRef.current = true;
-
         const newMessages = await refs.mainMessages.current.checkForNewMessages(
           activeChatRef.current,
           useDM,
@@ -118,8 +128,12 @@ export function useChatHandlers(
           let messagesBelongToActiveChat = false;
 
           if (useDM) {
-            messagesBelongToActiveChat =
-              lastMessageTest.senderUsername === activeDMName;
+            if (!shouldNotifyMessage) {
+              messagesBelongToActiveChat = true;
+            } else {
+              messagesBelongToActiveChat =
+                lastMessageTest.senderUsername === activeDMName;
+            }
           } else {
             messagesBelongToActiveChat =
               lastMessageTest.group === activeChatName;
@@ -403,10 +417,13 @@ export function useChatHandlers(
           case "ReactionUpdated": {
             // Fetch messages to get updated reactions
             const currentChat = activeChatRef.current;
+
             if (currentChat) {
               actions.isDM = currentChat.type === "direct_message";
               if (currentChat.type === "channel") {
                 actions.fetchMessageGroup = currentChat.name;
+              } else {
+                actions.fetchMessageGroup = "private_dm";
               }
             }
             actions.shouldNotifyMessage = false;
