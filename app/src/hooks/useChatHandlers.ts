@@ -89,7 +89,7 @@ export function useChatHandlers(
    * Handle message updates from websocket events
    */
   const handleMessageUpdates = useCallback(
-    async (useDM: boolean, group: string, contextId: string) => {
+    async (useDM: boolean, group: string, contextId: string, shouldNotifyMessage: boolean) => {
       if (!activeChatRef.current || !group) return;
       
       // Prevent concurrent message fetches
@@ -108,8 +108,6 @@ export function useChatHandlers(
           contextId
         );
 
-        console.log("newMessages: ", newMessages);
-
         if (newMessages.length > 0) {
           // Check if messages belong to the currently active chat
           const activeChatName = activeChatRef.current.name;
@@ -127,8 +125,6 @@ export function useChatHandlers(
               lastMessageTest.group === activeChatName;
           }
 
-          console.log("messagesBelongToActiveChat: ", messagesBelongToActiveChat);
-
           // Always show notifications for all messages (even if not in active chat)
           const lastMessage = newMessages[newMessages.length - 1];
           const currentUserId = getExecutorPublicKey();
@@ -144,12 +140,14 @@ export function useChatHandlers(
             ) {
               // Use message.group to show the correct channel name
               const channelName = lastMessage.group || activeChatName;
-              refs.notifyChannel.current(
-                lastMessage.id,
-                channelName,
-                lastMessage.senderUsername,
-                lastMessage.text
-              );
+              if (shouldNotifyMessage) {
+                refs.notifyChannel.current(
+                  lastMessage.id,
+                  channelName,
+                  lastMessage.senderUsername,
+                  lastMessage.text
+                );
+              }
             }
           } else {
             // For DMs, check both the main identity and the DM-specific identity
@@ -165,11 +163,13 @@ export function useChatHandlers(
               lastMessage.senderUsername &&
               lastMessage.text
             ) {
-              refs.notifyDM.current(
-                lastMessage.id,
-                lastMessage.senderUsername,
-                lastMessage.text
-              );
+              if (shouldNotifyMessage) {
+                refs.notifyDM.current(
+                  lastMessage.id,
+                  lastMessage.senderUsername,
+                  lastMessage.text
+                );
+              }
             }
           }
 
@@ -364,6 +364,7 @@ export function useChatHandlers(
       const actions = {
         fetchMessages: false,
         fetchMessageGroup: "",
+        shouldNotifyMessage: true,
         isDM: false,
         fetchChannels: false,
         fetchDMs: false,
@@ -401,20 +402,14 @@ export function useChatHandlers(
 
           case "ReactionUpdated": {
             // Fetch messages to get updated reactions
-            // Get the currently open chat
             const currentChat = activeChatRef.current;
-
-            console.log("currentChat: ", currentChat);
             if (currentChat) {
-              // You can access properties like:
-              // currentChat.type, currentChat.name, currentChat.id, etc.
-              // For example, determine if it's a DM:
               actions.isDM = currentChat.type === "direct_message";
-              // Set the message group based on chat type
               if (currentChat.type === "channel") {
                 actions.fetchMessageGroup = currentChat.name;
               }
             }
+            actions.shouldNotifyMessage = false;
             actions.fetchMessages = true;
             break;
           }
@@ -497,7 +492,8 @@ export function useChatHandlers(
         handleMessageUpdates(
           actions.isDM,
           actions.fetchMessageGroup,
-          contextId
+          contextId,
+          actions.shouldNotifyMessage
         );
       }
       if (actions.fetchChannels) {
