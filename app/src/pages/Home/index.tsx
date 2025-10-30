@@ -44,6 +44,7 @@ import { useMessages } from "../../hooks/useMessages";
 import { useThreadMessages } from "../../hooks/useThreadMessages";
 import { useWebSocket, useWebSocketEvents } from "../../contexts/WebSocketContext";
 import { useChatHandlers } from "../../hooks/useChatHandlers";
+import type { ContextInviteByOpenInvitationResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
@@ -585,6 +586,21 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       "11111111111111111111111111111111";
 
     if (response.data) {
+      const invitationPayloadResponse: ResponseData<ContextInviteByOpenInvitationResponse> =
+        await apiClient
+          .node()
+          .contextInviteByOpenInvitation(
+            response.data.contextId,
+            getExecutorPublicKey() || "",
+            86400
+          );
+      if (invitationPayloadResponse.error) {
+        await apiClient.node().deleteContext(response.data.contextId);
+        return {
+          data: "",
+          error: "Failed to create DM - failed to generate invitation payload",
+        };
+      }
       const createDMResponse = await new ClientApiDataSource().createDm({
         context_id: response.data.contextId,
         creator: getExecutorPublicKey() || "",
@@ -592,6 +608,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         context_hash: hash as string,
         invitee: value,
         timestamp: Date.now(),
+        payload: JSON.stringify(invitationPayloadResponse.data),
       });
       if (createDMResponse.data) {
         await fetchDms();

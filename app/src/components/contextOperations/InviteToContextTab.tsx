@@ -103,7 +103,6 @@ export default function InviteToContextTab() {
             86400
           );
 
-      console.log(response.data);
       if (response.error) {
         setMessage({
           text: response.error.message || "Failed to generate invitation",
