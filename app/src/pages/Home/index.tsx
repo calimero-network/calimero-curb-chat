@@ -305,6 +305,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     async (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => {
       const contextId = sc?.contextId || dm?.context_id || "";
 
+      console.log("tu sam nakon joinanog contexta");
+
       // Prevent rapid re-selection of the same DM (within 1 second)
       const now = Date.now();
       if (
@@ -329,12 +331,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       const isSynced =
         verifyContextResponse.data?.rootHash !==
         "11111111111111111111111111111111";
+      console.log("jel sync", isSynced);
 
       if ((sc?.account || dm?.own_identity) && !canJoin && isSynced) {
         // Use session identity information if available, fallback to DM data
         const executor = sc?.ownIdentity || sc?.account || dm?.own_identity || "";
         const username = sc?.ownUsername || sc?.username || dm?.own_username || "";
-        
+        console.log("executor , username", executor, username);
         if (executor && username) {
           await new ClientApiDataSource().joinChat({
             contextId: dm?.context_id || "",
@@ -591,7 +594,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           .node()
           .contextInviteByOpenInvitation(
             response.data.contextId,
-            getExecutorPublicKey() || "",
+            response.data.memberPublicKey as string,
             86400
           );
       if (invitationPayloadResponse.error) {

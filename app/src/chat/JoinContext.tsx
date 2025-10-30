@@ -7,7 +7,16 @@ import { getDMSetupState } from "../utils/dmSetupState";
 import { DMSetupState } from "../types/Common";
 import type { DMChatInfo } from "../api/clientApi";
 import { getStoredSession, updateSessionChat } from "../utils/session";
-import { apiClient } from "@calimero-network/calimero-client";
+import {
+  apiClient,
+  type ResponseData,
+} from "@calimero-network/calimero-client";
+import type {
+  JoinContextResponse,
+  NodeIdentity,
+  SignedOpenInvitation,
+} from "@calimero-network/calimero-client/lib/api/nodeApi";
+import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 
 const TextWrapper = styled.div`
   display: flex;
@@ -51,15 +60,47 @@ export default function JoinContext({
       return;
     }
     try {
-      const response = await apiClient
+      let executorPublicKey = "";
+
+      const createIdentityResponse: ResponseData<NodeIdentity> = await apiClient
         .node()
-        .joinContext(invitationPayload.trim());
+        .createNewIdentity();
+
+      if (createIdentityResponse.error) {
+        setError(
+          createIdentityResponse.error.message ||
+            "Failed to create identity for this invitation"
+        );
+      } else if (createIdentityResponse.data) {
+        executorPublicKey = createIdentityResponse.data.publicKey;
+      }
+
+      if (!executorPublicKey) {
+        setError("Please create an identity first");
+        return;
+      }
+      const response: ResponseData<JoinContextResponse> = await apiClient
+        .node()
+        .joinContextByOpenInvitation(
+          JSON.parse(invitationPayload.trim()) as SignedOpenInvitation,
+          executorPublicKey
+        );
 
       if (response.data) {
         const verifyContextResponse = await apiClient
           .node()
           .getContext(activeChat.contextId ?? "");
         if (verifyContextResponse.data) {
+
+          const clientResponse = await new ClientApiDataSource().updateNewIdentity({
+            other_user: activeChat.creator ?? "",
+            new_identity: executorPublicKey,
+          });
+
+          if (clientResponse.error) {
+            setError(clientResponse.error?.message || "Failed to update new identity");
+          }
+
           setSuccess("Context joined successfully");
           const savedSession = getStoredSession();
           if (savedSession) {
@@ -80,7 +121,7 @@ export default function JoinContext({
           }
         } else {
           setError(
-            verifyContextResponse.error?.message || "Failed to verify context",
+            verifyContextResponse.error?.message || "Failed to verify context"
           );
         }
       } else {
@@ -88,7 +129,7 @@ export default function JoinContext({
       }
     } catch (error) {
       setError(
-        error instanceof Error ? error.message : "An unexpected error occurred",
+        error instanceof Error ? error.message : "An unexpected error occurred"
       );
     } finally {
       setLoading(false);
