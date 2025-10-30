@@ -6,7 +6,7 @@ import { styled } from "styled-components";
 import { getDMSetupState } from "../utils/dmSetupState";
 import { DMSetupState } from "../types/Common";
 import type { DMChatInfo } from "../api/clientApi";
-import { getStoredSession, updateSessionChat } from "../utils/session";
+import { getStoredSession, setDmContextId, updateSessionChat } from "../utils/session";
 import {
   apiClient,
   type ResponseData,
@@ -103,14 +103,16 @@ export default function JoinContext({
 
           setSuccess("Context joined successfully");
           const savedSession = getStoredSession();
+          
           if (savedSession) {
             savedSession.canJoin = false;
             savedSession.isSynced =
               verifyContextResponse.data.rootHash !==
               "11111111111111111111111111111111";
             // Preserve identity information during context join
-            if (!savedSession.ownIdentity && activeChat.account) {
-              savedSession.ownIdentity = activeChat.account;
+            if (!savedSession.ownIdentity && executorPublicKey) {
+              savedSession.ownIdentity = executorPublicKey;
+              savedSession.account = executorPublicKey;
             }
             if (!savedSession.ownUsername && activeChat.username) {
               savedSession.ownUsername = activeChat.username;

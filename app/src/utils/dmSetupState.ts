@@ -39,14 +39,9 @@ export function getDMSetupState(activeChat: ActiveChat): DMSetupState {
   const canJoin = activeChat.canJoin;
   const isSynced = activeChat.isSynced;
 
-  // NODE2 - Context created and waiting for sync - NODE1 never goes here because is isSynced
-  if (
-    hasAccount &&
-    hasOtherIdentity &&
-    hasInvitationPayload &&
-    !canJoin &&
-    !isSynced
-  ) {
+  // Context created but not yet synced: gate chat until sync completes.
+  // This applies to both creator and invitee after join, regardless of invitation payload presence.
+  if (!canJoin && !isSynced) {
     return DMSetupState.SYNC_WAITING;
   }
 

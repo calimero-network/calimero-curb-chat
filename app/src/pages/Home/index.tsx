@@ -327,24 +327,26 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       if (verifyContextResponse.data) {
         canJoin = !(verifyContextResponse.data.rootHash ? true : false);
       }
+      console.log("verifyContextResponse", verifyContextResponse);
 
-      const isSynced =
+      const isSynced = verifyContextResponse.data ? 
         verifyContextResponse.data?.rootHash !==
-        "11111111111111111111111111111111";
+        "11111111111111111111111111111111" : false;
       console.log("jel sync", isSynced);
 
-      if ((sc?.account || dm?.own_identity) && !canJoin && isSynced) {
+      if ((sc?.account || dm?.own_identity) && isSynced) {
         // Use session identity information if available, fallback to DM data
         const executor = sc?.ownIdentity || sc?.account || dm?.own_identity || "";
         const username = sc?.ownUsername || sc?.username || dm?.own_username || "";
         console.log("executor , username", executor, username);
         if (executor && username) {
-          await new ClientApiDataSource().joinChat({
+          const joinChatResponse = await new ClientApiDataSource().joinChat({
             contextId: dm?.context_id || "",
             isDM: true,
             executor: executor,
             username: username,
           });
+          console.log("joinChat response", joinChatResponse);
         } else {
           console.warn("Missing executor or username for DM join:", { executor, username });
         }
