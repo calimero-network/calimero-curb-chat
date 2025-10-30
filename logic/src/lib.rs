@@ -35,6 +35,7 @@ pub enum Event {
     NewIdentityUpdated(String),
     InvitationPayloadUpdated(String),
     InvitationAccepted(String),
+    DMDeleted(String),
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -2147,6 +2148,9 @@ impl CurbChat {
 
         // Finally remove the channel itself
         let _ = self.channels.remove(&dm_channel);
+
+        // Emit DMDeleted with executor_id
+        app::emit!(Event::DMDeleted(executor_id.clone().to_string()));
 
         Ok("DM deleted successfully".to_string())
     }

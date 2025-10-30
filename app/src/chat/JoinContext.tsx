@@ -6,7 +6,7 @@ import { styled } from "styled-components";
 import { getDMSetupState } from "../utils/dmSetupState";
 import { DMSetupState } from "../types/Common";
 import type { DMChatInfo } from "../api/clientApi";
-import { getStoredSession, setDmContextId, updateSessionChat } from "../utils/session";
+import { getStoredSession, updateSessionChat } from "../utils/session";
 import {
   apiClient,
   type ResponseData,
@@ -144,7 +144,6 @@ export default function JoinContext({
         <div className="messageBoxHeader">
           <TextWrapper>
             <div className="title">Join Private DM Context</div>
-            <span className="chat-name">User ID: {activeChat.name}</span>
           </TextWrapper>
         </div>
         {error && <div className="error">{error}</div>}
@@ -153,6 +152,11 @@ export default function JoinContext({
           <div className="wrapper">
             <button
               className="join-button"
+              style={{
+                backgroundColor: "#A5FF11",
+                border: "1px solid #16a34a",
+                color: "#0E0E10",
+              }}
               onClick={joinContext}
               disabled={loading || !invitationPayload}
             >
