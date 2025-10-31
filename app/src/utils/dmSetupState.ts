@@ -38,6 +38,7 @@ export function getDMSetupState(activeChat: ActiveChat): DMSetupState {
   const hasInvitationPayload = !!activeChat.invitationPayload;
   const canJoin = activeChat.canJoin;
   const isSynced = activeChat.isSynced;
+  const didJoin = activeChat.didJoin ?? false;
 
   // Context created but not yet synced: gate chat until sync completes.
   // This applies to both creator and invitee after join, regardless of invitation payload presence.
@@ -45,13 +46,29 @@ export function getDMSetupState(activeChat: ActiveChat): DMSetupState {
     return DMSetupState.SYNC_WAITING;
   }
 
-  //NODE1 - CASE2
-  if (hasAccount && hasInvitationPayload && !canJoin) {
+  // If invitee hasn't joined yet (did_join: false), show join popup
+  // This check should come before other checks to ensure invitee sees join popup
+  if (canJoin && hasInvitationPayload && !didJoin) {
+    return DMSetupState.INVITEE_CONTEXT_ACCEPT_POPUP;
+  }
+
+  //NODE1 - CASE2 (Creator with invitation payload)
+  if (hasAccount && hasInvitationPayload && !canJoin && didJoin) {
     return DMSetupState.ACTIVE;
   }
 
-  // NODE2 - CASE2
+  // NODE2 - CASE2 (Invitee without account, but this should be handled by did_join check above)
   if (!hasAccount && hasOtherIdentity && hasInvitationPayload && canJoin) {
+    return DMSetupState.INVITEE_CONTEXT_ACCEPT_POPUP;
+  }
+
+  // Default: show active chat only if user has joined
+  if (didJoin) {
+    return DMSetupState.ACTIVE;
+  }
+
+  // If user hasn't joined and has invitation, show join popup
+  if (hasInvitationPayload && canJoin) {
     return DMSetupState.INVITEE_CONTEXT_ACCEPT_POPUP;
   }
 

@@ -26,15 +26,15 @@ impl CurbChat {
             return Err(error_messages::CANNOT_DM_YOURSELF.to_string());
         }
 
-        let mut dms = self
+        let mut dms_a = self
             .dm_chats
             .get(&executor_id)
             .ok()
             .flatten()
             .unwrap_or_else(|| Vector::new());
 
-        // Check if DM already exists
-        if let Ok(iter) = dms.iter() {
+        // Check if DM already exists for User A
+        if let Ok(iter) = dms_a.iter() {
             for dm in iter {
                 if dm.other_identity_old == other_user
                     || dm.other_identity_new.as_ref() == Some(&other_user)
@@ -44,29 +44,70 @@ impl CurbChat {
             }
         }
 
+        // Check if DM already exists for User B
+        let mut dms_b = self
+            .dm_chats
+            .get(&other_user)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| Vector::new());
+
+        if let Ok(iter) = dms_b.iter() {
+            for dm in iter {
+                if dm.other_identity_old == executor_id
+                    || dm.other_identity_new.as_ref() == Some(&executor_id)
+                {
+                    return Err(error_messages::DM_ALREADY_EXISTS.to_string());
+                }
+            }
+        }
+
         let own_username = self.get_username(executor_id);
         let other_username = self.get_username(other_user);
 
-        let dm_info = DMChatInfo {
+        // Create DM info for User A (creator)
+        let dm_info_a = DMChatInfo {
             created_at,
             context_id: context_id.clone(),
             channel_type: ChannelType::Private,
             created_by: executor_id,
             own_identity_old: executor_id,
             own_identity: Some(executor_id),
-            own_username,
+            own_username: own_username.clone(),
             other_identity_old: other_user,
             other_identity_new: Some(other_user),
-            other_username,
+            other_username: other_username.clone(),
             did_join: false,
-            invitation_payload,
+            invitation_payload: invitation_payload.clone(),
             old_hash: String::new(),
             new_hash: String::new(),
             unread_messages: 0,
         };
 
-        let _ = dms.push(dm_info);
-        let _ = self.dm_chats.insert(executor_id, dms);
+        // Create DM info for User B (invitee) with swapped roles
+        let dm_info_b = DMChatInfo {
+            created_at,
+            context_id: context_id.clone(),
+            channel_type: ChannelType::Private,
+            created_by: executor_id, // Creator is still User A
+            own_identity_old: other_user,
+            own_identity: Some(other_user),
+            own_username: other_username.clone(),
+            other_identity_old: executor_id,
+            other_identity_new: Some(executor_id),
+            other_username: own_username.clone(),
+            did_join: false,
+            invitation_payload: invitation_payload.clone(),
+            old_hash: String::new(),
+            new_hash: String::new(),
+            unread_messages: 0,
+        };
+
+        let _ = dms_a.push(dm_info_a);
+        let _ = self.dm_chats.insert(executor_id, dms_a);
+
+        let _ = dms_b.push(dm_info_b);
+        let _ = self.dm_chats.insert(other_user, dms_b);
 
         app::emit!(Event::DMCreated(context_id));
 

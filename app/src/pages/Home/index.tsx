@@ -382,6 +382,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           isSynced: isSynced,
           ownIdentity: dm?.own_identity || "",
           ownUsername: dm?.own_username || "",
+          didJoin: dm?.did_join || false,
         };
       }
 
