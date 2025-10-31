@@ -59,12 +59,19 @@ const ReplyContainerButton: React.FC<{
   lastTimestamp: number;
 }> = (props) => {
   const [hover, setHover] = useState(false);
-  const [time, setTime] = useState(() => elapsedTime(props.lastTimestamp)); // Step 1: Create time state
+  // Convert milliseconds to seconds (elapsedTime expects seconds)
+  const timestampInSeconds = props.lastTimestamp / 1000;
+  const [time, setTime] = useState(() => elapsedTime(timestampInSeconds)); // Step 1: Create time state
 
   useEffect(() => {
+    // Convert milliseconds to seconds (elapsedTime expects seconds)
+    const timestampInSeconds = props.lastTimestamp / 1000;
+    setTime(elapsedTime(timestampInSeconds)); // Update immediately when timestamp changes
+    
     const interval = setInterval(() => {
-      // Step 2: Start interval
-      setTime(elapsedTime(props.lastTimestamp));
+      // Recalculate from props to avoid stale closure
+      const currentTimestampInSeconds = props.lastTimestamp / 1000;
+      setTime(elapsedTime(currentTimestampInSeconds));
     }, 60000); // Update every minute
 
     return () => clearInterval(interval); // Step 3: Clear interval on unmount

@@ -212,7 +212,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
 
       // Check if we already have the username in storage
       const cachedUsername = StorageHelper.getItem("chat-username");
-      if (cachedUsername) {
+      if (cachedUsername && cachedUsername !== "Unknown") {
         const normalizedClass = cachedUsername
           .replace(/\s+/g, "")
           .toLowerCase()
@@ -223,17 +223,27 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
         return;
       }
 
-      // Fetch from API if not cached
+      // Fetch from API if not cached or if cached value is "Unknown"
       const response = await new ClientApiDataSource().getUsername({
         userId: executorId ?? "",
       });
       if (response.data) {
+        // Check if username is "Unknown" - user needs to join the chat first
+        if (response.data === "Unknown") {
+          // Clear cached "Unknown" username to force user to join chat
+          StorageHelper.removeItem("chat-username");
+          setUsername("");
+          hasLoadedUsername.current = true;
+          return;
+        }
+        
         const normalizedClass = response.data
           .replace(/\s+/g, "")
           .toLowerCase()
           .replace(/\./g, "\\.")
           .replace(/_/g, "\\_");
         setUsername(normalizedClass);
+        StorageHelper.setItem("chat-username", response.data);
         hasLoadedUsername.current = true;
       }
     };

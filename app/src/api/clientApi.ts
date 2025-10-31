@@ -118,13 +118,10 @@ export interface DMChatInfo {
 }
 
 export interface CreateDmProps {
+  other_user: UserId;
   context_id: string;
-  context_hash: string;
-  creator: UserId;
-  creator_new_identity: UserId;
-  invitee: UserId;
-  timestamp: number;
-  payload: string;
+  invitation_payload: string;
+  created_at: number;
 }
 
 export interface UpdateReactionProps {

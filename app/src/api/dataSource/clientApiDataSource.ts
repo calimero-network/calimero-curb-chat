@@ -53,6 +53,17 @@ export function getJsonRpcClient() {
 
 export class ClientApiDataSource implements ClientApi {
   async joinChat(props: JoinChatProps): ApiResponse<string> {
+    // Check if username is "Unknown" - user needs to join the chat first
+    if (props.username === "Unknown" || !props.username || props.username.trim() === "") {
+      return {
+        data: null,
+        error: {
+          code: 400,
+          message: "Username cannot be 'Unknown'. Please join the chat first by entering a valid username.",
+        },
+      };
+    }
+    
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
@@ -588,7 +599,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: useContext,
           method: ClientMethod.GET_MESSAGES,
           argsJson: {
-            group: props.group,
+            channel: props.group,
             parent_message: props.parent_message,
             limit: props.limit,
             offset: props.offset,
@@ -653,13 +664,11 @@ export class ClientApiDataSource implements ClientApi {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.SEND_MESSAGE,
           argsJson: {
-            group: props.group,
-            message: props.message,
+            channel: props.group,
+            text: props.message,
             mentions: props.mentions,
             mentions_usernames: props.usernames,
             parent_message: props.parent_message,
-            timestamp: props.timestamp,
-            sender_username: "",
           },
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
@@ -776,6 +785,7 @@ export class ClientApiDataSource implements ClientApi {
           timeout: 10000,
         },
       );
+      console.log("response", response);
       if (response?.error) {
         return {
           data: null,
@@ -869,13 +879,10 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.CREATE_DM,
           argsJson: {
+            other_user: props.other_user,
             context_id: props.context_id,
-            context_hash: props.context_hash,
-            creator: props.creator,
-            creator_new_identity: props.creator_new_identity,
-            invitee: props.invitee,
-            timestamp: props.timestamp,
-            invitation_payload: props.payload,
+            invitation_payload: props.invitation_payload,
+            created_at: props.created_at,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },

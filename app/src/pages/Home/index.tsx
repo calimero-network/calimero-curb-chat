@@ -339,6 +339,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         const executor = sc?.ownIdentity || sc?.account || dm?.own_identity || "";
         const username = sc?.ownUsername || sc?.username || dm?.own_username || "";
         console.log("executor , username", executor, username);
+        
+        // Check if username is "Unknown" - user needs to join the chat first
+        if (username === "Unknown") {
+          console.warn("Cannot join chat: username is 'Unknown'. User needs to join the chat first.");
+          return;
+        }
+        
         if (executor && username) {
           const joinChatResponse = await new ClientApiDataSource().joinChat({
             contextId: dm?.context_id || "",
@@ -607,14 +614,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           error: "Failed to create DM - failed to generate invitation payload",
         };
       }
+      // Convert milliseconds to nanoseconds for created_at timestamp
+      const created_at_nanos = Date.now() * 1_000_000;
+      
       const createDMResponse = await new ClientApiDataSource().createDm({
+        other_user: value,
         context_id: response.data.contextId,
-        creator: getExecutorPublicKey() || "",
-        creator_new_identity: response.data.memberPublicKey,
-        context_hash: hash as string,
-        invitee: value,
-        timestamp: Date.now(),
-        payload: JSON.stringify(invitationPayloadResponse.data),
+        invitation_payload: JSON.stringify(invitationPayloadResponse.data),
+        created_at: created_at_nanos,
       });
       if (createDMResponse.data) {
         await fetchDms();

@@ -8,18 +8,25 @@ import { MessageStatus } from "../types/Common";
 export function transformMessageToUI(
   message: MessageWithReactions,
 ): CurbMessage {
+  // Convert nanoseconds to milliseconds (Rust timestamps are in nanoseconds)
+  const NANOSECONDS_TO_MILLISECONDS = 1_000_000;
+  
   return {
     id: message.id,
     text: message.text,
     nonce: Math.random().toString(36).substring(2, 15),
     key: message.id,
-    timestamp: message.timestamp * 1000,
+    timestamp: message.timestamp / NANOSECONDS_TO_MILLISECONDS,
     sender: message.sender,
     senderUsername: message.sender_username,
     reactions: message.reactions,
     threadCount: message.thread_count,
-    threadLastTimestamp: message.thread_last_timestamp,
-    editedOn: message.edited_on,
+    threadLastTimestamp: message.thread_last_timestamp
+      ? message.thread_last_timestamp / NANOSECONDS_TO_MILLISECONDS
+      : undefined,
+    editedOn: message.edited_on
+      ? message.edited_on / NANOSECONDS_TO_MILLISECONDS
+      : undefined,
     mentions: [],
     files: [],
     images: [],

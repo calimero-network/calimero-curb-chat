@@ -238,7 +238,7 @@ export default function SearchChannelsContainer({
               },
               isMember: isMember,
               readOnly: channelInfo.read_only,
-              createdAt: new Date(channelInfo.created_at * 1000).toISOString(),
+              createdAt: new Date(channelInfo.created_at / 1_000_000).toISOString(),
             };
           }),
         );

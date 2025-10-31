@@ -58,7 +58,7 @@ export default function ChannelDetailsPopup({
     if (channelInfo.data) {
       setChannelMeta((prevMeta) => ({
         ...prevMeta,
-        createdAt: new Date(channelInfo.data.created_at * 1000).toISOString(),
+        createdAt: new Date(channelInfo.data.created_at / 1_000_000).toISOString(),
         createdBy: channelInfo.data.created_by,
         createdByUsername: channelInfo.data.created_by_username,
         channelType: chat.channelType || "",

@@ -218,6 +218,14 @@ export default function ChatTab({
           identityId: contextIdentity,
         }));
         if (usernameResponse.data) {
+          // Check if username is "Unknown" - user needs to join the chat first
+          if (usernameResponse.data === "Unknown") {
+            setIsDisabled(false);
+            setError("You are not a member of this chat. Please join the chat first by entering a username.");
+            setFetchingUsername(false);
+            return;
+          }
+          
           setExecutorPublicKey(contextIdentity);
           setUsername(usernameResponse.data);
           setContextId(contextId);
@@ -265,6 +273,13 @@ export default function ChatTab({
     setIsLoading(true);
     setError("");
     setSuccess("");
+
+    // Check if username is "Unknown" - user needs to join the chat first
+    if (username.trim() === "Unknown" || username.trim() === "") {
+      setError("Please enter a valid username to join the chat.");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setAppEndpointKey(formData.nodeUrl.trim());
