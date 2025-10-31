@@ -6,6 +6,7 @@ use std::borrow::Cow;
 
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{self, de, Deserialize, Serialize};
+use calimero_storage::collections::crdt_meta::{MergeError, Mergeable};
 
 enum Dud<const N: usize> {}
 
@@ -108,6 +109,15 @@ impl<'de, const N: usize, const S: usize> Deserialize<'de> for Id<N, S> {
         let encoded = Container::deserialize(deserializer)?;
 
         Self::from_str(&*encoded.0).map_err(de::Error::custom)
+    }
+}
+
+/// Mergeable implementation for Id - enables Vector<UserId> to work
+impl<const N: usize, const S: usize> Mergeable for Id<N, S> {
+    fn merge(&mut self, other: &Self) -> Result<(), MergeError> {
+        // LWW semantics for IDs
+        *self = *other;
+        Ok(())
     }
 }
 

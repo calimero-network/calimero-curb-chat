@@ -221,6 +221,7 @@ dependencies = [
  "bs58",
  "calimero-sdk",
  "calimero-storage",
+ "calimero-storage-macros",
  "thiserror",
 ]
 
