@@ -76,6 +76,7 @@ export default function InvitationHandlerPopup({ onSuccess, onError }: Invitatio
   const [status, setStatus] = useState<"joining" | "syncing" | "error">("joining");
   const [errorMessage, setErrorMessage] = useState("");
   const hasAttemptedJoin = useRef(false);
+  // @ts-expect-error - NodeJS.Timeout is not defined in the browser
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const joinContextWithInvitation = useCallback(async () => {
