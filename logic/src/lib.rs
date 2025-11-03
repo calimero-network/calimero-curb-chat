@@ -2,7 +2,6 @@ use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
 use calimero_sdk::{app, env};
 use calimero_storage::collections::{UnorderedMap, UnorderedSet, Vector};
-use calimero_storage::collections::crdt_meta::{MergeError, Mergeable};
 use types::id;
 mod types;
 use std::collections::HashMap;
@@ -54,15 +53,6 @@ pub struct Message {
     pub group: String,
 }
 
-impl Mergeable for Message {
-    fn merge(&mut self, other: &Self) -> Result<(), MergeError> {
-        if other.timestamp >= self.timestamp {
-            *self = other.clone();
-        }
-        Ok(())
-    }
-}
-
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "calimero_sdk::serde")]
 #[borsh(crate = "calimero_sdk::borsh")]
@@ -89,13 +79,6 @@ pub enum ChannelType {
     Public,
     Private,
     Default,
-}
-
-impl Mergeable for ChannelType {
-    fn merge(&mut self, other: &Self) -> Result<(), MergeError> {
-        *self = other.clone();
-        Ok(())
-    }
 }
 
 #[derive(
@@ -152,28 +135,6 @@ pub struct ChannelInfo {
     pub last_read: UnorderedMap<UserId, MessageId>,
 }
 
-impl Mergeable for ChannelInfo {
-    fn merge(&mut self, other: &Self) -> Result<(), MergeError> {
-        // Keep channel_type as-is (assumed immutable after creation)
-
-        // Monotonic booleans
-        self.read_only |= other.read_only;
-        self.meta.links_allowed |= other.meta.links_allowed;
-
-        // LWW on created_at
-        if other.meta.created_at > self.meta.created_at {
-            self.meta.created_at = other.meta.created_at;
-        }
-
-        // Prefer Some username over None
-        if self.meta.created_by_username.is_none() {
-            self.meta.created_by_username = other.meta.created_by_username.clone();
-        }
-
-        Ok(())
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "calimero_sdk::serde")]
 pub struct FullMessageResponse {
@@ -228,15 +189,6 @@ pub struct DMChatInfo {
     pub unread_messages: u32,
 }
 
-impl Mergeable for DMChatInfo {
-    fn merge(&mut self, other: &Self) -> Result<(), MergeError> {
-        if other.created_at >= self.created_at {
-            *self = other.clone();
-        }
-        Ok(())
-    }
-}
-
 /// Tracks unread messages for a user in a specific channel
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "calimero_sdk::serde")]
@@ -246,15 +198,6 @@ pub struct UserChannelUnread {
     pub last_read_timestamp: u64,
     /// Number of unread messages for the user in this channel
     pub unread_count: u32,
-}
-
-impl Mergeable for UserChannelUnread {
-    fn merge(&mut self, other: &Self) -> Result<(), MergeError> {
-        if other.last_read_timestamp >= self.last_read_timestamp {
-            *self = other.clone();
-        }
-        Ok(())
-    }
 }
 
 /// Tracks mentions for a user in a specific channel
@@ -275,15 +218,6 @@ pub struct UserChannelMentions {
 impl AsRef<[u8]> for UserChannelMentions {
     fn as_ref(&self) -> &[u8] {
         self.message_id.as_bytes()
-    }
-}
-
-impl Mergeable for UserChannelMentions {
-    fn merge(&mut self, other: &Self) -> Result<(), MergeError> {
-        if other.timestamp >= self.timestamp {
-            *self = other.clone();
-        }
-        Ok(())
     }
 }
 
