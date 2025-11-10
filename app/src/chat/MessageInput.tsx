@@ -762,14 +762,16 @@ export default function MessageInput({
                     <MessageImageField
                       file={uploadedImage.file}
                       previewUrl={uploadedImage.previewUrl}
-                    onRemove={removeUploadedImage}
+                      onRemove={removeUploadedImage}
                       contextId={resolvedContextId}
+                      isInput={true}
+                      containerSize={45}
                     />
                   )}
                   {uploadedFile && (
                     <MessageFileField
                       file={uploadedFile.file}
-                    onRemove={removeUploadedFile}
+                      onRemove={removeUploadedFile}
                     />
                   )}
                 </AttachmentPreviewContainer>

@@ -616,6 +616,8 @@ const Message = (props: MessageProps) => {
                 file={file}
                 previewUrl={previewUrl}
                 contextId={props.contextId}
+                containerSize={80}
+                isInput={false}
               />
             ))}
             {fileAttachments.map(({ key, file, attachment }) => (
