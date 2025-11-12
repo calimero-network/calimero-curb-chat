@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, memo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import type { FormEvent } from "react";
 import { styled } from "styled-components";
 import { StorageHelper } from "../utils/storage";
 import { log } from "../utils/logger";
@@ -11,11 +12,13 @@ import type {
   CurbMessage,
   SendMessagePayload,
   UpdatedMessages,
+  MessageRendererProps,
 } from "../types/Common";
 import { DMSetupState, MessageStatus } from "../types/Common";
 import JoinChannel from "./JoinChannel";
 import ChatDisplaySplit from "./ChatDisplaySplit";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
+import { Button, SearchInput } from "@calimero-network/mero-ui";
 import {
   apiClient,
   getExecutorPublicKey,
@@ -29,6 +32,7 @@ import InvitationPending from "./InvitationPending";
 import { getDMSetupState } from "../utils/dmSetupState";
 import SyncWaiting from "./SyncWaiting";
 import { extractAndAddMentions } from "../utils/mentions";
+import { messageRenderer } from "../components/virtualized-chat";
 
 interface ChatContainerProps {
   activeChat: ActiveChat;
@@ -51,9 +55,21 @@ interface ChatContainerProps {
   addOptimisticMessage?: (message: CurbMessage) => void;
   addOptimisticThreadMessage?: (message: CurbMessage) => void;
   clearThreadsMessagesOnSwitch: () => void;
+  searchResults: CurbMessage[];
+  searchTotalCount: number;
+  searchQuery: string;
+  isSearchingMessages: boolean;
+  searchHasMore: boolean;
+  searchError: string | null;
+  onSearchMessages: (query: string) => Promise<void>;
+  onLoadMoreSearch: () => Promise<void>;
+  onClearSearch: () => void;
+  isSearchOverlayOpen: boolean;
+  onCloseSearchOverlay: () => void;
 }
 
 const ChatContainerWrapper = styled.div`
+  position: relative;
   display: flex;
   background-color: #0e0e10;
   @media (min-width: 1025px) {
@@ -87,6 +103,142 @@ const ThreadWrapper = styled.div`
   }
 `;
 
+const SearchOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 48px 24px;
+  background: rgba(7, 7, 9, 0.72);
+  backdrop-filter: blur(6px);
+`;
+
+const SearchOverlayPanel = styled.div`
+  width: min(720px, 100%);
+  max-height: 90%;
+  background-color: #0e0e10;
+  border: 1px solid #282933;
+  border-radius: 10px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`;
+
+const SearchOverlayHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid #1e1f28;
+`;
+
+const SearchOverlayTitle = styled.h3`
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 500;
+`;
+
+const SearchOverlayActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const SearchOverlayBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 18px 24px 24px;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+`;
+
+const SearchForm = styled.form`
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+`;
+
+const SearchInputWrapper = styled.div`
+  flex: 1;
+  min-width: 240px;
+`;
+
+const SearchMeta = styled.div`
+  color: #777583;
+  font-size: 13px;
+`;
+
+const SearchErrorText = styled.div`
+  color: #ff5f56;
+  font-size: 13px;
+`;
+
+const SearchResultsScroll = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 6px;
+`;
+
+const SearchResultItem = styled.div`
+  background-color: #141418;
+  border: 1px solid #1e1f28;
+  border-radius: 8px;
+  padding: 12px 12px 14px;
+`;
+
+const SearchEmptyState = styled.div`
+  color: #777583;
+  font-size: 13px;
+  padding: 16px 0;
+`;
+
+const CloseButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(40, 41, 51, 0.6);
+  color: #c8c7d1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  &:hover {
+    background: rgba(87, 101, 242, 0.2);
+    color: #fff;
+  }
+`;
+
+const CloseIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="currentColor"
+  >
+    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
+  </svg>
+);
+
+const normalizeUsernameForClass = (value: string) =>
+  value
+    .replace(/\s+/g, "")
+    .toLowerCase()
+    .replace(/\./g, "\\.")
+    .replace(/_/g, "\\_");
+
 function ChatContainer({
   activeChat,
   setIsOpenSearchChannel,
@@ -105,7 +257,18 @@ function ChatContainer({
   membersList,
   addOptimisticMessage,
   addOptimisticThreadMessage,
-  clearThreadsMessagesOnSwitch
+  clearThreadsMessagesOnSwitch,
+  searchResults,
+  searchTotalCount,
+  searchQuery,
+  isSearchingMessages,
+  searchHasMore,
+  searchError,
+  onSearchMessages,
+  onLoadMoreSearch,
+  onClearSearch,
+  isSearchOverlayOpen,
+  onCloseSearchOverlay,
 }: ChatContainerProps) {
   const [updatedMessages, setUpdatedMessages] = useState<UpdatedMessages[]>([]);
   const [_updatedThreadMessages, setUpdatedThreadMessages] = useState<
@@ -118,9 +281,16 @@ function ChatContainer({
   const [openMobileReactions, setOpenMobileReactions] = useState("");
   const [messageWithEmojiSelector, setMessageWithEmojiSelector] =
     useState<CurbMessage | null>(null);
+  const [searchInputValue, setSearchInputValue] = useState(searchQuery);
+  const [searchUsername, setSearchUsername] = useState("");
+  const hasLoadedSearchUsername = useRef(false);
 
   // Track last fetched channel to prevent excessive API calls
   const lastFetchedChannelRef = useRef<string>("");
+
+  useEffect(() => {
+    setSearchInputValue(searchQuery);
+  }, [searchQuery]);
 
   useEffect(() => {
     const fetchChannelMeta = async () => {
@@ -158,6 +328,36 @@ function ChatContainer({
   useEffect(() => {
     membersListRef.current = membersList;
   }, [membersList]);
+
+  useEffect(() => {
+    if (hasLoadedSearchUsername.current) return;
+
+    const cachedUsername = StorageHelper.getItem("chat-username");
+    if (cachedUsername) {
+      setSearchUsername(normalizeUsernameForClass(cachedUsername));
+      hasLoadedSearchUsername.current = true;
+      return;
+    }
+
+    const fetchUsername = async () => {
+      const executorId = getExecutorPublicKey() ?? "";
+      if (!executorId) return;
+      const response = await new ClientApiDataSource().getUsername({
+        userId: executorId,
+      });
+      if (response.data) {
+        setSearchUsername(normalizeUsernameForClass(response.data));
+        hasLoadedSearchUsername.current = true;
+      }
+    };
+
+    fetchUsername();
+  }, []);
+
+  useEffect(() => {
+    if (searchUsername || !activeChat?.username) return;
+    setSearchUsername(normalizeUsernameForClass(activeChat.username));
+  }, [activeChat?.username, searchUsername]);
 
   const computeReaction = useCallback(
     (message: CurbMessage, reaction: string, username: string) => {
@@ -453,7 +653,7 @@ function ChatContainer({
         }
       }
     },
-    [] // Uses refs which don't need to be in dependencies
+    [currentOpenThreadRef],
   );
 
   const handleEditMode = useCallback(
@@ -515,7 +715,7 @@ function ChatContainer({
         }
       }
     },
-    [] // Uses refs which don't need to be in dependencies
+    [currentOpenThreadRef],
   );
 
   const selectThread = (message: CurbMessage) => {
@@ -570,6 +770,57 @@ function ChatContainer({
   }, [openThread]);
 
   const dmSetupState = getDMSetupState(activeChat);
+
+  const handleSearchSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      await onSearchMessages(searchInputValue);
+    },
+    [onSearchMessages, searchInputValue],
+  );
+
+  const handleClearSearch = useCallback(() => {
+    setSearchInputValue("");
+    onClearSearch();
+  }, [onClearSearch]);
+
+  const handleLoadMoreSearch = useCallback(async () => {
+    if (!searchQuery) return;
+    await onLoadMoreSearch();
+  }, [onLoadMoreSearch, searchQuery]);
+
+  const searchRenderer = useMemo(() => {
+    const params: MessageRendererProps = {
+      accountId: searchUsername,
+      isThread: false,
+      handleReaction: () => {},
+      setThread: () => {},
+      getIconFromCache,
+      toggleEmojiSelector: () => {},
+      openMobileReactions: "",
+      setOpenMobileReactions: () => {},
+      editable: () => false,
+      deleteable: () => false,
+      onEditModeRequested: () => {},
+      onEditModeCancelled: () => {},
+      onMessageUpdated: () => {},
+      onDeleteMessageRequested: () => {},
+      fetchAccounts: () => {},
+      autocompleteAccounts: [],
+      authToken: undefined,
+      privateIpfsEndpoint: "https://ipfs.io",
+      contextId: activeChat.contextId,
+    };
+    return messageRenderer(params);
+  }, [activeChat.contextId, getIconFromCache, searchUsername]);
+
+  const renderSearchResult = useCallback(
+    (message: CurbMessage, index: number) => {
+      const previous = index > 0 ? searchResults[index - 1] : undefined;
+      return searchRenderer(message, previous);
+    },
+    [searchRenderer, searchResults],
+  );
 
   const renderDMContent = () => {
     switch (dmSetupState) {
@@ -681,8 +932,98 @@ function ChatContainer({
     }
   };
 
+  const trimmedSearchInput = searchInputValue.trim();
+  const hasSearchResults = searchResults.length > 0;
+  const hasSearchQuery = searchQuery.length > 0;
+  const searchButtonDisabled =
+    trimmedSearchInput.length === 0 || isSearchingMessages;
+  const clearButtonDisabled =
+    (trimmedSearchInput.length === 0 &&
+      !hasSearchQuery &&
+      !hasSearchResults) ||
+    isSearchingMessages;
+
   return (
     <ChatContainerWrapper>
+      {isSearchOverlayOpen && (
+        <SearchOverlay>
+          <SearchOverlayPanel>
+            <SearchOverlayHeader>
+              <SearchOverlayTitle>Search Messages</SearchOverlayTitle>
+              <SearchOverlayActions>
+                <CloseButton
+                  type="button"
+                  onClick={onCloseSearchOverlay}
+                  aria-label="Close message search"
+                >
+                  <CloseIcon />
+                </CloseButton>
+              </SearchOverlayActions>
+            </SearchOverlayHeader>
+            <SearchOverlayBody>
+              <SearchForm onSubmit={handleSearchSubmit}>
+                <SearchInputWrapper>
+                  <SearchInput
+                    label="Search messages"
+                    value={searchInputValue}
+                    onChange={(value) => setSearchInputValue(value)}
+                    placeholder="Search by message text or sender"
+                    clearable={false}
+                    showSuggestions={false}
+                    showCategories={false}
+                    style={{ width: "100%" }}
+                  />
+                </SearchInputWrapper>
+                <Button type="submit" variant="primary" disabled={searchButtonDisabled}>
+                  {isSearchingMessages ? "Searching..." : "Search"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleClearSearch}
+                  disabled={clearButtonDisabled}
+                >
+                  Clear
+                </Button>
+              </SearchForm>
+              {searchError && <SearchErrorText>{searchError}</SearchErrorText>}
+              {!isSearchingMessages &&
+                hasSearchQuery &&
+                !hasSearchResults &&
+                !searchError && (
+                  <SearchEmptyState>
+                    No messages matched "{searchQuery}"
+                  </SearchEmptyState>
+                )}
+              {hasSearchResults && (
+                <>
+                  <SearchMeta>
+                    Showing {searchResults.length} of {searchTotalCount} results
+                  </SearchMeta>
+                  <SearchResultsScroll>
+                    {searchResults.map((message, index) => (
+                      <SearchResultItem
+                        key={`${message.id}-${message.timestamp}-${index}`}
+                      >
+                        {renderSearchResult(message, index)}
+                      </SearchResultItem>
+                    ))}
+                  </SearchResultsScroll>
+                  {searchHasMore && (
+                    <Button
+                      variant="secondary"
+                      onClick={handleLoadMoreSearch}
+                      disabled={isSearchingMessages}
+                    >
+                      {isSearchingMessages ? "Loading..." : "Load more results"}
+                    </Button>
+                  )}
+                </>
+              )}
+            </SearchOverlayBody>
+          </SearchOverlayPanel>
+        </SearchOverlay>
+      )}
       {activeChat.type === "direct_message" ? (
         renderDMContent()
       ) : (
@@ -736,7 +1077,7 @@ function ChatContainer({
                     activeChat={activeChat}
                     updatedMessages={_updatedThreadMessages}
                     resetImage={() => {}}
-                  sendMessage={(payload) => sendMessage(payload, true)}
+                    sendMessage={(payload) => sendMessage(payload, true)}
                     getIconFromCache={getIconFromCache}
                     isThread={true}
                     isReadOnly={activeChat.readOnly ?? false}
@@ -782,6 +1123,12 @@ export default memo(ChatContainer, (prevProps, nextProps) => {
     prevProps.activeChat.contextId === nextProps.activeChat.contextId &&
     prevProps.incomingMessages === nextProps.incomingMessages &&
     prevProps.incomingThreadMessages === nextProps.incomingThreadMessages &&
-    prevProps.openThread?.id === nextProps.openThread?.id
+    prevProps.openThread?.id === nextProps.openThread?.id &&
+    prevProps.searchResults === nextProps.searchResults &&
+    prevProps.searchQuery === nextProps.searchQuery &&
+    prevProps.isSearchingMessages === nextProps.isSearchingMessages &&
+    prevProps.searchHasMore === nextProps.searchHasMore &&
+    prevProps.searchError === nextProps.searchError &&
+    prevProps.isSearchOverlayOpen === nextProps.isSearchOverlayOpen
   );
 });
