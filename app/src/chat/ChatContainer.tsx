@@ -12,7 +12,6 @@ import type {
   CurbMessage,
   SendMessagePayload,
   UpdatedMessages,
-  MessageRendererProps,
 } from "../types/Common";
 import { DMSetupState, MessageStatus } from "../types/Common";
 import JoinChannel from "./JoinChannel";
@@ -21,6 +20,7 @@ import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { Button, SearchInput } from "@calimero-network/mero-ui";
 import {
   apiClient,
+  getContextId,
   getExecutorPublicKey,
   type ResponseData,
 } from "@calimero-network/calimero-client";
@@ -32,7 +32,7 @@ import InvitationPending from "./InvitationPending";
 import { getDMSetupState } from "../utils/dmSetupState";
 import SyncWaiting from "./SyncWaiting";
 import { extractAndAddMentions } from "../utils/mentions";
-import { messageRenderer } from "../components/virtualized-chat";
+import SearchResultMessage from "./SearchResultMessage";
 
 interface ChatContainerProps {
   activeChat: ActiveChat;
@@ -234,13 +234,6 @@ const CloseIcon = () => (
   </svg>
 );
 
-const normalizeUsernameForClass = (value: string) =>
-  value
-    .replace(/\s+/g, "")
-    .toLowerCase()
-    .replace(/\./g, "\\.")
-    .replace(/_/g, "\\_");
-
 function ChatContainer({
   activeChat,
   setIsOpenSearchChannel,
@@ -284,8 +277,6 @@ function ChatContainer({
   const [messageWithEmojiSelector, setMessageWithEmojiSelector] =
     useState<CurbMessage | null>(null);
   const [searchInputValue, setSearchInputValue] = useState(searchQuery);
-  const [searchUsername, setSearchUsername] = useState("");
-  const hasLoadedSearchUsername = useRef(false);
 
   // Track last fetched channel to prevent excessive API calls
   const lastFetchedChannelRef = useRef<string>("");
@@ -330,36 +321,6 @@ function ChatContainer({
   useEffect(() => {
     membersListRef.current = membersList;
   }, [membersList]);
-
-  useEffect(() => {
-    if (hasLoadedSearchUsername.current) return;
-
-    const cachedUsername = StorageHelper.getItem("chat-username");
-    if (cachedUsername) {
-      setSearchUsername(normalizeUsernameForClass(cachedUsername));
-      hasLoadedSearchUsername.current = true;
-      return;
-    }
-
-    const fetchUsername = async () => {
-      const executorId = getExecutorPublicKey() ?? "";
-      if (!executorId) return;
-      const response = await new ClientApiDataSource().getUsername({
-        userId: executorId,
-      });
-      if (response.data) {
-        setSearchUsername(normalizeUsernameForClass(response.data));
-        hasLoadedSearchUsername.current = true;
-      }
-    };
-
-    fetchUsername();
-  }, []);
-
-  useEffect(() => {
-    if (searchUsername || !activeChat?.username) return;
-    setSearchUsername(normalizeUsernameForClass(activeChat.username));
-  }, [activeChat?.username, searchUsername]);
 
   const computeReaction = useCallback(
     (message: CurbMessage, reaction: string, username: string) => {
@@ -797,38 +758,15 @@ function ChatContainer({
     await onLoadMoreSearch();
   }, [onLoadMoreSearch, searchQuery]);
 
-  const searchRenderer = useMemo(() => {
-    const params: MessageRendererProps = {
-      accountId: searchUsername,
-      isThread: false,
-      handleReaction: () => {},
-      setThread: () => {},
-      getIconFromCache,
-      toggleEmojiSelector: () => {},
-      openMobileReactions: "",
-      setOpenMobileReactions: () => {},
-      editable: () => false,
-      deleteable: () => false,
-      onEditModeRequested: () => {},
-      onEditModeCancelled: () => {},
-      onMessageUpdated: () => {},
-      onDeleteMessageRequested: () => {},
-      fetchAccounts: () => {},
-      autocompleteAccounts: [],
-      authToken: undefined,
-      privateIpfsEndpoint: "https://ipfs.io",
-      contextId: activeChat.contextId,
-    };
-    return messageRenderer(params);
-  }, [activeChat.contextId, getIconFromCache, searchUsername]);
-
-  const renderSearchResult = useCallback(
-    (message: CurbMessage, index: number) => {
-      const previous = index > 0 ? searchResults[index - 1] : undefined;
-      return searchRenderer(message, previous);
-    },
-    [searchRenderer, searchResults],
-  );
+  const searchContextId = useMemo(() => {
+    if (activeChat.contextId && activeChat.contextId.length > 0) {
+      return activeChat.contextId;
+    }
+    if (activeChat.type === "direct_message") {
+      return getDmContextId() ?? "";
+    }
+    return getContextId() ?? "";
+  }, [activeChat.contextId, activeChat.type]);
 
   const renderDMContent = () => {
     switch (dmSetupState) {
@@ -1016,7 +954,10 @@ function ChatContainer({
                       <SearchResultItem
                         key={`${message.id}-${message.timestamp}-${index}`}
                       >
-                        {renderSearchResult(message, index)}
+                        <SearchResultMessage
+                          message={message}
+                          contextId={searchContextId}
+                        />
                       </SearchResultItem>
                     ))}
                   </SearchResultsScroll>
