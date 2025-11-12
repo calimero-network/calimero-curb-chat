@@ -104,14 +104,16 @@ const ThreadWrapper = styled.div`
 `;
 
 const SearchOverlay = styled.div`
-  position: absolute;
-  inset: 0;
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   z-index: 40;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   padding: 48px 24px;
-  background: rgba(7, 7, 9, 0.72);
   backdrop-filter: blur(6px);
 `;
 
@@ -784,6 +786,12 @@ function ChatContainer({
     onClearSearch();
   }, [onClearSearch]);
 
+  useEffect(() => {
+    if (!isSearchOverlayOpen) {
+      handleClearSearch();
+    }
+  }, [isSearchOverlayOpen, handleClearSearch]);
+
   const handleLoadMoreSearch = useCallback(async () => {
     if (!searchQuery) return;
     await onLoadMoreSearch();
@@ -953,7 +961,10 @@ function ChatContainer({
               <SearchOverlayActions>
                 <CloseButton
                   type="button"
-                  onClick={onCloseSearchOverlay}
+                  onClick={() => {
+                    handleClearSearch();
+                    onCloseSearchOverlay();
+                  }}
                   aria-label="Close message search"
                 >
                   <CloseIcon />
