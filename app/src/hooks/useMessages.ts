@@ -110,12 +110,19 @@ export function useMessages() {
 
       if (response.data) {
         const messagesArray = transformMessagesToUI(response.data.messages);
-        setOffset(offset + MESSAGE_PAGE_SIZE);
+        const returnedCount = messagesArray.length;
+        if (returnedCount > 0) {
+          setOffset((prev) => prev + returnedCount);
+        }
+
+        const nextOffset = offset + returnedCount;
+        const total = response.data.total_count;
+        const hasOlder = nextOffset < total;
 
         return {
           messages: messagesArray,
-          totalCount: response.data.total_count,
-          hasOlder: response.data.start_position < response.data.total_count,
+          totalCount: total,
+          hasOlder,
         };
       }
 

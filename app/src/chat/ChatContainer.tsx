@@ -33,6 +33,7 @@ import { getDMSetupState } from "../utils/dmSetupState";
 import SyncWaiting from "./SyncWaiting";
 import { extractAndAddMentions } from "../utils/mentions";
 import SearchResultMessage from "./SearchResultMessage";
+import { getDmContextId } from "../utils/session";
 
 interface ChatContainerProps {
   activeChat: ActiveChat;
