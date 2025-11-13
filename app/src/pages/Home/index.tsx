@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
-  MessageStatus,
   type ActiveChat,
   type ChannelMeta,
   type ChatMessagesData,
@@ -10,7 +9,6 @@ import {
   type CurbMessage,
 } from "../../types/Common";
 import {
-  getDmContextId,
   getStoredSession,
   setDmContextId,
   updateSessionChat,
@@ -24,12 +22,8 @@ import {
   useCalimero,
 } from "@calimero-network/calimero-client";
 import {
-  type Channels,
   type DMChatInfo,
-  type FullMessageResponse,
-  type UserId,
 } from "../../api/clientApi";
-import type { MessageWithReactions } from "../../api/clientApi";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
 import { generateDMParams } from "../../utils/dmSetupState";
 import { useAppNotifications } from "../../hooks/useAppNotifications";
@@ -92,10 +86,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const dmsHook = useDMs();
   const chatMembersHook = useChatMembers();
   const channelMembersHook = useChannelMembers();
+  const {
+    setChannelUsers: setChannelUsersDirect,
+    setNonInvitedUsers: setNonInvitedUsersDirect,
+  } = channelMembersHook;
 
   // Expose for compatibility with existing code
-  const messagesRef = mainMessages.messagesRef;
-  const incomingMessages = mainMessages.incomingMessages;
+  const _messagesRef = mainMessages.messagesRef;
+  const _incomingMessages = mainMessages.incomingMessages;
   const addOptimisticMessage = mainMessages.addOptimistic;
   const addOptimisticThreadMessage = threadMessages.addOptimistic;
 
@@ -119,6 +117,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   useEffect(() => {
     if (!isConfigSet) {
       window.location.href = "/login";
+    } else if (activeChat?.type !== "channel") {
+      setChannelUsersDirect({});
+      setNonInvitedUsersDirect([]);
     }
   }, [isConfigSet]);
 
@@ -152,12 +153,30 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const lastSelectedChatIdRef = useRef<string>("");
 
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
-    // Find the channel metadata to get channelType
-    const channelMeta = channels.find(
-      (ch: ChannelMeta) => ch.name === selectedChat.name,
-    );
-    if (channelMeta && selectedChat.type === "channel") {
-      selectedChat.channelType = channelMeta.channelType;
+    const channelMetaFromSelection =
+      selectedChat.type === "channel"
+        ? selectedChat.channelMeta ??
+          channels.find(
+            (ch: ChannelMeta) => ch.name === selectedChat.name,
+          )
+        : undefined;
+
+    if (channelMetaFromSelection && selectedChat.type === "channel") {
+      selectedChat.channelType = channelMetaFromSelection.channelType;
+      selectedChat.channelMeta = channelMetaFromSelection;
+
+      const membersRecord: Record<string, string> = {};
+      channelMetaFromSelection.members.forEach((member) => {
+        if (!member.id) {
+          return;
+        }
+        const displayName = member.name ?? member.id;
+        membersRecord[member.id] = member.moderator
+          ? `${displayName}`
+          : displayName;
+      });
+      setChannelUsersDirect(membersRecord);
+      setNonInvitedUsersDirect([]);
     }
 
     // Clear message state using hooks
@@ -181,8 +200,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       // Only fetch for channels, not for DMs
       if (selectedChat.type === "channel") {
-        getChannelUsers(selectedChat.id);
-        getNonInvitedUsers(selectedChat.id);
+        if (!channelMetaFromSelection) {
+          getChannelUsers(selectedChat.id);
+          getNonInvitedUsers(selectedChat.id);
+        }
       }
     }
 
@@ -321,9 +342,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     notifyChannel: notifyChannelRef,
     fetchDms: fetchDmsRef,
     onDMSelected: onDMSelectedRef,
-    fetchChannels: { current: debouncedFetchChannels },
-    fetchDMs: { current: debouncedFetchDMs },
-    fetchMembers: { current: debouncedFetchMembers },
+    fetchChannels: useRef(async () => {
+      await debouncedFetchChannels();
+    }),
+    fetchDMs: useRef(async () => {
+      await debouncedFetchDMs();
+    }),
+    fetchMembers: useRef(async () => {
+      await debouncedFetchMembers();
+    }),
   }).current;
 
   // Store updateSelectedActiveChat in ref to avoid dependency
@@ -453,15 +480,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const fetchDms = dmsHook.fetchDms;
 
   const chatMembers = chatMembersHook.members;
-  const fetchChatMembers = chatMembersHook.fetchMembers;
+  const _fetchChatMembers = chatMembersHook.fetchMembers;
 
   // Use chat handlers hook - simplified with refs
   const {
-    handleMessageUpdates,
     handleThreadMessageUpdates,
-    handleDMUpdates,
     handleStateMutation,
-    handleExecutionEvents,
   } = useChatHandlers(activeChatRef, activeChat, chatHandlersRefs);
 
   // Listen to WebSocket events via context

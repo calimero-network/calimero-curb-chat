@@ -79,7 +79,7 @@ const PaddingContainer = styled.div`
 interface DetailsDropdownProps {
   activeChat: ActiveChat;
   isOpenSearchChannel: boolean;
-  channelUserList: Map<string, string>;
+  channelUserList: Record<string, string>;
   nonInvitedUserList: UserId[];
   reFetchChannelMembers: () => void;
   setActiveChat: (chat: ActiveChat) => void;

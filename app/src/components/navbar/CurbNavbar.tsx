@@ -199,7 +199,7 @@ interface CurbNavbarProps {
   setIsSidebarOpen: (isOpen: boolean) => void;
   isOpenSearchChannel: boolean;
   setIsOpenSearchChannel: (isOpen: boolean) => void;
-  channelUserList: Map<string, string>;
+  channelUserList: Record<string, string>;
   nonInvitedUserList: UserId[];
   reFetchChannelMembers: () => void;
   setActiveChat: (chat: ActiveChat) => void;

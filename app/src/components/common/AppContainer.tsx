@@ -36,7 +36,7 @@ interface AppContainerProps {
   activeChat: ActiveChat | null;
   updateSelectedActiveChat: (chat: ActiveChat) => void;
   openSearchPage: () => void;
-  channelUsers: Map<string, string>;
+  channelUsers: Record<string, string>;
   nonInvitedUserList: UserId[];
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
   loadInitialChatMessages: () => Promise<ChatMessagesData>;

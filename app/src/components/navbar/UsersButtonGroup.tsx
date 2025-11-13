@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Avatar } from "@calimero-network/mero-ui";
 
 interface UsersButtonGroupProps {
-  channelUserList: Map<string, string>;
+  channelUserList: Record<string, string>;
   openMemberList: () => void;
 }
 

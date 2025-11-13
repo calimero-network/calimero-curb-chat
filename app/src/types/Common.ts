@@ -54,6 +54,7 @@ export type ActiveChat = {
   channelType?: string;
   ownIdentity?: string;
   ownUsername?: string;
+  channelMeta?: ChannelMeta;
 };
 
 export interface User {

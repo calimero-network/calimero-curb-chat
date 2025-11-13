@@ -249,7 +249,7 @@ interface MemberDetailsProps {
   setOptionsOpen: (id: number) => void;
   selectedUser: User | null;
   setSelectedUser: (user: User | null) => void;
-  userList: Map<string, string>;
+  userList: Record<string, string>;
   addMember: (account: string, channel: string) => void;
   channelName: string;
   getNonInvitedUsers: (value: string) => UserId[];
@@ -313,10 +313,8 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
           Object.keys(userList).map((user, id) => (
             <UserListItem key={id}>
               <UserInfo>
-                {/* @ts-expect-error - userList is a Map */}
                 <Avatar size="xs" name={userList[user] ?? ""} />
                 <Text $isSelected={optionsOpen === Number(id)}>
-                  {/* @ts-expect-error - userList is a Map */}
                   {userList[user]}
                 </Text>
               </UserInfo>

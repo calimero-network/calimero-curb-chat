@@ -36,8 +36,12 @@ export function useDMs() {
     // } finally {
     //   setLoading(false);
     // }
-    setDms([]);
-    setLoading(false);
+    try {
+      setDms([]);
+      return [];
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   return {

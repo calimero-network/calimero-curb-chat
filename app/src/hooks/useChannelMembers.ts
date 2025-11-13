@@ -7,9 +7,7 @@ import { log } from "../utils/logger";
  * Custom hook for managing channel-specific members and non-invited users
  */
 export function useChannelMembers() {
-  const [channelUsers, setChannelUsers] = useState<Map<string, string>>(
-    new Map(),
-  );
+  const [channelUsers, setChannelUsers] = useState<Record<string, string>>({});
   const [nonInvitedUsers, setNonInvitedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +27,7 @@ export function useChannelMembers() {
       // } else if (response.error) {
       //   setError(response.error.message || "Failed to fetch channel members");
       // }
-      setChannelUsers(new Map());
+      setChannelUsers({});
     } catch (err) {
       log.error("ChannelMembers", "Error fetching channel members", err);
       setError("Failed to fetch channel members");
@@ -73,6 +71,17 @@ export function useChannelMembers() {
     [fetchChannelMembers, fetchNonInvitedUsers],
   );
 
+  const setChannelUsersDirect = useCallback(
+    (users: Record<string, string>) => {
+      setChannelUsers({ ...users });
+    },
+    [],
+  );
+
+  const setNonInvitedUsersDirect = useCallback((users: string[]) => {
+    setNonInvitedUsers([...users]);
+  }, []);
+
   return {
     channelUsers,
     nonInvitedUsers,
@@ -81,5 +90,7 @@ export function useChannelMembers() {
     fetchChannelMembers,
     fetchNonInvitedUsers,
     fetchBoth,
+    setChannelUsers: setChannelUsersDirect,
+    setNonInvitedUsers: setNonInvitedUsersDirect,
   };
 }

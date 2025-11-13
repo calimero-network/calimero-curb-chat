@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
-import type { ChannelDataResponse } from "../api/clientApi";
-import type { ChannelMeta } from "../types/Common";
+import { getExecutorPublicKey } from "@calimero-network/calimero-client";
+import type { ChannelDataResponse, ChannelMember } from "../api/clientApi";
+import type { ChannelMeta, User } from "../types/Common";
 import { log } from "../utils/logger";
 
 /**
@@ -24,24 +25,52 @@ export function useChannels() {
       try {
         const response: ResponseData<ChannelDataResponse[]> = await clientApiDataSource.getChannels();
         if (response.data) {
-          const channelsArray: ChannelMeta[] = response.data.map((channel) => ({
-            name: channel.channelId,
-            type: "channel" as const,
-            channelType: channel.type,
-            description: "",
-            owner: channel.createdBy,
-            createdByUsername: channel.createdByUsername,
-            members: [],
-            createdBy: channel.createdBy,
-            inviteOnly: false,
-            unreadMessages: {
-              count: 0,
-              mentions: 0,
-            },
-            isMember: false,
-            readOnly: channel.readOnly,
-            createdAt: parseTimestampToIso(channel.createdAt),
-          }));
+          const currentUserId = getExecutorPublicKey() || "";
+
+          const channelsArray: ChannelMeta[] = response.data.map((channel) => {
+            const membersMap = new Map<string, User>();
+
+            const upsertMember = (
+              member: ChannelMember,
+              isModerator: boolean,
+            ) => {
+              membersMap.set(member.publicKey, {
+                id: member.publicKey,
+                name: member.username,
+                moderator: isModerator,
+                active: true,
+              });
+            };
+
+            channel.members.forEach((member) => upsertMember(member, false));
+            channel.moderators.forEach((moderator) =>
+              upsertMember(moderator, true),
+            );
+
+            const members = Array.from(membersMap.values());
+            const isMember = currentUserId
+              ? membersMap.has(currentUserId)
+              : members.length > 0;
+
+            return {
+              name: channel.channelId,
+              type: "channel" as const,
+              channelType: channel.type,
+              description: "",
+              owner: channel.createdBy,
+              createdByUsername: channel.createdByUsername,
+              members,
+              createdBy: channel.createdBy,
+              inviteOnly: channel.type === "Private",
+              unreadMessages: {
+                count: 0,
+                mentions: 0,
+              },
+              isMember,
+              readOnly: channel.readOnly,
+              createdAt: parseTimestampToIso(channel.createdAt),
+            };
+          });
 
           setChannels(channelsArray);
         } else if (response.error) {

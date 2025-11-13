@@ -26,7 +26,7 @@ const ChannelTitle = styled.div`
 interface DetailsContainerProps {
   channelName: string;
   selectedTabIndex?: number;
-  userList: Map<string, string>;
+  userList: Record<string, string>;
   nonInvitedUserList: UserId[];
   channelMeta: ChannelMeta;
   handleLeaveChannel: () => void;
@@ -121,14 +121,12 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
             if (!isModerator) {
               return;
             }
-            // @ts-expect-error - userList is a Map<string, string>
             const user = userList[userId];
             if (user) {
               promoteModerator(userId);
             }
           }}
           removeUserFromChannel={(userId: string) => {
-            // @ts-expect-error - userList is a Map<string, string>
             const user = userList[userId];
             if (user) {
               removeUserFromChannel(userId);
