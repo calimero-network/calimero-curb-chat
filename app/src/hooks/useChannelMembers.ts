@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
-import type { ResponseData } from "@calimero-network/calimero-client";
+// import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
+// import type { ResponseData } from "@calimero-network/calimero-client";
 import { log } from "../utils/logger";
 
 /**
@@ -14,21 +14,22 @@ export function useChannelMembers() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchChannelMembers = useCallback(async (channelId: string) => {
+  const fetchChannelMembers = useCallback(async (_channelId: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response: ResponseData<Map<string, string>> =
-        await new ClientApiDataSource().getChannelMembers({
-          channel: { name: channelId },
-        });
+      // const response: ResponseData<Map<string, string>> =
+      //   await new ClientApiDataSource().getChannelMembers({
+      //     channel: { name: channelId },
+      //   });
 
-      if (response.data) {
-        setChannelUsers(response.data);
-      } else if (response.error) {
-        setError(response.error.message || "Failed to fetch channel members");
-      }
+      // if (response.data) {
+      //   setChannelUsers(response.data);
+      // } else if (response.error) {
+      //   setError(response.error.message || "Failed to fetch channel members");
+      // }
+      setChannelUsers(new Map());
     } catch (err) {
       log.error("ChannelMembers", "Error fetching channel members", err);
       setError("Failed to fetch channel members");
@@ -37,27 +38,29 @@ export function useChannelMembers() {
     }
   }, []);
 
-  const fetchNonInvitedUsers = useCallback(async (channelId: string) => {
+  const fetchNonInvitedUsers = useCallback(async (_channelId: string) => {
     setLoading(true);
     setError(null);
 
-    try {
-      const response: ResponseData<string[]> =
-        await new ClientApiDataSource().getNonMemberUsers({
-          channel: { name: channelId },
-        });
+    // try {
+    //   const response: ResponseData<string[]> =
+    //     await new ClientApiDataSource().getNonMemberUsers({
+    //       channel: { name: channelId },
+    //     });
 
-      if (response.data) {
-        setNonInvitedUsers(response.data);
-      } else if (response.error) {
-        setError(response.error.message || "Failed to fetch non-invited users");
-      }
-    } catch (err) {
-      log.error("ChannelMembers", "Error fetching non-invited users", err);
-      setError("Failed to fetch non-invited users");
-    } finally {
-      setLoading(false);
-    }
+    //   if (response.data) {
+    //     setNonInvitedUsers(response.data);
+    //   } else if (response.error) {
+    //     setError(response.error.message || "Failed to fetch non-invited users");
+    //   }
+    // } catch (err) {
+    //   log.error("ChannelMembers", "Error fetching non-invited users", err);
+    //   setError("Failed to fetch non-invited users");
+    // } finally {
+    //   setLoading(false);
+    // }
+    setNonInvitedUsers([]);
+    setLoading(false);
   }, []);
 
   const fetchBoth = useCallback(

@@ -7,6 +7,7 @@ import {
 } from "@calimero-network/calimero-client";
 import {
   type AcceptInvitationProps,
+  type ChannelDataResponse,
   type ChannelInfo,
   type Channels,
   type ClientApi,
@@ -166,10 +167,10 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getChannels(): ApiResponse<Channels> {
+  async getChannels(): ApiResponse<ChannelDataResponse[]> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Channels>(
+      const response = await getJsonRpcClient().execute<any, { result: ChannelDataResponse[] }>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_CHANNELS,
@@ -195,7 +196,8 @@ export class ClientApiDataSource implements ClientApi {
       }
 
       return {
-        data: response?.result.output as Channels,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: response?.result?.output?.result as any,
         error: null,
       };
     } catch (error) {
@@ -1450,13 +1452,11 @@ export class ClientApiDataSource implements ClientApi {
   async getUsername(props: GetUsernameProps): ApiResponse<string> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response = await getJsonRpcClient().execute<any, { result: string }>(
         {
           contextId: props.contextId || getContextId() || "",
           method: ClientMethod.GET_USERNAME,
-          argsJson: {
-            user_id: props.userId,
-          },
+          argsJson: {},
           executorPublicKey: props.executorPublicKey || getExecutorPublicKey() || "",
         },
         {
@@ -1477,7 +1477,7 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
       return {
-        data: response?.result.output as string,
+        data: response?.result.output?.result as string,
         error: null,
       };
     } catch (error) {

@@ -234,10 +234,26 @@ export type GetTotalDmUnreadCountProps = Record<string, never>;
 
 export type MarkAllDmsAsReadProps = Record<string, never>;
 
+export interface ChannelMember {
+  publicKey: string;
+  username: string;
+}
+
+export interface ChannelDataResponse {
+  channelId: string;
+  createdAt: string;
+  createdBy: string;
+  createdByUsername: string;
+  type: ChannelType;
+  members: ChannelMember[];
+  moderators: ChannelMember[];
+  readOnly: boolean;
+}
+
 export enum ClientMethod {
   JOIN_CHAT = "join_chat",
   CREATE_CHANNEL = "create_channel",
-  GET_CHANNELS = "get_channels",
+  GET_CHANNELS = "getChannels",
   GET_ALL_CHANNELS_SEARCH = "get_all_channels",
   GET_CHANNEL_MEMBERS = "get_channel_members",
   GET_CHANNEL_INFO = "get_channel_info",
@@ -257,7 +273,7 @@ export enum ClientMethod {
   UPDATE_INVITATION_PAYLOAD = "update_invitation_payload",
   ACCEPT_INVITATION = "accept_invitation",
   DELETE_DM = "delete_dm",
-  GET_USERNAME = "get_username",
+  GET_USERNAME = "getUsername",
   GET_CHAT_USERNAMES = "get_chat_usernames",
   READ_MESSAGE = "mark_messages_as_read",
   UPDATE_DM_HASH = "update_dm_hashes",
@@ -271,7 +287,7 @@ export enum ClientMethod {
 export interface ClientApi {
   joinChat(props: JoinChatProps): ApiResponse<string>;
   createChannel(props: CreateChannelProps): ApiResponse<CreateChannelResponse>;
-  getChannels(): ApiResponse<Channels>;
+  getChannels(): ApiResponse<ChannelDataResponse[]>;
   getAllChannelsSearch(): ApiResponse<Channels>;
   getChannelMembers(
     props: GetChannelMembersProps,

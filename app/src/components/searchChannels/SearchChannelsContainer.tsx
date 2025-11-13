@@ -4,7 +4,7 @@ import type { ActiveChat, ChannelMeta } from "../../types/Common";
 import { useCallback, useEffect, useState } from "react";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import {
-  getExecutorPublicKey,
+  // getExecutorPublicKey,
   type ResponseData,
 } from "@calimero-network/calimero-client";
 import type { Channels } from "../../api/clientApi";
@@ -208,41 +208,41 @@ export default function SearchChannelsContainer({
       const channels: ResponseData<Channels> =
         await new ClientApiDataSource().getAllChannelsSearch();
       if (channels.data) {
-        const channelsArray: ChannelMeta[] = await Promise.all(
-          Object.entries(channels.data).map(async ([name, channelInfo]) => {
-            const channelMembers: ResponseData<Map<string, string>> =
-              await new ClientApiDataSource().getChannelMembers({
-                channel: { name: name },
-              });
-            let isMember = false;
-            if (channelMembers.data) {
-              isMember = Object.keys(channelMembers.data).includes(
-                getExecutorPublicKey() || "",
-              );
-            } else {
-              isMember = false;
-            }
-            return {
-              name,
-              type: "channel" as const,
-              channelType: channelInfo.channel_type,
-              description: "",
-              owner: channelInfo.created_by,
-              members: [],
-              createdBy: channelInfo.created_by,
-              createdByUsername: channelInfo.created_by_username,
-              inviteOnly: false,
-              unreadMessages: {
-                count: 0,
-                mentions: 0,
-              },
-              isMember: isMember,
-              readOnly: channelInfo.read_only,
-              createdAt: new Date(channelInfo.created_at * 1000).toISOString(),
-            };
-          }),
-        );
-        setAllChannels(channelsArray);
+        // const channelsArray: ChannelMeta[] = await Promise.all(
+        //   Object.entries(channels.data).map(async ([name, channelInfo]) => {
+        //     const channelMembers: ResponseData<Map<string, string>> =
+        //       await new ClientApiDataSource().getChannelMembers({
+        //         channel: { name: name },
+        //       });
+        //     let isMember = false;
+        //     if (channelMembers.data) {
+        //       isMember = Object.keys(channelMembers.data).includes(
+        //         getExecutorPublicKey() || "",
+        //       );
+        //     } else {
+        //       isMember = false;
+        //     }
+        //     return {
+        //       name,
+        //       type: "channel" as const,
+        //       channelType: channelInfo.channel_type,
+        //       description: "",
+        //       owner: channelInfo.created_by,
+        //       members: [],
+        //       createdBy: channelInfo.created_by,
+        //       createdByUsername: channelInfo.created_by_username,
+        //       inviteOnly: false,
+        //       unreadMessages: {
+        //         count: 0,
+        //         mentions: 0,
+        //       },
+        //       isMember: isMember,
+        //       readOnly: channelInfo.read_only,
+        //       createdAt: new Date(channelInfo.created_at * 1000).toISOString(),
+        //     };
+        //   }),
+        // );
+        setAllChannels([]);
       }
     };
     fetchChannels();

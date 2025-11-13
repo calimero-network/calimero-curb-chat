@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import type { ActiveChat, ChannelMeta } from "../../types/Common";
 import DetailsContainer from "../settings/DetailsContainer";
 import BaseModal from "../common/popups/BaseModal";
-import type { ChannelInfo, UserId } from "../../api/clientApi";
+import type { UserId } from "../../api/clientApi";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
-import type { ResponseData } from "@calimero-network/calimero-client";
+// import type { ResponseData } from "@calimero-network/calimero-client";
 import { defaultActiveChat } from "../../mock/mock";
 
 interface ChannelDetailsPopupProps {
@@ -32,7 +32,7 @@ export default function ChannelDetailsPopup({
   setActiveChat,
   fetchChannels,
 }: ChannelDetailsPopupProps) {
-  const [channelMeta, setChannelMeta] = useState<ChannelMeta>({
+  const [channelMeta, _setChannelMeta] = useState<ChannelMeta>({
     name: chat.name,
     description: "",
     members: [],
@@ -50,20 +50,20 @@ export default function ChannelDetailsPopup({
 
   const channelName = chat.type === "channel" ? chat.name : chat.id;
 
-  const getChannelMetadata = async (channelName: string) => {
-    const channelInfo: ResponseData<ChannelInfo> =
-      await new ClientApiDataSource().getChannelInfo({
-        channel: { name: channelName },
-      });
-    if (channelInfo.data) {
-      setChannelMeta((prevMeta) => ({
-        ...prevMeta,
-        createdAt: new Date(channelInfo.data.created_at * 1000).toISOString(),
-        createdBy: channelInfo.data.created_by,
-        createdByUsername: channelInfo.data.created_by_username,
-        channelType: chat.channelType || "",
-      }));
-    }
+  const getChannelMetadata = async (_channelName: string) => {
+    // const channelInfo: ResponseData<ChannelInfo> =
+    //   await new ClientApiDataSource().getChannelInfo({
+    //     channel: { name: channelName },
+    //   });
+    // if (channelInfo.data) {
+    //   setChannelMeta((prevMeta) => ({
+    //     ...prevMeta,
+    //     createdAt: new Date(channelInfo.data.created_at * 1000).toISOString(),
+    //     createdBy: channelInfo.data.created_by,
+    //     createdByUsername: channelInfo.data.created_by_username,
+    //     channelType: chat.channelType || "",
+    //   }));
+    // }
   };
 
   const handleLeaveChannel = async () => {

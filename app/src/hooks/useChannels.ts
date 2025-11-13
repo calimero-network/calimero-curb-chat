@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
-import type { Channels } from "../api/clientApi";
+import type { ChannelDataResponse } from "../api/clientApi";
 import type { ChannelMeta } from "../types/Common";
 import { log } from "../utils/logger";
 
@@ -14,46 +14,77 @@ export function useChannels() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchChannels = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const clientApiDataSource = useMemo(() => new ClientApiDataSource(), []);
 
-    try {
-      const response: ResponseData<Channels> =
-        await new ClientApiDataSource().getChannels();
+  const fetchChannels = useMemo(
+    () => async () => {
+      setLoading(true);
+      setError(null);
 
-      if (response.data) {
-        const channelsArray: ChannelMeta[] = Object.entries(response.data).map(
-          ([name, channelInfo]) => ({
-            name,
+      try {
+        const response: ResponseData<ChannelDataResponse[]> = await clientApiDataSource.getChannels();
+        if (response.data) {
+          const channelsArray: ChannelMeta[] = response.data.map((channel) => ({
+            name: channel.channelId,
             type: "channel" as const,
-            channelType: channelInfo.channel_type,
+            channelType: channel.type,
             description: "",
-            owner: channelInfo.created_by,
-            createdByUsername: channelInfo.created_by_username,
+            owner: channel.createdBy,
+            createdByUsername: channel.createdByUsername,
             members: [],
-            createdBy: channelInfo.created_by,
+            createdBy: channel.createdBy,
             inviteOnly: false,
             unreadMessages: {
-              count: channelInfo.unread_count,
-              mentions: channelInfo.unread_mention_count,
+              count: 0,
+              mentions: 0,
             },
             isMember: false,
-            readOnly: channelInfo.read_only,
-            createdAt: new Date(channelInfo.created_at * 1000).toISOString(),
-          }),
-        );
-        setChannels(channelsArray);
-      } else if (response.error) {
-        setError(response.error.message || "Failed to fetch channels");
+            readOnly: channel.readOnly,
+            createdAt: parseTimestampToIso(channel.createdAt),
+          }));
+
+          setChannels(channelsArray);
+        } else if (response.error) {
+          setError(response.error.message || "Failed to fetch channels");
+        }
+      } catch (err) {
+        log.error("Channels", "Error fetching channels", err);
+        setError("Failed to fetch channels");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      log.error("Channels", "Error fetching channels", err);
-      setError("Failed to fetch channels");
-    } finally {
-      setLoading(false);
+    },
+    [clientApiDataSource],
+  );
+
+  function parseTimestampToIso(
+    rawTimestamp: number | string | null | undefined,
+  ): string {
+    if (rawTimestamp === null || rawTimestamp === undefined) {
+      return new Date(0).toISOString();
     }
-  }, []);
+
+    const numericTimestamp =
+      typeof rawTimestamp === "string" ? Number(rawTimestamp) : rawTimestamp;
+
+    if (!Number.isFinite(numericTimestamp)) {
+      return new Date(0).toISOString();
+    }
+
+    let timestampMs = numericTimestamp;
+
+    if (numericTimestamp > 1e15) {
+      timestampMs = numericTimestamp / 1_000_000;
+    } else if (numericTimestamp > 1e12) {
+      timestampMs = numericTimestamp / 1_000;
+    } else if (numericTimestamp > 1e10) {
+      timestampMs = numericTimestamp;
+    } else {
+      timestampMs = numericTimestamp * 1_000;
+    }
+
+    return new Date(timestampMs).toISOString();
+  }
 
   return {
     channels,
