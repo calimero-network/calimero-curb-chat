@@ -253,7 +253,7 @@ export function useMessages() {
           });
 
         if (response.data) {
-          const transformed = transformMessagesToUI(response.data.messages);
+          const transformed = transformMessagesToUI(response.data.messages).reverse();
           setSearchResults((prev) =>
             shouldReset ? transformed : [...prev, ...transformed],
           );
