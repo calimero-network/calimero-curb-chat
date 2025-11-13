@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import type { ListRange } from "react-virtuoso";
 import { Virtuoso } from "react-virtuoso";
 import styled from "styled-components";
@@ -85,7 +85,6 @@ const VirtualizedChat = <T extends Message>({
   const store = useRef(new MessageStore<T>()).current;
   const [oldestMessageReported, setOldestMessageReported] =
     useState<number>(-1);
-  const [initialTopIndex, setInitialTopIndex] = useState<number | undefined>();
 
   // Memoize callbacks to prevent render loops
   const handleLoadComplete = useCallback(
@@ -190,26 +189,6 @@ const VirtualizedChat = <T extends Message>({
     onClick: scrollToBottom,
   });
 
-  useEffect(() => {
-    setInitialTopIndex(undefined);
-  }, [chatId]);
-
-  useEffect(() => {
-    if (
-      !isLoadingInitial &&
-      messages.length > 0 &&
-      initialTopIndex === undefined
-    ) {
-      const topIndex = messages.length - 1;
-      setInitialTopIndex(topIndex);
-
-      // Disable followOutput auto-scrolling shortly after initial scroll
-      window.setTimeout(() => {
-        setInitialTopIndex(undefined);
-      }, 1000);
-    }
-  }, [isLoadingInitial, messages.length, initialTopIndex]);
-
   return (
     <VirtuosoWrapper style={{ position: "relative", ...style }}>
       {isLoadingInitial && <OverlayDiv type="loading" />}
@@ -231,7 +210,7 @@ const VirtualizedChat = <T extends Message>({
           }}
           data={messages}
           alignToBottom
-          initialTopMostItemIndex={initialTopIndex}
+          initialTopMostItemIndex={messages.length - 1}
           startReached={handleLoadMore}
           endReached={hideNewMessageIndicator}
           rangeChanged={reportLastRenderedItem}

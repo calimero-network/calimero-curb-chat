@@ -65,10 +65,9 @@ export function useMessageUpdates<T extends Message>({
         const isOwnMessage = !shouldTriggerIndicator; // Inverse of shouldTriggerNewItemIndicator
 
         if (isOwnMessage) {
-          // Only scroll when the user is already at the bottom
-          if (isAtBottom) {
-            onOwnMessageSentRef.current?.();
-          }
+          // User sent a message - always scroll to bottom
+          // This handles both optimistic messages and real messages from server
+          onOwnMessageSentRef.current?.();
         } else if (!isAtBottom && addedCount > 0) {
           // Someone else's NEW message and we're not at bottom - show indicator
           // Only for added, not updated (reactions, etc)
