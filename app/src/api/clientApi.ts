@@ -2,9 +2,9 @@ import type { ApiResponse } from "@calimero-network/calimero-client";
 import type { HashMap } from "../types/Common";
 
 export enum ChannelType {
-  PUBLIC = "Public",
-  PRIVATE = "Private",
-  GROUP = "Default",
+  PUBLIC = "public",
+  PRIVATE = "private",
+  GROUP = "default",
 }
 
 export interface Channel {
@@ -252,7 +252,7 @@ export interface ChannelDataResponse {
 
 export enum ClientMethod {
   JOIN_CHAT = "join_chat",
-  CREATE_CHANNEL = "create_channel",
+  CREATE_CHANNEL = "createChannel",
   GET_CHANNELS = "getChannels",
   GET_ALL_CHANNELS_SEARCH = "get_all_channels",
   GET_CHANNEL_MEMBERS = "get_channel_members",
@@ -260,7 +260,7 @@ export enum ClientMethod {
   INVITE_TO_CHANNEL = "invite_to_channel",
   GET_INVITE_USERS = "get_non_member_users",
   JOIN_CHANNEL = "join_channel",
-  LEAVE_CHANNEL = "leave_channel",
+  LEAVE_CHANNEL = "leaveChannel",
   GET_MESSAGES = "get_messages",
   SEND_MESSAGE = "send_message",
   GET_DMS = "get_dms",

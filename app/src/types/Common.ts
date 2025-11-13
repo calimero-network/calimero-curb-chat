@@ -86,6 +86,7 @@ export interface ChannelMeta {
   channelType: string;
   description: string;
   members: User[];
+  moderators?: User[];
   createdAt: string;
   createdBy: string;
   createdByUsername: string;

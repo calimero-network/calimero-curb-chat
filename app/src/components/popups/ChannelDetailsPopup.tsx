@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from "react";
-import type { ActiveChat, ChannelMeta } from "../../types/Common";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import type { ActiveChat, ChannelMeta, User } from "../../types/Common";
 import DetailsContainer from "../settings/DetailsContainer";
 import BaseModal from "../common/popups/BaseModal";
 import type { UserId } from "../../api/clientApi";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 // import type { ResponseData } from "@calimero-network/calimero-client";
 import { defaultActiveChat } from "../../mock/mock";
+import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 
 interface ChannelDetailsPopupProps {
   toggle: React.ReactNode;
   chat: ActiveChat;
+  channelMeta?: ChannelMeta;
   channelUserList?: Record<string, string>;
   nonInvitedUserList: UserId[];
   isOpen: boolean;
@@ -23,6 +25,7 @@ interface ChannelDetailsPopupProps {
 export default function ChannelDetailsPopup({
   chat,
   toggle,
+  channelMeta: channelMetaProp,
   channelUserList,
   isOpen,
   setIsOpen,
@@ -36,6 +39,7 @@ export default function ChannelDetailsPopup({
     name: chat.name,
     description: "",
     members: [],
+    moderators: [],
     createdAt: "",
     createdBy: "",
     createdByUsername: "",
@@ -48,6 +52,8 @@ export default function ChannelDetailsPopup({
     readOnly: false,
   });
   const channelName = chat.type === "channel" ? chat.name : chat.id;
+  const currentUserId = getExecutorPublicKey() || "";
+  const isOwner = channelMeta.createdBy === currentUserId;
 
   const handleLeaveChannel = async () => {
     await new ClientApiDataSource().leaveChannel({
@@ -59,27 +65,122 @@ export default function ChannelDetailsPopup({
   };
 
   useEffect(() => {
-    if (chat.channelMeta) {
+    if (channelMetaProp) {
+      setChannelMeta((prev) => ({
+        ...prev,
+        ...channelMetaProp,
+        channelType:
+          channelMetaProp.channelType ?? chat.channelType ?? prev.channelType,
+      }));
+    } else if (chat.channelMeta) {
       setChannelMeta((prev) => ({
         ...prev,
         ...chat.channelMeta,
-        channelType: chat?.channelMeta?.channelType ?? chat.channelType ?? prev.channelType,
+        channelType:
+          chat.channelMeta?.channelType ?? chat.channelType ?? prev.channelType,
       }));
     }
-  }, [chat.channelMeta, chat.channelType]);
+  }, [channelMetaProp, chat.channelMeta, chat.channelType]);
+
+  const membersRecord = useMemo(() => {
+    if (channelMeta.members?.length) {
+      const record: Record<string, string> = {};
+      channelMeta.members.forEach((member) => {
+        if (!member.id) return;
+        record[member.id] = member.name ?? member.id;
+      });
+      return record;
+    }
+    return channelUserList ?? {};
+  }, [channelMeta.members, channelUserList]);
+
+  const membersForDisplay = useMemo(() => {
+    if (channelMeta.members?.length) {
+      return channelMeta.members;
+    }
+    if (channelUserList) {
+      return Object.entries(channelUserList).map(([id, name]) => ({
+        id,
+        name,
+        moderator: false,
+        active: true,
+      }));
+    }
+    return [];
+  }, [channelMeta.members, channelUserList]);
+
+  const updateMembersState = useCallback(
+    (updater: (members: User[]) => User[]) => {
+      setChannelMeta((prev) => {
+        const updatedMembers = updater(prev.members ?? []);
+        return {
+          ...prev,
+          members: updatedMembers,
+          moderators: updatedMembers.filter((member) => member.moderator),
+        };
+      });
+    },
+    [],
+  );
+
+  const handlePromoteModerator = useCallback(
+    async (userId: string) => {
+      if (userId === channelMeta.createdBy) return;
+      updateMembersState((members) =>
+        members.map((member) =>
+          member.id === userId ? { ...member, moderator: true } : member,
+        ),
+      );
+      await reFetchChannelMembers();
+    },
+    [channelMeta.createdBy, updateMembersState, reFetchChannelMembers],
+  );
+
+  const handleDemoteModerator = useCallback(
+    async (userId: string) => {
+      if (userId === channelMeta.createdBy) return;
+      updateMembersState((members) =>
+        members.map((member) =>
+          member.id === userId ? { ...member, moderator: false } : member,
+        ),
+      );
+      await reFetchChannelMembers();
+    },
+    [channelMeta.createdBy, updateMembersState, reFetchChannelMembers],
+  );
+
+  const handleRemoveUserFromChannel = useCallback(
+    async (userId: string) => {
+      if (userId === channelMeta.createdBy) return;
+      updateMembersState((members) =>
+        members.filter((member) => member.id !== userId),
+      );
+      await reFetchChannelMembers();
+    },
+    [channelMeta.createdBy, updateMembersState, reFetchChannelMembers],
+  );
+
+  const handleDeleteChannel = useCallback(async () => {
+    console.warn("Delete channel action is not yet implemented.");
+  }, []);
 
   const popupContent = (
     <DetailsContainer
       channelName={channelName}
       selectedTabIndex={selectedTabIndex}
-      userList={channelUserList ?? {}}
+      userList={membersRecord}
       nonInvitedUserList={nonInvitedUserList}
       channelMeta={channelMeta}
       handleLeaveChannel={handleLeaveChannel}
       addMember={() => {}}
-      promoteModerator={() => {}}
-      removeUserFromChannel={() => {}}
+      promoteModerator={handlePromoteModerator}
+      demoteModerator={handleDemoteModerator}
+      removeUserFromChannel={handleRemoveUserFromChannel}
       reFetchChannelMembers={reFetchChannelMembers}
+      members={membersForDisplay}
+      currentUserId={currentUserId}
+      canDeleteChannel={isOwner}
+      onDeleteChannel={handleDeleteChannel}
     />
   );
 

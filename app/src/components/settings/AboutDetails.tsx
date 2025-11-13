@@ -7,6 +7,9 @@ interface AboutDetailsProps {
   dateCreated: string;
   manager: string;
   handleLeaveChannel: () => void;
+  canDeleteChannel?: boolean;
+  onDeleteChannel?: () => void;
+  isOwner?: boolean;
 }
 
 interface SettingsItemProps {
@@ -35,7 +38,7 @@ const SettingsItem = styled.div<SettingsItemProps>`
 
 const Text = styled.h6<TextProps>`
   ${({ $red }) =>
-    $red ? "color: #DC3545; :hover { color: #f76560 }" : "color: #FFF;"}
+    $red ? "color: #DC3545; &:hover { color: #f76560 }" : "color: #FFF;"}
   /* Body/Regular */
     font-family: Helvetica Neue;
   font-size: 14px;
@@ -55,6 +58,12 @@ const ButtonLeave = styled.button`
   cursor: pointer;
 `;
 
+const ActionButtons = styled.div`
+  display: flex;
+  gap: 3rem;
+  width: 100%;
+`;
+
 const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
   return (
     <>
@@ -69,13 +78,22 @@ const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
         <Text>{props.manager}</Text>
       </SettingsItem>
       <SettingsItem $roundedBottom>
-        {props.channelName !== "general" && (
-          <ButtonLeave>
-            <Text $red={true} onClick={props.handleLeaveChannel}>
-              Leave Channel
-            </Text>
-          </ButtonLeave>
-        )}
+        <ActionButtons>
+          {props.channelName !== "general" && (
+            <ButtonLeave>
+              <Text $red={true} onClick={props.handleLeaveChannel}>
+                Leave Channel
+              </Text>
+            </ButtonLeave>
+          )}
+          {props.canDeleteChannel && props.onDeleteChannel && (
+            <ButtonLeave>
+              <Text $red={true} onClick={props.onDeleteChannel}>
+                Delete Channel
+              </Text>
+            </ButtonLeave>
+          )}
+        </ActionButtons>
       </SettingsItem>
     </>
   );

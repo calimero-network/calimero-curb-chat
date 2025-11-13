@@ -51,6 +51,7 @@ export function useChannels() {
             const isMember = currentUserId
               ? membersMap.has(currentUserId)
               : members.length > 0;
+            const moderators = members.filter((member) => member.moderator);
 
             return {
               name: channel.channelId,
@@ -60,6 +61,7 @@ export function useChannels() {
               owner: channel.createdBy,
               createdByUsername: channel.createdByUsername,
               members,
+              moderators,
               createdBy: channel.createdBy,
               inviteOnly: channel.type === "Private",
               unreadMessages: {
