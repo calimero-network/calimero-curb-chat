@@ -2,7 +2,6 @@ import { styled } from "styled-components";
 import type { ActiveChat, ChannelMeta } from "../../types/Common";
 import ChannelDetailsPopup from "../popups/ChannelDetailsPopup";
 import { useState } from "react";
-import type { UserId } from "../../api/clientApi";
 
 const DropdownSelector = styled.div`
   display: flex;
@@ -81,7 +80,7 @@ interface DetailsDropdownProps {
   isOpenSearchChannel: boolean;
   channelUserList: Record<string, string>;
   channelMeta?: ChannelMeta;
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
   reFetchChannelMembers: () => void;
   setActiveChat: (chat: ActiveChat) => void;
   fetchChannels: () => void;

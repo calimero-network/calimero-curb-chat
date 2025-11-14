@@ -11,7 +11,7 @@ import ChannelsContainer from "./ChannelsContainer";
 import CurbNavbar from "../navbar/CurbNavbar";
 import SearchChannelsContainer from "../searchChannels/SearchChannelsContainer";
 import ChatContainer from "../../chat/ChatContainer";
-import type { DMChatInfo, UserId } from "../../api/clientApi";
+import type { DMChatInfo } from "../../api/clientApi";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 
 const ContentDivContainer = styled.div`
@@ -37,7 +37,7 @@ interface AppContainerProps {
   updateSelectedActiveChat: (chat: ActiveChat) => void;
   openSearchPage: () => void;
   channelUsers: Record<string, string>;
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
   loadInitialChatMessages: () => Promise<ChatMessagesData>;
   incomingMessages: CurbMessage[];

@@ -2,7 +2,11 @@ import { useState, useMemo } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import { getExecutorPublicKey } from "@calimero-network/calimero-client";
-import type { ChannelDataResponse, ChannelMember } from "../api/clientApi";
+import type {
+  ChannelDataResponse,
+  ChannelMember,
+} from "../api/clientApi";
+import { ChannelType } from "../api/clientApi";
 import type { ChannelMeta, User } from "../types/Common";
 import { log } from "../utils/logger";
 
@@ -63,7 +67,7 @@ export function useChannels() {
               members,
               moderators,
               createdBy: channel.createdBy,
-              inviteOnly: channel.type === "Private",
+              inviteOnly: channel.type === ChannelType.PRIVATE,
               unreadMessages: {
                 count: 0,
                 mentions: 0,

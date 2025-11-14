@@ -1,14 +1,16 @@
-import { useState, useCallback } from "react";
-// import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
-// import type { ResponseData } from "@calimero-network/calimero-client";
+import { useState, useCallback, useMemo } from "react";
+import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { log } from "../utils/logger";
 
 /**
  * Custom hook for managing channel-specific members and non-invited users
  */
 export function useChannelMembers() {
+  const clientApiDataSource = useMemo(() => new ClientApiDataSource(), []);
   const [channelUsers, setChannelUsers] = useState<Record<string, string>>({});
-  const [nonInvitedUsers, setNonInvitedUsers] = useState<string[]>([]);
+  const [nonInvitedUsers, setNonInvitedUsers] = useState<Record<string, string>>(
+    {},
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,30 +38,28 @@ export function useChannelMembers() {
     }
   }, []);
 
-  const fetchNonInvitedUsers = useCallback(async (_channelId: string) => {
+  const fetchNonInvitedUsers = useCallback(async (channelId: string) => {
     setLoading(true);
     setError(null);
 
-    // try {
-    //   const response: ResponseData<string[]> =
-    //     await new ClientApiDataSource().getNonMemberUsers({
-    //       channel: { name: channelId },
-    //     });
+    try {
+      const response = await clientApiDataSource.getNonMemberUsers({
+        channel: { name: channelId },
+      });
 
-    //   if (response.data) {
-    //     setNonInvitedUsers(response.data);
-    //   } else if (response.error) {
-    //     setError(response.error.message || "Failed to fetch non-invited users");
-    //   }
-    // } catch (err) {
-    //   log.error("ChannelMembers", "Error fetching non-invited users", err);
-    //   setError("Failed to fetch non-invited users");
-    // } finally {
-    //   setLoading(false);
-    // }
-    setNonInvitedUsers([]);
-    setLoading(false);
-  }, []);
+      
+      if (response.data) {
+        setNonInvitedUsers(response.data);
+      } else if (response.error) {
+        setError(response.error.message || "Failed to fetch non-invited users");
+      }
+    } catch (err) {
+      log.error("ChannelMembers", "Error fetching non-invited users", err);
+      setError("Failed to fetch non-invited users");
+    } finally {
+      setLoading(false);
+    }
+  }, [clientApiDataSource]);
 
   const fetchBoth = useCallback(
     async (channelId: string) => {
@@ -78,9 +78,12 @@ export function useChannelMembers() {
     [],
   );
 
-  const setNonInvitedUsersDirect = useCallback((users: string[]) => {
-    setNonInvitedUsers([...users]);
-  }, []);
+  const setNonInvitedUsersDirect = useCallback(
+    (users: Record<string, string>) => {
+      setNonInvitedUsers({ ...users });
+    },
+    [],
+  );
 
   return {
     channelUsers,

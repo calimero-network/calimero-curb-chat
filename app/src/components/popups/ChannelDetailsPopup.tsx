@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { ActiveChat, ChannelMeta, User } from "../../types/Common";
 import DetailsContainer from "../settings/DetailsContainer";
 import BaseModal from "../common/popups/BaseModal";
-import type { UserId } from "../../api/clientApi";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 // import type { ResponseData } from "@calimero-network/calimero-client";
 import { defaultActiveChat } from "../../mock/mock";
@@ -13,7 +12,7 @@ interface ChannelDetailsPopupProps {
   chat: ActiveChat;
   channelMeta?: ChannelMeta;
   channelUserList?: Record<string, string>;
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   selectedTabIndex: number;
@@ -81,18 +80,6 @@ export default function ChannelDetailsPopup({
       }));
     }
   }, [channelMetaProp, chat.channelMeta, chat.channelType]);
-
-  const membersRecord = useMemo(() => {
-    if (channelMeta.members?.length) {
-      const record: Record<string, string> = {};
-      channelMeta.members.forEach((member) => {
-        if (!member.id) return;
-        record[member.id] = member.name ?? member.id;
-      });
-      return record;
-    }
-    return channelUserList ?? {};
-  }, [channelMeta.members, channelUserList]);
 
   const membersForDisplay = useMemo(() => {
     if (channelMeta.members?.length) {
@@ -168,7 +155,6 @@ export default function ChannelDetailsPopup({
     <DetailsContainer
       channelName={channelName}
       selectedTabIndex={selectedTabIndex}
-      userList={membersRecord}
       nonInvitedUserList={nonInvitedUserList}
       channelMeta={channelMeta}
       handleLeaveChannel={handleLeaveChannel}

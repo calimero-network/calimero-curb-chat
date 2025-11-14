@@ -25,10 +25,10 @@ const ChannelTitle = styled.div`
 interface DetailsContainerProps {
   channelName: string;
   selectedTabIndex?: number;
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
   channelMeta: ChannelMeta;
   handleLeaveChannel: () => void;
-  addMember: (user: string) => void;
+  addMember: (user: string, username?: string) => void;
   promoteModerator: (user: string) => void;
   demoteModerator: (user: string) => void;
   removeUserFromChannel: (user: string) => void;
@@ -88,20 +88,27 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
     );
   };
 
-  const addMember = async (account: string, channel: string) => {
+  const addMember = async (
+    account: string,
+    channel: string,
+    username?: string,
+  ) => {
     await new ClientApiDataSource().inviteToChannel({
       channel: { name: channel },
       user: account,
+      username,
     });
     await reFetchChannelMembers();
   };
 
   const getNonInvitedUsers = (value: string): UserId[] => {
-    return nonInvitedUserList
-      ? Object.values(nonInvitedUserList).filter((u) => {
-          return u.startsWith(value);
-        })
-      : [];
+    if (!nonInvitedUserList) return [];
+    const lowerValue = value.toLowerCase();
+    return Object.entries(nonInvitedUserList)
+      .filter(([, username]) =>
+        username.toLowerCase().startsWith(lowerValue),
+      )
+      .map(([userId]) => userId);
   };
 
   return (

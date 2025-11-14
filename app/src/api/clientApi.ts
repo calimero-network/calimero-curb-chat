@@ -12,6 +12,7 @@ export interface Channel {
 }
 
 export type UserId = string;
+export type Username = string;
 
 export interface CreateChannelProps {
   channel: Channel;
@@ -116,6 +117,7 @@ export interface FullMessageResponse {
 export interface InviteToChannelProps {
   channel: Channel;
   user: UserId;
+  username?: Username;
 }
 
 export interface DMChatInfo {
@@ -257,8 +259,8 @@ export enum ClientMethod {
   GET_ALL_CHANNELS_SEARCH = "get_all_channels",
   GET_CHANNEL_MEMBERS = "get_channel_members",
   GET_CHANNEL_INFO = "get_channel_info",
-  INVITE_TO_CHANNEL = "invite_to_channel",
-  GET_INVITE_USERS = "get_non_member_users",
+  INVITE_TO_CHANNEL = "addUserToChannel",
+  GET_INVITE_USERS = "getInvitees",
   JOIN_CHANNEL = "join_channel",
   LEAVE_CHANNEL = "leaveChannel",
   GET_MESSAGES = "get_messages",
@@ -294,7 +296,9 @@ export interface ClientApi {
   ): ApiResponse<Map<string, string>>;
   getChannelInfo(props: GetChannelInfoProps): ApiResponse<ChannelInfo>;
   inviteToChannel(props: InviteToChannelProps): ApiResponse<string>;
-  getNonMemberUsers(props: GetNonMemberUsersProps): ApiResponse<UserId[]>;
+  getNonMemberUsers(
+    props: GetNonMemberUsersProps,
+  ): ApiResponse<Record<string, string>>;
   joinChannel(props: JoinChannelProps): ApiResponse<string>;
   leaveChannel(props: LeaveChannelProps): ApiResponse<string>;
   getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse>;

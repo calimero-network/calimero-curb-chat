@@ -4,7 +4,6 @@ import DetailsDropdown from "./DetailsDropdown";
 import ChannelDetailsPopup from "../popups/ChannelDetailsPopup";
 import UsersButtonGroup from "./UsersButtonGroup";
 import { useState } from "react";
-import type { UserId } from "../../api/clientApi";
 import SettingsIcon from "./SettingsIcon";
 import NotificationCenterWidget from "./NotificationCenterWidget";
 import { WebSocketStatus } from "../WebSocketStatus";
@@ -200,7 +199,7 @@ interface CurbNavbarProps {
   isOpenSearchChannel: boolean;
   setIsOpenSearchChannel: (isOpen: boolean) => void;
   channelUserList: Record<string, string>;
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
   reFetchChannelMembers: () => void;
   setActiveChat: (chat: ActiveChat) => void;
   fetchChannels: () => void;

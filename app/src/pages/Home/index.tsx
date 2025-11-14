@@ -119,9 +119,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       window.location.href = "/login";
     } else if (activeChat?.type !== "channel") {
       setChannelUsersDirect({});
-      setNonInvitedUsersDirect([]);
+      setNonInvitedUsersDirect({});
     }
-  }, [isConfigSet]);
+  }, [
+    isConfigSet,
+    activeChat?.type,
+    setChannelUsersDirect,
+    setNonInvitedUsersDirect,
+  ]);
 
   useEffect(() => {
     currentOpenThreadRef.current = currentOpenThread;
@@ -176,7 +181,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           : displayName;
       });
       setChannelUsersDirect(membersRecord);
-      setNonInvitedUsersDirect([]);
+      setNonInvitedUsersDirect({});
     }
 
     // Clear message state using hooks
@@ -202,8 +207,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       if (selectedChat.type === "channel") {
         if (!channelMetaFromSelection) {
           getChannelUsers(selectedChat.id);
-          getNonInvitedUsers(selectedChat.id);
         }
+        getNonInvitedUsers(selectedChat.id);
       }
     }
 
@@ -482,6 +487,45 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const chatMembers = chatMembersHook.members;
   const _fetchChatMembers = chatMembersHook.fetchMembers;
 
+  // Keep active channel metadata & members in sync when the channels list updates
+  useEffect(() => {
+    if (activeChatRef.current?.type !== "channel") return;
+    const currentChannelName = activeChatRef.current.name;
+    const latestMeta = channels.find(
+      (channel: ChannelMeta) => channel.name === currentChannelName,
+    );
+    if (!latestMeta) return;
+
+    const prevMeta = activeChatRef.current.channelMeta;
+    if (
+      prevMeta &&
+      prevMeta.members?.length === latestMeta.members?.length &&
+      prevMeta.createdAt === latestMeta.createdAt
+    ) {
+      return;
+    }
+
+    const memberRecord: Record<string, string> = {};
+    latestMeta.members.forEach((member) => {
+      if (!member.id) return;
+      memberRecord[member.id] = member.name ?? member.id;
+    });
+    setChannelUsersDirect(memberRecord);
+
+    setActiveChat((prev) => {
+      if (!prev || prev.type !== "channel" || prev.name !== currentChannelName) {
+        return prev;
+      }
+      const updated: ActiveChat = {
+        ...prev,
+        channelMeta: latestMeta,
+        channelType: latestMeta.channelType,
+      };
+      activeChatRef.current = updated;
+      return updated;
+    });
+  }, [channels, setChannelUsersDirect, setActiveChat]);
+
   // Use chat handlers hook - simplified with refs
   const {
     handleThreadMessageUpdates,
@@ -489,24 +533,29 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   } = useChatHandlers(activeChatRef, activeChat, chatHandlersRefs);
 
   // Listen to WebSocket events via context
-  useWebSocketEvents(useCallback(async (event: WebSocketEvent) => {
-    try {
-      await handleStateMutation(event);
+  useWebSocketEvents(
+    useCallback(
+      async (event: WebSocketEvent) => {
+        try {
+          await handleStateMutation(event);
 
-      // Also handle thread messages if a thread is open
-      if (openThread) {
-        const sessionChat = getStoredSession();
-        const useDM = (sessionChat?.type === "direct_message" &&
-          sessionChat?.account &&
-          !sessionChat?.canJoin &&
-          sessionChat?.otherIdentityNew) as boolean;
+          // Also handle thread messages if a thread is open
+          if (openThread) {
+            const sessionChat = getStoredSession();
+            const useDM = (sessionChat?.type === "direct_message" &&
+              sessionChat?.account &&
+              !sessionChat?.canJoin &&
+              sessionChat?.otherIdentityNew) as boolean;
 
-        await handleThreadMessageUpdates(useDM, openThread.id);
-      }
-    } catch (error) {
-      log.error("Home", "Error processing WebSocket event", error);
-    }
-  }, [handleStateMutation, handleThreadMessageUpdates, openThread]));
+            await handleThreadMessageUpdates(useDM, openThread.id);
+          }
+        } catch (error) {
+          log.error("Home", "Error processing WebSocket event", error);
+        }
+      },
+      [handleStateMutation, handleThreadMessageUpdates, openThread],
+    ),
+  );
 
   // Track if initial fetch has been done - using useState to ensure it persists
   const initialFetchDone = useRef(false);

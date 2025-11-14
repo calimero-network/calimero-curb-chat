@@ -186,10 +186,10 @@ const OverLay = styled.div`
 // `;
 
 interface AddUserDialogProps {
-  addMember: (account: string, channel: string) => void;
+  addMember: (account: string, channel: string, username?: string) => void;
   channelName: string;
   getNonInvitedUsers: (value: string) => UserId[];
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
 }
 
 const AddUserDialog = ({
@@ -201,11 +201,8 @@ const AddUserDialog = ({
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const addUser = useCallback(() => {
     selectedUsers.forEach((account) => {
-      const identityId = Object.keys(nonInvitedUserList).find(
-        // @ts-expect-error - nonInvitedUserList is a Map
-        (u) => nonInvitedUserList[u] === account
-      ) as string;
-      addMember(identityId, channelName);
+      const username = nonInvitedUserList[account];
+      addMember(account, channelName, username);
     });
   }, [addMember, channelName, selectedUsers, nonInvitedUserList]);
 
@@ -273,20 +270,19 @@ const RoleBadge = styled.span`
 `;
 
 const OptionsWindow = styled.div`
-  right: 42px;
-  bottom: 20px;
   position: absolute;
-  height: fit;
+  top: 0;
+  right: 0;
+  transform: translateY(calc(-100% - 10px));
+  min-width: 200px;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  padding: 6px 0;
+  border-radius: 6px;
   background-color: #1d1d21;
   border: solid 1px #282933;
-  border-radius: 4px;
-  justify-content: start;
-  text-align: start;
-  padding: 0.5rem;
-  z-index: 1000;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+  z-index: 2000;
 `;
 
 const Option = styled.button`
@@ -300,13 +296,10 @@ const Option = styled.button`
   text-align: start;
   line-height: 150%;
   cursor: pointer;
+  padding: 0.4rem 1rem;
   &:hover {
     color: #fff;
   }
-`;
-
-const Wrapper = styled.div`
-  position: relative;
 `;
 
 interface MemberDetailsProps {
@@ -316,10 +309,10 @@ interface MemberDetailsProps {
   promoteModerator: (userId: string) => void;
   demoteModerator: (userId: string) => void;
   removeUserFromChannel: (userId: string) => void;
-  addMember: (account: string, channel: string) => void;
+  addMember: (account: string, channel: string, username?: string) => void;
   channelName: string;
   getNonInvitedUsers: (value: string) => UserId[];
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
 }
 
 const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
@@ -361,7 +354,7 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
   );
 
   return (
-    <Wrapper>
+    <>
       <AddUserDialog
         addMember={props.addMember}
         channelName={props.channelName}
@@ -376,7 +369,7 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
           const isSelf = member.id === effectiveCurrentUserId;
           const canManage = !isOwner && !isSelf;
           return (
-            <UserListItem key={member.id}>
+            <UserListItem key={member.id} style={{ position: "relative" }}>
               <UserInfo>
                 <Avatar size="xs" name={displayName} />
                 <Text $isSelected={optionsOpen === member.id}>
@@ -392,33 +385,13 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
                   <OptionsButton onClick={() => setOptionsOpen(member.id)}>
                     <i className="bi bi-three-dots" />
                   </OptionsButton>
-                </OptionsWrapper>
-              )}
-              {optionsOpen === member.id && <OptionsWindow>
-                {member.moderator ? (
-                        <Option onClick={() => handleDemote(member.id)}>
-                          Demote from moderator
-                        </Option>
-                      ) : (
-                  
-                        <Option onClick={() => handlePromote(member.id)}>
-                          Promote to moderator
-                        </Option>
-                      )}
-                      <Option onClick={() => handleRemove(member.id)}>
-                        Remove from channel
-                      </Option></OptionsWindow>}
-            </UserListItem>
-          );
-        })}
-        {/* {optionsOpen === member.id && (
+                  {optionsOpen === member.id && (
                     <OptionsWindow>
                       {member.moderator ? (
                         <Option onClick={() => handleDemote(member.id)}>
                           Demote from moderator
                         </Option>
                       ) : (
-                  
                         <Option onClick={() => handlePromote(member.id)}>
                           Promote to moderator
                         </Option>
@@ -427,9 +400,14 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
                         Remove from channel
                       </Option>
                     </OptionsWindow>
-                  )} */}
+                  )}
+                </OptionsWrapper>
+              )}
+            </UserListItem>
+          );
+        })}
       </UserList>
-    </Wrapper>
+    </>
   );
 };
 
