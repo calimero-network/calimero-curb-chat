@@ -36,7 +36,10 @@ export interface ChannelInfo {
   unread_mentions: number;
 }
 
-export type Channels = Map<string, ChannelInfo>;
+export type AllChannelsResponse = {
+  availablePublic: ChannelDataResponse[];
+  joined: ChannelDataResponse[];
+};
 
 interface ChannelOperationProps {
   channel: Channel;
@@ -256,12 +259,12 @@ export enum ClientMethod {
   JOIN_CHAT = "join_chat",
   CREATE_CHANNEL = "createChannel",
   GET_CHANNELS = "getChannels",
-  GET_ALL_CHANNELS_SEARCH = "get_all_channels",
+  GET_ALL_CHANNELS_SEARCH = "getChannelDirectory",
   GET_CHANNEL_MEMBERS = "get_channel_members",
   GET_CHANNEL_INFO = "get_channel_info",
   INVITE_TO_CHANNEL = "addUserToChannel",
   GET_INVITE_USERS = "getInvitees",
-  JOIN_CHANNEL = "join_channel",
+  JOIN_CHANNEL = "joinPublicChannel",
   LEAVE_CHANNEL = "leaveChannel",
   GET_MESSAGES = "get_messages",
   SEND_MESSAGE = "send_message",
@@ -290,7 +293,7 @@ export interface ClientApi {
   joinChat(props: JoinChatProps): ApiResponse<string>;
   createChannel(props: CreateChannelProps): ApiResponse<CreateChannelResponse>;
   getChannels(): ApiResponse<ChannelDataResponse[]>;
-  getAllChannelsSearch(): ApiResponse<Channels>;
+  getAllChannelsSearch(): ApiResponse<AllChannelsResponse>;
   getChannelMembers(
     props: GetChannelMembersProps,
   ): ApiResponse<Map<string, string>>;

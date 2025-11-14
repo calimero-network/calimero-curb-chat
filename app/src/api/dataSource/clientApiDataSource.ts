@@ -9,7 +9,7 @@ import {
   type AcceptInvitationProps,
   type ChannelDataResponse,
   type ChannelInfo,
-  type Channels,
+  type AllChannelsResponse,
   type ClientApi,
   ClientMethod,
   type CreateChannelProps,
@@ -213,10 +213,10 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getAllChannelsSearch(): ApiResponse<Channels> {
+  async getAllChannelsSearch(): ApiResponse<AllChannelsResponse> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Channels>(
+      const response = await getJsonRpcClient().execute<any, {result: AllChannelsResponse}>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_ALL_CHANNELS_SEARCH,
@@ -241,7 +241,7 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
       return {
-        data: response?.result.output as Channels,
+        data: response?.result.output?.result as AllChannelsResponse,
         error: null,
       };
     } catch (error) {
@@ -566,7 +566,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.JOIN_CHANNEL,
           argsJson: {
-            channel: props.channel,
+            channelId: props.channel.name,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -616,7 +616,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.LEAVE_CHANNEL,
           argsJson: {
-            channel: props.channel,
+            input: { channelId: props.channel.name },
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
