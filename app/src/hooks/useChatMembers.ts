@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
-// import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
-// import type { ResponseData } from "@calimero-network/calimero-client";
-// import { log } from "../utils/logger";
+import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
+import type { ResponseData } from "@calimero-network/calimero-client";
+import { log } from "../utils/logger";
 
 /**
  * Custom hook for managing chat members
@@ -16,27 +16,26 @@ export function useChatMembers() {
     setLoading(true);
     setError(null);
 
-    // try {
-    //   const response: ResponseData<Map<string, string>> =
-    //     await new ClientApiDataSource().getChatMembers({
-    //       isDM: false,
-    //     });
+    try {
+      const response: ResponseData<Map<string, string>> =
+        await new ClientApiDataSource().getChatMembers({
+          isDM: false,
+        });
 
-    //   if (response.data) {
-    //     setMembers(response.data);
-    //   } else if (response.error) {
-    //     setError(response.error.message || "Failed to fetch chat members");
-    //   }
-    // } catch (err) {
-    //   log.error("ChatMembers", "Error fetching chat members", err);
-    //   setError("Failed to fetch chat members");
-    // } finally {
-    //   setLoading(false);
-    // }
-    setMembers(new Map());
-    setLoading(false);
+      if (response.data) {
+        // @ts-expect-error - response.data is a Map<string, string>
+        setMembers(response.data.result as Map<string, string>);
+      } else if (response.error) {
+        setError(response.error.message || "Failed to fetch chat members");
+      }
+    } catch (err) {
+      log.error("ChatMembers", "Error fetching chat members", err);
+      setError("Failed to fetch chat members");
+    } finally {
+      setLoading(false);
+    }
   }, []);
-
+  
   return {
     members,
     loading,
