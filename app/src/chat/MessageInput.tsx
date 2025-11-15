@@ -17,10 +17,10 @@ import MessageImageField from "./MessageImageField";
 import {
   blobClient,
   getContextId,
-  type ResponseData,
+  //type ResponseData,
 } from "@calimero-network/calimero-client";
-import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
-import { extractUsernames } from "../utils/mentions";
+// import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
+// import { extractUsernames } from "../utils/mentions";
 import { RichTextEditor } from "@calimero-network/mero-ui";
 import { getDmContextId } from "../utils/session";
 import { useToast } from "../contexts/ToastContext";
@@ -616,18 +616,19 @@ export default function MessageInput({
         return;
       }
 
-      let tagList: string[] = [];
-      try {
-        const channelUsers: ResponseData<Map<string, string>> =
-          await new ClientApiDataSource().getChannelMembers({
-            channel: { name: selectedChat },
-          });
-        if (channelUsers.data) {
-          tagList = extractUsernames(channelUsers.data);
-        }
-      } catch (error) {
-        console.error("MessageInput", "Failed to fetch channel members", error);
-      }
+      const tagList: string[] = [];
+      // WIP: FRAN - DISABLED FOR NOW
+      // try {
+      //   const channelUsers: ResponseData<Map<string, string>> =
+      //     await new ClientApiDataSource().getChannelMembers({
+      //       channel: { name: selectedChat },
+      //     });
+      //   if (channelUsers.data) {
+      //     tagList = extractUsernames(channelUsers.data);
+      //   }
+      // } catch (error) {
+      //   console.error("MessageInput", "Failed to fetch channel members", error);
+      // }
 
       const payload: SendMessagePayload = {
         text: markdownParser(rawContent ?? "", tagList),

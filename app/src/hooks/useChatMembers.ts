@@ -23,7 +23,8 @@ export function useChatMembers() {
         });
 
       if (response.data) {
-        setMembers(response.data);
+        // @ts-expect-error - response.data is a Map<string, string>
+        setMembers(response.data.result as Map<string, string>);
       } else if (response.error) {
         setError(response.error.message || "Failed to fetch chat members");
       }
@@ -34,7 +35,7 @@ export function useChatMembers() {
       setLoading(false);
     }
   }, []);
-
+  
   return {
     members,
     loading,

@@ -54,6 +54,7 @@ export type ActiveChat = {
   channelType?: string;
   ownIdentity?: string;
   ownUsername?: string;
+  channelMeta?: ChannelMeta;
 };
 
 export interface User {
@@ -85,6 +86,7 @@ export interface ChannelMeta {
   channelType: string;
   description: string;
   members: User[];
+  moderators?: User[];
   createdAt: string;
   createdBy: string;
   createdByUsername: string;

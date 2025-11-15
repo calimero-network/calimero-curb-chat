@@ -2,9 +2,9 @@ import type { ApiResponse } from "@calimero-network/calimero-client";
 import type { HashMap } from "../types/Common";
 
 export enum ChannelType {
-  PUBLIC = "Public",
-  PRIVATE = "Private",
-  GROUP = "Default",
+  PUBLIC = "public",
+  PRIVATE = "private",
+  GROUP = "default",
 }
 
 export interface Channel {
@@ -12,6 +12,7 @@ export interface Channel {
 }
 
 export type UserId = string;
+export type Username = string;
 
 export interface CreateChannelProps {
   channel: Channel;
@@ -35,7 +36,10 @@ export interface ChannelInfo {
   unread_mentions: number;
 }
 
-export type Channels = Map<string, ChannelInfo>;
+export type AllChannelsResponse = {
+  availablePublic: ChannelDataResponse[];
+  joined: ChannelDataResponse[];
+};
 
 interface ChannelOperationProps {
   channel: Channel;
@@ -116,6 +120,7 @@ export interface FullMessageResponse {
 export interface InviteToChannelProps {
   channel: Channel;
   user: UserId;
+  username?: Username;
 }
 
 export interface DMChatInfo {
@@ -234,22 +239,38 @@ export type GetTotalDmUnreadCountProps = Record<string, never>;
 
 export type MarkAllDmsAsReadProps = Record<string, never>;
 
+export interface ChannelMember {
+  publicKey: string;
+  username: string;
+}
+
+export interface ChannelDataResponse {
+  channelId: string;
+  createdAt: string;
+  createdBy: string;
+  createdByUsername: string;
+  type: ChannelType;
+  members: ChannelMember[];
+  moderators: ChannelMember[];
+  readOnly: boolean;
+}
+
 export enum ClientMethod {
   JOIN_CHAT = "join_chat",
-  CREATE_CHANNEL = "create_channel",
-  GET_CHANNELS = "get_channels",
-  GET_ALL_CHANNELS_SEARCH = "get_all_channels",
+  CREATE_CHANNEL = "createChannel",
+  GET_CHANNELS = "getChannels",
+  GET_ALL_CHANNELS_SEARCH = "getChannelDirectory",
   GET_CHANNEL_MEMBERS = "get_channel_members",
   GET_CHANNEL_INFO = "get_channel_info",
-  INVITE_TO_CHANNEL = "invite_to_channel",
-  GET_INVITE_USERS = "get_non_member_users",
-  JOIN_CHANNEL = "join_channel",
-  LEAVE_CHANNEL = "leave_channel",
+  INVITE_TO_CHANNEL = "addUserToChannel",
+  GET_INVITE_USERS = "getInvitees",
+  JOIN_CHANNEL = "joinPublicChannel",
+  LEAVE_CHANNEL = "leaveChannel",
   GET_MESSAGES = "get_messages",
   SEND_MESSAGE = "send_message",
-  GET_DMS = "get_dms",
+  GET_DMS = "getDMs",
   GET_CHAT_MEMBERS = "get_chat_members",
-  CREATE_DM = "create_dm_chat",
+  CREATE_DM = "createDMChat",
   UPDATE_REACTION = "update_reaction",
   DELETE_MESSAGE = "delete_message",
   EDIT_MESSAGE = "edit_message",
@@ -257,8 +278,8 @@ export enum ClientMethod {
   UPDATE_INVITATION_PAYLOAD = "update_invitation_payload",
   ACCEPT_INVITATION = "accept_invitation",
   DELETE_DM = "delete_dm",
-  GET_USERNAME = "get_username",
-  GET_CHAT_USERNAMES = "get_chat_usernames",
+  GET_USERNAME = "getUsername",
+  GET_CHAT_USERNAMES = "getMembers",
   READ_MESSAGE = "mark_messages_as_read",
   UPDATE_DM_HASH = "update_dm_hashes",
   READ_DM = "mark_dm_as_read",
@@ -271,14 +292,16 @@ export enum ClientMethod {
 export interface ClientApi {
   joinChat(props: JoinChatProps): ApiResponse<string>;
   createChannel(props: CreateChannelProps): ApiResponse<CreateChannelResponse>;
-  getChannels(): ApiResponse<Channels>;
-  getAllChannelsSearch(): ApiResponse<Channels>;
+  getChannels(): ApiResponse<ChannelDataResponse[]>;
+  getAllChannelsSearch(): ApiResponse<AllChannelsResponse>;
   getChannelMembers(
     props: GetChannelMembersProps,
   ): ApiResponse<Map<string, string>>;
   getChannelInfo(props: GetChannelInfoProps): ApiResponse<ChannelInfo>;
   inviteToChannel(props: InviteToChannelProps): ApiResponse<string>;
-  getNonMemberUsers(props: GetNonMemberUsersProps): ApiResponse<UserId[]>;
+  getNonMemberUsers(
+    props: GetNonMemberUsersProps,
+  ): ApiResponse<Record<string, string>>;
   joinChannel(props: JoinChannelProps): ApiResponse<string>;
   leaveChannel(props: LeaveChannelProps): ApiResponse<string>;
   getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse>;

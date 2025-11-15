@@ -21,7 +21,7 @@ import {
   apiClient,
   getContextId,
   getExecutorPublicKey,
-  type ResponseData,
+  // type ResponseData,
 } from "@calimero-network/calimero-client";
 import type { ChannelInfo, DMChatInfo, UserId } from "../api/clientApi";
 import HandleDMSetup from "./HandleDMSetup";
@@ -139,7 +139,7 @@ function ChatContainer({
     UpdatedMessages[]
   >([]);
   const [isEmojiSelectorVisible, setIsEmojiSelectorVisible] = useState(false);
-  const [channelMeta, setChannelMeta] = useState<ChannelInfo>(
+  const [channelMeta, _setChannelMeta] = useState<ChannelInfo>(
     {} as ChannelInfo
   );
   const [openMobileReactions, setOpenMobileReactions] = useState("");
@@ -148,36 +148,36 @@ function ChatContainer({
   const [searchInputValue, setSearchInputValue] = useState(searchQuery);
 
   // Track last fetched channel to prevent excessive API calls
-  const lastFetchedChannelRef = useRef<string>("");
+  const _lastFetchedChannelRef = useRef<string>("");
 
   useEffect(() => {
     setSearchInputValue(searchQuery);
   }, [searchQuery]);
 
   useEffect(() => {
-    const fetchChannelMeta = async () => {
-      // Skip for DMs - they don't have channel info
-      if (activeChat.type === "direct_message") {
-        setChannelMeta({} as ChannelInfo);
-        return;
-      }
+    // const fetchChannelMeta = async () => {
+    //   // Skip for DMs - they don't have channel info
+    //   if (activeChat.type === "direct_message") {
+    //     setChannelMeta({} as ChannelInfo);
+    //     return;
+    //   }
 
-      // Only fetch if we haven't fetched for this channel yet
-      if (lastFetchedChannelRef.current === activeChat.name) {
-        return;
-      }
+    //   // Only fetch if we haven't fetched for this channel yet
+    //   if (lastFetchedChannelRef.current === activeChat.name) {
+    //     return;
+    //   }
 
-      lastFetchedChannelRef.current = activeChat.name;
+    //   lastFetchedChannelRef.current = activeChat.name;
 
-      const channelMeta: ResponseData<ChannelInfo> =
-        await new ClientApiDataSource().getChannelInfo({
-          channel: { name: activeChat.name },
-        });
-      if (channelMeta.data) {
-        setChannelMeta(channelMeta.data);
-      }
-    };
-    fetchChannelMeta();
+    //   const channelMeta: ResponseData<ChannelInfo> =
+    //     await new ClientApiDataSource().getChannelInfo({
+    //       channel: { name: activeChat.name },
+    //     });
+    //   if (channelMeta.data) {
+    //     setChannelMeta(channelMeta.data);
+    //   }
+    // };
+    // fetchChannelMeta();
   }, [activeChat.name, activeChat.type]);
 
   const activeChatRef = useRef(activeChat);

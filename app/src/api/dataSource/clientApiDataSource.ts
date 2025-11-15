@@ -7,8 +7,9 @@ import {
 } from "@calimero-network/calimero-client";
 import {
   type AcceptInvitationProps,
+  type ChannelDataResponse,
   type ChannelInfo,
-  type Channels,
+  type AllChannelsResponse,
   type ClientApi,
   ClientMethod,
   type CreateChannelProps,
@@ -37,7 +38,6 @@ import {
   type UpdateInvitationPayloadProps,
   type UpdateNewIdentityProps,
   type UpdateReactionProps,
-  type UserId,
 } from "../clientApi";
 import { getDmContextId } from "../../utils/session";
 
@@ -117,12 +117,9 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.CREATE_CHANNEL,
           argsJson: {
-            channel: props.channel,
-            channel_type: props.channel_type,
+            name: props.channel.name,
+            type: props.channel_type,
             read_only: props.read_only,
-            moderators: props.moderators,
-            links_allowed: props.links_allowed,
-            created_at: props.created_at,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -166,10 +163,10 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getChannels(): ApiResponse<Channels> {
+  async getChannels(): ApiResponse<ChannelDataResponse[]> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Channels>(
+      const response = await getJsonRpcClient().execute<any, { result: ChannelDataResponse[] }>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_CHANNELS,
@@ -195,7 +192,8 @@ export class ClientApiDataSource implements ClientApi {
       }
 
       return {
-        data: response?.result.output as Channels,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: response?.result?.output?.result as any,
         error: null,
       };
     } catch (error) {
@@ -215,10 +213,10 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getAllChannelsSearch(): ApiResponse<Channels> {
+  async getAllChannelsSearch(): ApiResponse<AllChannelsResponse> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Channels>(
+      const response = await getJsonRpcClient().execute<any, {result: AllChannelsResponse}>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_ALL_CHANNELS_SEARCH,
@@ -243,7 +241,7 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
       return {
-        data: response?.result.output as Channels,
+        data: response?.result.output?.result as AllChannelsResponse,
         error: null,
       };
     } catch (error) {
@@ -379,8 +377,13 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.INVITE_TO_CHANNEL,
           argsJson: {
-            channel: props.channel,
-            user: props.user,
+            rawInput: {
+              input: {
+                channelId: props.channel.name,
+                userId: props.user,
+                username: props.username,
+              },
+            },
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -424,15 +427,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async getNonMemberUsers(
     props: GetNonMemberUsersProps,
-  ): ApiResponse<UserId[]> {
+  ): ApiResponse<Record<string, string>> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, UserId[]>(
+      const response = await getJsonRpcClient().execute<any, unknown>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_INVITE_USERS,
           argsJson: {
-            channel: props.channel,
+            rawInput: {
+              input: {
+                channelId: props.channel.name,
+              },
+            },
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -453,8 +460,83 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
+
+      const normalizeInvitees = (
+        payload: unknown,
+      ): Record<string, string> => {
+        if (!payload) return {};
+
+        let parsedData: unknown = payload;
+
+        if (typeof parsedData === "string") {
+          try {
+            parsedData = JSON.parse(parsedData);
+          } catch {
+            const key = parsedData as string;
+            return { [key]: key };
+          }
+        }
+
+        if (
+          typeof parsedData === "object" &&
+          parsedData !== null &&
+          Object.prototype.hasOwnProperty.call(parsedData, "result")
+        ) {
+          parsedData = (parsedData as { result: unknown }).result;
+        }
+
+        const map: Record<string, string> = {};
+
+        if (Array.isArray(parsedData)) {
+          parsedData.forEach((entry) => {
+            if (!entry) return;
+
+            if (typeof entry === "string") {
+              map[entry] = entry;
+              return;
+            }
+
+            if (typeof entry === "object") {
+              const userId =
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).userId ??
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).user_id ??
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).id;
+
+              if (!userId) return;
+
+              const username =
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).username ??
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).userName ??
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).name ??
+                userId;
+
+              map[userId] = username;
+            }
+          });
+        } else if (
+          typeof parsedData === "object" &&
+          parsedData !== null
+        ) {
+          Object.entries(parsedData as Record<string, unknown>).forEach(
+            ([key, value]) => {
+              map[key] = typeof value === "string" ? value : key;
+            },
+          );
+        }
+
+        return map;
+      };
+
+      const invitees = normalizeInvitees(response?.result?.output);
+
       return {
-        data: response?.result.output as UserId[],
+        data: invitees,
         error: null,
       };
     } catch (error) {
@@ -467,6 +549,7 @@ export class ClientApiDataSource implements ClientApi {
         errorMessage = error;
       }
       return {
+        data: null,
         error: {
           code: 500,
           message: errorMessage,
@@ -483,7 +566,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.JOIN_CHANNEL,
           argsJson: {
-            channel: props.channel,
+            channelId: props.channel.name,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -533,7 +616,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.LEAVE_CHANNEL,
           argsJson: {
-            channel: props.channel,
+            input: { channelId: props.channel.name },
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -878,10 +961,10 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.CREATE_DM,
           argsJson: {
-            context_id: props.context_id,
-            context_hash: props.context_hash,
+            contextId: props.context_id,
+            // context_hash: props.context_hash,
             creator: props.creator,
-            creator_new_identity: props.creator_new_identity,
+            creatorNewIdentity: props.creator_new_identity,
             invitee: props.invitee,
             timestamp: props.timestamp,
             invitation_payload: props.payload,
@@ -1450,13 +1533,11 @@ export class ClientApiDataSource implements ClientApi {
   async getUsername(props: GetUsernameProps): ApiResponse<string> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response = await getJsonRpcClient().execute<any, { result: string }>(
         {
           contextId: props.contextId || getContextId() || "",
           method: ClientMethod.GET_USERNAME,
-          argsJson: {
-            user_id: props.userId,
-          },
+          argsJson: {},
           executorPublicKey: props.executorPublicKey || getExecutorPublicKey() || "",
         },
         {
@@ -1477,7 +1558,7 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
       return {
-        data: response?.result.output as string,
+        data: response?.result.output?.result as string,
         error: null,
       };
     } catch (error) {
