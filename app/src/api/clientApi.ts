@@ -99,6 +99,46 @@ export interface AttachmentResponse {
   uploaded_at: number;
 }
 
+export interface MessageAttachments {
+  files?: AttachmentRequest[];
+  images?: AttachmentRequest[];
+}
+
+// New backend API types
+export interface SendMessageArgs {
+  channelId: string;
+  text: string;
+  parentId?: string | null;
+  attachments?: MessageAttachments;
+  messageId?: string;
+}
+
+export interface GetMessagesArgs {
+  channelId: string;
+  parentId?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface EditMessageArgs {
+  channelId: string;
+  messageId: string;
+  text: string;
+  parentId?: string | null;
+}
+
+export interface DeleteMessageArgs {
+  channelId: string;
+  messageId: string;
+  parentId?: string | null;
+}
+
+export interface UpdateReactionArgs {
+  messageId: string;
+  emoji: string;
+  add: boolean;
+}
+
 export interface SendMessageProps {
   group: Channel;
   message: string;
@@ -299,14 +339,14 @@ export enum ClientMethod {
   PROMOTE_MODERATOR = "promoteModerator",
   DEMOTE_MODERATOR = "demoteModerator",
   REMOVE_USER_FROM_CHANNEL = "removeUserFromChannel",
-  GET_MESSAGES = "get_messages",
-  SEND_MESSAGE = "send_message",
+  GET_MESSAGES = "getMessages",
+  SEND_MESSAGE = "sendMessage",
   GET_DMS = "getDMs",
   GET_CHAT_MEMBERS = "get_chat_members",
   CREATE_DM = "createDMChat",
-  UPDATE_REACTION = "update_reaction",
-  DELETE_MESSAGE = "delete_message",
-  EDIT_MESSAGE = "edit_message",
+  UPDATE_REACTION = "updateReaction",
+  DELETE_MESSAGE = "deleteMessage",
+  EDIT_MESSAGE = "editMessage",
   UPDATE_NEW_IDENTITY = "update_new_identity",
   UPDATE_INVITATION_PAYLOAD = "update_invitation_payload",
   ACCEPT_INVITATION = "accept_invitation",

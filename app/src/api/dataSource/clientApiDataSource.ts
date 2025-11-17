@@ -881,6 +881,40 @@ export class ClientApiDataSource implements ClientApi {
     try {
       const useContext = props.refetch_context_id ? props.refetch_context_id : (props.is_dm ? getDmContextId() : getContextId()) || "";
       const useIdentity = props.refetch_identity ? props.refetch_identity : (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "";
+      
+      // Convert old props format to new GetMessagesArgs format
+      const getMessagesArgs = {
+        channelId: props.group.name,
+        parentId: props.parent_message || null,
+        limit: props.limit,
+        offset: props.offset,
+      };
+
+      // Backend accepts: rawInput: GetMessagesArgs | { input: GetMessagesArgs }
+      // Send as { input: GetMessagesArgs } format to match other methods
+      const argsJson: any = {
+        rawInput: {
+          input: getMessagesArgs,
+        },
+      };
+
+      console.log("getMessages API call:", {
+        method: ClientMethod.GET_MESSAGES,
+        channelId: getMessagesArgs.channelId,
+        parentId: getMessagesArgs.parentId,
+        limit: getMessagesArgs.limit,
+        offset: getMessagesArgs.offset,
+        contextId: useContext,
+        executorPublicKey: useIdentity,
+      });
+
+      // Add search_term if present (legacy support - might need to be handled differently)
+      if (props.search_term) {
+        // Note: search_term might need to be part of GetMessagesArgs in the future
+        // For now, keeping it separate for backward compatibility
+        argsJson.search_term = props.search_term;
+      }
+
       const response = await getJsonRpcClient().execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
@@ -889,15 +923,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: useContext,
           method: ClientMethod.GET_MESSAGES,
-          argsJson: {
-            group: props.group,
-            parent_message: props.parent_message,
-            limit: props.limit,
-            offset: props.offset,
-            ...(props.search_term
-              ? { search_term: props.search_term }
-              : {}),
-          },
+          argsJson,
           executorPublicKey: useIdentity,
         },
         {
@@ -907,7 +933,9 @@ export class ClientApiDataSource implements ClientApi {
           timeout: 10000,
         },
       );
+      
       if (response?.error) {
+        console.error("getMessages API error:", response.error);
         return {
           data: null,
           error: {
@@ -949,6 +977,22 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
+      
+      // Convert old props format to new SendMessageArgs format
+      const attachments = (props.files && props.files.length > 0) || (props.images && props.images.length > 0)
+        ? {
+            files: props.files,
+            images: props.images,
+          }
+        : undefined;
+
+      const sendMessageArgs = {
+        channelId: props.group.name,
+        text: props.message,
+        parentId: props.parent_message || null,
+        attachments,
+      };
+
       const response = await getJsonRpcClient().execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
@@ -958,19 +1002,9 @@ export class ClientApiDataSource implements ClientApi {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.SEND_MESSAGE,
           argsJson: {
-            group: props.group,
-            message: props.message,
-            mentions: props.mentions,
-            mentions_usernames: props.usernames,
-            parent_message: props.parent_message,
-            timestamp: props.timestamp,
-            sender_username: "",
-            ...(props.files && props.files.length > 0
-              ? { files: props.files }
-              : {}),
-            ...(props.images && props.images.length > 0
-              ? { images: props.images }
-              : {}),
+            rawInput: {
+              input: sendMessageArgs,
+            },
           },
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
@@ -1230,16 +1264,22 @@ export class ClientApiDataSource implements ClientApi {
 
   async updateReaction(props: UpdateReactionProps): ApiResponse<string> {
     try {
+      // Convert old props format to new UpdateReactionArgs format
+      const updateReactionArgs = {
+        messageId: props.messageId,
+        emoji: props.emoji,
+        add: props.add,
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.UPDATE_REACTION,
           argsJson: {
-            message_id: props.messageId,
-            emoji: props.emoji,
-            user: props.userId,
-            add: props.add,
+            rawInput: {
+              input: updateReactionArgs,
+            },
           },
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
@@ -1284,15 +1324,22 @@ export class ClientApiDataSource implements ClientApi {
 
   async deleteMessage(props: DeleteMessageProps): ApiResponse<string> {
     try {
+      // Convert old props format to new DeleteMessageArgs format
+      const deleteMessageArgs = {
+        channelId: props.is_dm ? "private_dm" : props.group.name,
+        messageId: props.messageId,
+        parentId: props.parent_id || null,
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.DELETE_MESSAGE,
           argsJson: {
-            group: props.is_dm ? { name: "private_dm" } : props.group,
-            message_id: props.messageId,
-            parent_id: props.parent_id,
+            rawInput: {
+              input: deleteMessageArgs,
+            },
           },
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
@@ -1337,17 +1384,23 @@ export class ClientApiDataSource implements ClientApi {
 
   async editMessage(props: EditMessageProps): ApiResponse<Message> {
     try {
+      // Convert old props format to new EditMessageArgs format
+      const editMessageArgs = {
+        channelId: props.is_dm ? "private_dm" : props.group.name,
+        messageId: props.messageId,
+        text: props.newMessage,
+        parentId: props.parent_id || null,
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, Message>(
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.EDIT_MESSAGE,
           argsJson: {
-            group: props.is_dm ? { name: "private_dm" } : props.group,
-            message_id: props.messageId,
-            new_message: props.newMessage,
-            timestamp: props.timestamp,
-            parent_id: props.parent_id,
+            rawInput: {
+              input: editMessageArgs,
+            },
           },
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
