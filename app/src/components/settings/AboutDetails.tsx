@@ -86,7 +86,7 @@ const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
               </Text>
             </ButtonLeave>
           )}
-          {props.canDeleteChannel && props.onDeleteChannel && (
+          {props.isOwner && props.canDeleteChannel && props.onDeleteChannel && (
             <ButtonLeave>
               <Text $red={true} onClick={props.onDeleteChannel}>
                 Delete Channel

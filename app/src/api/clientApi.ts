@@ -50,6 +50,7 @@ export type GetChannelInfoProps = ChannelOperationProps;
 export type GetNonMemberUsersProps = ChannelOperationProps;
 export type JoinChannelProps = ChannelOperationProps;
 export type LeaveChannelProps = ChannelOperationProps;
+export type DeleteChannelProps = ChannelOperationProps;
 
 export interface GetMessagesProps {
   group: Channel;
@@ -266,6 +267,7 @@ export enum ClientMethod {
   GET_INVITE_USERS = "getInvitees",
   JOIN_CHANNEL = "joinPublicChannel",
   LEAVE_CHANNEL = "leaveChannel",
+  DELETE_CHANNEL = "deleteChannel",
   GET_MESSAGES = "get_messages",
   SEND_MESSAGE = "send_message",
   GET_DMS = "getDMs",
@@ -304,6 +306,7 @@ export interface ClientApi {
   ): ApiResponse<Record<string, string>>;
   joinChannel(props: JoinChannelProps): ApiResponse<string>;
   leaveChannel(props: LeaveChannelProps): ApiResponse<string>;
+  deleteChannel(props: DeleteChannelProps): ApiResponse<string>;
   getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse>;
   sendMessage(props: SendMessageProps): ApiResponse<Message>;
   getDms(): ApiResponse<DMChatInfo[]>;

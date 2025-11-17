@@ -15,6 +15,7 @@ import {
   type CreateChannelProps,
   type CreateChannelResponse,
   type CreateDmProps,
+  type DeleteChannelProps,
   type DeleteDMProps,
   type DeleteMessageProps,
   type DMChatInfo,
@@ -644,6 +645,56 @@ export class ClientApiDataSource implements ClientApi {
     } catch (error) {
       console.error("leaveChannel failed:", error);
       let errorMessage = "An unexpected error occurred during leaveChannel";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: {
+          code: 500,
+          message: errorMessage,
+        },
+      };
+    }
+  }
+
+  async deleteChannel(props: DeleteChannelProps): ApiResponse<string> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
+        {
+          contextId: getContextId() || "",
+          method: ClientMethod.DELETE_CHANNEL,
+          argsJson: {
+            input: { channelId: props.channel.name },
+          },
+          executorPublicKey: getExecutorPublicKey() || "",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        },
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return {
+        data: response?.result.output as string,
+        error: null,
+      };
+    } catch (error) {
+      console.error("deleteChannel failed:", error);
+      let errorMessage = "An unexpected error occurred during deleteChannel";
       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === "string") {

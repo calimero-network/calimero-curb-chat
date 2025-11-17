@@ -148,8 +148,20 @@ export default function ChannelDetailsPopup({
   );
 
   const handleDeleteChannel = useCallback(async () => {
-    console.warn("Delete channel action is not yet implemented.");
-  }, []);
+    const apiClient = new ClientApiDataSource();
+    const response = await apiClient.deleteChannel({
+      channel: { name: channelName },
+    });
+    
+    if (response.error) {
+      console.error("Failed to delete channel:", response.error);
+      return;
+    }
+    
+    setActiveChat(defaultActiveChat);
+    fetchChannels();
+    setIsOpen(false);
+  }, [channelName, setActiveChat, fetchChannels, setIsOpen]);
 
   const popupContent = (
     <DetailsContainer

@@ -327,6 +327,11 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
 
   const effectiveCurrentUserId = currentUserId ?? "";
 
+  // Check if current user is a moderator
+  const currentUser = members.find((m) => m.id === effectiveCurrentUserId);
+  const isCurrentUserModerator = currentUser?.moderator ?? false;
+  const isCurrentUserOwner = effectiveCurrentUserId === channelOwner;
+
   const [optionsOpen, setOptionsOpen] = useState<string | null>(null);
 
   const handlePromote = useCallback(
@@ -353,14 +358,19 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
     [removeUserFromChannel]
   );
 
+  // Only show add member button if current user is moderator or owner
+  const canAddMembers = isCurrentUserModerator || isCurrentUserOwner;
+
   return (
     <>
-      <AddUserDialog
-        addMember={props.addMember}
-        channelName={props.channelName}
-        getNonInvitedUsers={props.getNonInvitedUsers}
-        nonInvitedUserList={props.nonInvitedUserList}
-      />
+      {canAddMembers && (
+        <AddUserDialog
+          addMember={props.addMember}
+          channelName={props.channelName}
+          getNonInvitedUsers={props.getNonInvitedUsers}
+          nonInvitedUserList={props.nonInvitedUserList}
+        />
+      )}
       {optionsOpen && <OverLay onClick={() => setOptionsOpen(null)} />}
       <UserList>
         {members.map((member) => {
@@ -368,6 +378,8 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
           const isOwner = member.id === channelOwner;
           const isSelf = member.id === effectiveCurrentUserId;
           const canManage = !isOwner && !isSelf;
+          // Only show menu if current user is moderator or owner
+          const canShowMenu = (isCurrentUserModerator || isCurrentUserOwner) && canManage;
           return (
             <UserListItem key={member.id} style={{ position: "relative" }}>
               <UserInfo>
@@ -380,7 +392,7 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
                   )}
                 </Text>
               </UserInfo>
-              {canManage && (
+              {canShowMenu && (
                 <OptionsWrapper>
                   <OptionsButton onClick={() => setOptionsOpen(member.id)}>
                     <i className="bi bi-three-dots" />
