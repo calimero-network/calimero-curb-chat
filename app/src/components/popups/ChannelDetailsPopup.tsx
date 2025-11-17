@@ -113,38 +113,71 @@ export default function ChannelDetailsPopup({
   const handlePromoteModerator = useCallback(
     async (userId: string) => {
       if (userId === channelMeta.createdBy) return;
+      const apiClient = new ClientApiDataSource();
+      const response = await apiClient.promoteModerator({
+        channel: { name: channelName },
+        user: userId,
+      });
+      
+      if (response.error) {
+        console.error("Failed to promote moderator:", response.error);
+        return;
+      }
+      
       updateMembersState((members) =>
         members.map((member) =>
           member.id === userId ? { ...member, moderator: true } : member,
         ),
       );
-      await reFetchChannelMembers();
+      await fetchChannels();
     },
-    [channelMeta.createdBy, updateMembersState, reFetchChannelMembers],
+    [channelMeta.createdBy, channelName, updateMembersState, fetchChannels],
   );
 
   const handleDemoteModerator = useCallback(
     async (userId: string) => {
       if (userId === channelMeta.createdBy) return;
+      const apiClient = new ClientApiDataSource();
+      const response = await apiClient.demoteModerator({
+        channel: { name: channelName },
+        user: userId,
+      });
+      
+      if (response.error) {
+        console.error("Failed to demote moderator:", response.error);
+        return;
+      }
+      
       updateMembersState((members) =>
         members.map((member) =>
           member.id === userId ? { ...member, moderator: false } : member,
         ),
       );
-      await reFetchChannelMembers();
+      await fetchChannels();
     },
-    [channelMeta.createdBy, updateMembersState, reFetchChannelMembers],
+    [channelMeta.createdBy, channelName, updateMembersState, fetchChannels],
   );
 
   const handleRemoveUserFromChannel = useCallback(
     async (userId: string) => {
       if (userId === channelMeta.createdBy) return;
+      const apiClient = new ClientApiDataSource();
+      const response = await apiClient.removeUserFromChannel({
+        channel: { name: channelName },
+        user: userId,
+      });
+      
+      if (response.error) {
+        console.error("Failed to remove user from channel:", response.error);
+        return;
+      }
+      
       updateMembersState((members) =>
         members.filter((member) => member.id !== userId),
       );
-      await reFetchChannelMembers();
+      await fetchChannels();
     },
-    [channelMeta.createdBy, updateMembersState, reFetchChannelMembers],
+    [channelMeta.createdBy, channelName, updateMembersState, fetchChannels],
   );
 
   const handleDeleteChannel = useCallback(async () => {

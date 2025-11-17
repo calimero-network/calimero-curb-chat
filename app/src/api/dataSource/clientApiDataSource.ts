@@ -32,6 +32,9 @@ import {
   type JoinChatProps,
   type LeaveChannelProps,
   type Message,
+  type PromoteModeratorProps,
+  type DemoteModeratorProps,
+  type RemoveUserFromChannelProps,
   type ReadDmProps,
   type ReadMessageProps,
   type SendMessageProps,
@@ -695,6 +698,171 @@ export class ClientApiDataSource implements ClientApi {
     } catch (error) {
       console.error("deleteChannel failed:", error);
       let errorMessage = "An unexpected error occurred during deleteChannel";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: {
+          code: 500,
+          message: errorMessage,
+        },
+      };
+    }
+  }
+
+  async promoteModerator(props: PromoteModeratorProps): ApiResponse<string> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
+        {
+          contextId: getContextId() || "",
+          method: ClientMethod.PROMOTE_MODERATOR,
+          argsJson: {
+            rawInput: {
+              input: {
+                channelId: props.channel.name,
+                userId: props.user,
+              },
+            },
+          },
+          executorPublicKey: getExecutorPublicKey() || "",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        },
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return {
+        data: response?.result.output as string,
+        error: null,
+      };
+    } catch (error) {
+      console.error("promoteModerator failed:", error);
+      let errorMessage = "An unexpected error occurred during promoteModerator";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: {
+          code: 500,
+          message: errorMessage,
+        },
+      };
+    }
+  }
+
+  async demoteModerator(props: DemoteModeratorProps): ApiResponse<string> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
+        {
+          contextId: getContextId() || "",
+          method: ClientMethod.DEMOTE_MODERATOR,
+          argsJson: {
+            rawInput: {
+              input: {
+                channelId: props.channel.name,
+                userId: props.user,
+              },
+            },
+          },
+          executorPublicKey: getExecutorPublicKey() || "",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        },
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return {
+        data: response?.result.output as string,
+        error: null,
+      };
+    } catch (error) {
+      console.error("demoteModerator failed:", error);
+      let errorMessage = "An unexpected error occurred during demoteModerator";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: {
+          code: 500,
+          message: errorMessage,
+        },
+      };
+    }
+  }
+
+  async removeUserFromChannel(props: RemoveUserFromChannelProps): ApiResponse<string> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
+        {
+          contextId: getContextId() || "",
+          method: ClientMethod.REMOVE_USER_FROM_CHANNEL,
+          argsJson: {
+            rawInput: {
+              input: {
+                channelId: props.channel.name,
+                userId: props.user,
+              },
+            },
+          },
+          executorPublicKey: getExecutorPublicKey() || "",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        },
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return {
+        data: response?.result.output as string,
+        error: null,
+      };
+    } catch (error) {
+      console.error("removeUserFromChannel failed:", error);
+      let errorMessage = "An unexpected error occurred during removeUserFromChannel";
       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === "string") {

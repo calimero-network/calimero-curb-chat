@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import styled from "styled-components";
 import type { User } from "../../types/Common";
 import MultipleInputPopup from "../common/popups/MultipleInputPopup";
@@ -35,6 +35,10 @@ const UserListItem = styled.div`
   padding-right: 1rem;
   border-radius: 0.5rem;
   cursor: pointer;
+`;
+
+const MemberDetailsWrapper = styled.div`
+  position: relative;
 `;
 
 const UserList = styled.div`
@@ -269,11 +273,10 @@ const RoleBadge = styled.span`
   color: #777583;
 `;
 
-const OptionsWindow = styled.div`
-  position: absolute;
-  top: 0;
-  right: 0;
-  transform: translateY(calc(-100% - 10px));
+const OptionsWindow = styled.div<{ $top: number; $right: number }>`
+  position: fixed;
+  top: ${({ $top }) => $top}px;
+  right: ${({ $right }) => $right}px;
   min-width: 200px;
   display: flex;
   flex-direction: column;
@@ -283,6 +286,7 @@ const OptionsWindow = styled.div`
   border: solid 1px #282933;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
   z-index: 2000;
+  transform: translateY(calc(-100% - 10px));
 `;
 
 const Option = styled.button`
@@ -333,6 +337,9 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
   const isCurrentUserOwner = effectiveCurrentUserId === channelOwner;
 
   const [optionsOpen, setOptionsOpen] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const userListRef = useRef<HTMLDivElement | null>(null);
 
   const handlePromote = useCallback(
     (userId: string) => {
@@ -361,8 +368,53 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
   // Only show add member button if current user is moderator or owner
   const canAddMembers = isCurrentUserModerator || isCurrentUserOwner;
 
+  const handleOpenMenu = useCallback((memberId: string) => {
+    setOptionsOpen(memberId);
+    const button = buttonRefs.current[memberId];
+    if (button) {
+      const rect = button.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.top,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (optionsOpen) {
+      const updatePosition = () => {
+        const button = buttonRefs.current[optionsOpen];
+        if (button) {
+          const rect = button.getBoundingClientRect();
+          setMenuPosition({
+            top: rect.top,
+            right: window.innerWidth - rect.right,
+          });
+        }
+      };
+
+      updatePosition();
+      
+      // Update position on scroll
+      window.addEventListener('scroll', updatePosition, true);
+      const userList = userListRef.current;
+      if (userList) {
+        userList.addEventListener('scroll', updatePosition);
+      }
+
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        if (userList) {
+          userList.removeEventListener('scroll', updatePosition);
+        }
+      };
+    } else {
+      setMenuPosition(null);
+    }
+  }, [optionsOpen]);
+
   return (
-    <>
+    <MemberDetailsWrapper>
       {canAddMembers && (
         <AddUserDialog
           addMember={props.addMember}
@@ -372,7 +424,7 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
         />
       )}
       {optionsOpen && <OverLay onClick={() => setOptionsOpen(null)} />}
-      <UserList>
+      <UserList ref={userListRef}>
         {members.map((member) => {
           const displayName = member.name ?? member.id;
           const isOwner = member.id === channelOwner;
@@ -394,11 +446,16 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
               </UserInfo>
               {canShowMenu && (
                 <OptionsWrapper>
-                  <OptionsButton onClick={() => setOptionsOpen(member.id)}>
+                  <OptionsButton
+                    ref={(el) => {
+                      buttonRefs.current[member.id] = el;
+                    }}
+                    onClick={() => handleOpenMenu(member.id)}
+                  >
                     <i className="bi bi-three-dots" />
                   </OptionsButton>
-                  {optionsOpen === member.id && (
-                    <OptionsWindow>
+                  {optionsOpen === member.id && menuPosition && (
+                    <OptionsWindow $top={menuPosition.top} $right={menuPosition.right}>
                       {member.moderator ? (
                         <Option onClick={() => handleDemote(member.id)}>
                           Demote from moderator
@@ -419,7 +476,7 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
           );
         })}
       </UserList>
-    </>
+    </MemberDetailsWrapper>
   );
 };
 

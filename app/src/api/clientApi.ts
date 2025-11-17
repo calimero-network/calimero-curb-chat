@@ -124,6 +124,34 @@ export interface InviteToChannelProps {
   username?: Username;
 }
 
+export type ChannelId = string;
+
+export interface ChannelMembershipInput {
+  channelId: ChannelId;
+  userId: UserId;
+  username?: Username;
+}
+
+export interface ModeratorInput {
+  channelId: ChannelId;
+  userId: UserId;
+}
+
+export interface PromoteModeratorProps {
+  channel: Channel;
+  user: UserId;
+}
+
+export interface DemoteModeratorProps {
+  channel: Channel;
+  user: UserId;
+}
+
+export interface RemoveUserFromChannelProps {
+  channel: Channel;
+  user: UserId;
+}
+
 export interface DMChatInfo {
   channel_type: ChannelType;
   created_at: number;
@@ -268,6 +296,9 @@ export enum ClientMethod {
   JOIN_CHANNEL = "joinPublicChannel",
   LEAVE_CHANNEL = "leaveChannel",
   DELETE_CHANNEL = "deleteChannel",
+  PROMOTE_MODERATOR = "promoteModerator",
+  DEMOTE_MODERATOR = "demoteModerator",
+  REMOVE_USER_FROM_CHANNEL = "removeUserFromChannel",
   GET_MESSAGES = "get_messages",
   SEND_MESSAGE = "send_message",
   GET_DMS = "getDMs",
@@ -307,6 +338,9 @@ export interface ClientApi {
   joinChannel(props: JoinChannelProps): ApiResponse<string>;
   leaveChannel(props: LeaveChannelProps): ApiResponse<string>;
   deleteChannel(props: DeleteChannelProps): ApiResponse<string>;
+  promoteModerator(props: PromoteModeratorProps): ApiResponse<string>;
+  demoteModerator(props: DemoteModeratorProps): ApiResponse<string>;
+  removeUserFromChannel(props: RemoveUserFromChannelProps): ApiResponse<string>;
   getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse>;
   sendMessage(props: SendMessageProps): ApiResponse<Message>;
   getDms(): ApiResponse<DMChatInfo[]>;
