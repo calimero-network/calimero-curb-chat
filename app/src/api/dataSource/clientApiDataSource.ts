@@ -42,6 +42,8 @@ import {
   type UpdateInvitationPayloadProps,
   type UpdateNewIdentityProps,
   type UpdateReactionProps,
+  type GetMessagesResponse,
+  type MessageWithReactions,
 } from "../clientApi";
 import { getDmContextId } from "../../utils/session";
 
@@ -53,6 +55,45 @@ export function getJsonRpcClient() {
     );
   }
   return rpcClient;
+}
+
+/**
+ * Transforms reactions from backend array format to frontend HashMap format
+ * Backend format: [{ emoji: "👍", users: [null, "testuser"] }]
+ * Frontend format: { "👍": ["testuser"] }
+ */
+function transformReactions(
+  reactions: 
+    | Array<{ emoji: string; users: (string | null)[] }>
+    | Record<string, string[]>
+    | undefined
+    | null
+): Record<string, string[]> {
+  const reactionsHashMap: Record<string, string[]> = {};
+  
+  if (!reactions) {
+    return reactionsHashMap;
+  }
+  
+  if (Array.isArray(reactions)) {
+    // New format: array of { emoji, users }
+    reactions.forEach((reaction) => {
+      if (reaction?.emoji && Array.isArray(reaction.users)) {
+        // Filter out null values and convert to string array
+        const validUsers = reaction.users.filter(
+          (user): user is string => user !== null && user !== undefined
+        );
+        if (validUsers.length > 0) {
+          reactionsHashMap[reaction.emoji] = validUsers;
+        }
+      }
+    });
+  } else if (typeof reactions === 'object' && !Array.isArray(reactions)) {
+    // Old format: already a HashMap/object
+    return reactions as Record<string, string[]>;
+  }
+  
+  return reactionsHashMap;
 }
 
 export class ClientApiDataSource implements ClientApi {
@@ -890,23 +931,12 @@ export class ClientApiDataSource implements ClientApi {
         offset: props.offset,
       };
 
-      // Backend accepts: rawInput: GetMessagesArgs | { input: GetMessagesArgs }
-      // Send as { input: GetMessagesArgs } format to match other methods
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const argsJson: any = {
         rawInput: {
           input: getMessagesArgs,
         },
       };
-
-      console.log("getMessages API call:", {
-        method: ClientMethod.GET_MESSAGES,
-        channelId: getMessagesArgs.channelId,
-        parentId: getMessagesArgs.parentId,
-        limit: getMessagesArgs.limit,
-        offset: getMessagesArgs.offset,
-        contextId: useContext,
-        executorPublicKey: useIdentity,
-      });
 
       // Add search_term if present (legacy support - might need to be handled differently)
       if (props.search_term) {
@@ -918,7 +948,7 @@ export class ClientApiDataSource implements ClientApi {
       const response = await getJsonRpcClient().execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
-        FullMessageResponse
+        GetMessagesResponse
       >(
         {
           contextId: useContext,
@@ -946,8 +976,69 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
 
+      // Backend returns: { result: { output: { result: [...] } } }
+      // We need to transform it to FullMessageResponse format
+      const getMessagesObject = response?.result?.output?.result as FullMessageResponse | undefined;
+      if (!getMessagesObject) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "An unexpected error occurred during getMessages",
+          },
+        };
+      }
+      
+      // Transform messages from backend format to frontend format
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transformedMessages = getMessagesObject.messages.map((msg: any) => {
+        // Convert timestamp from nanoseconds (string) to milliseconds (number)
+        const timestampNs = typeof msg.timestamp === 'string' 
+          ? BigInt(msg.timestamp) 
+          : BigInt(msg.timestamp || 0);
+        const timestampMs = Number(timestampNs / BigInt(1_000_000));
+
+        // Convert editedAt from nanoseconds to milliseconds if present
+        let editedAt: number | undefined = undefined;
+        if (msg.editedAt !== null && msg.editedAt !== undefined) {
+          const editedAtNs = typeof msg.editedAt === 'string'
+            ? BigInt(msg.editedAt)
+            : BigInt(msg.editedAt || 0);
+          editedAt = Number(editedAtNs / BigInt(1_000_000));
+        }
+
+        // Transform reactions from array format to HashMap format
+        const reactionsHashMap = transformReactions(msg.reactions);
+
+        return {
+          id: msg.id,
+          sender: msg.senderId,
+          senderUsername: msg.senderUsername,
+          text: msg.text,
+          timestamp: timestampMs,
+          deleted: msg.deleted || false,
+          editedAt,
+          reactions: reactionsHashMap,
+          threadCount: msg.threadCount || 0,
+          threadLastTimestamp: msg.threadLastTimestamp 
+            ? (typeof msg.threadLastTimestamp === 'string'
+                ? Number(BigInt(msg.threadLastTimestamp) / BigInt(1_000_000))
+                : msg.threadLastTimestamp)
+            : 0,
+          group: msg.group,
+          files: msg.files || [],
+          images: msg.images || [],
+        };
+      });
+
+      const fullMessageResponse: FullMessageResponse = {
+        messages: transformedMessages,
+        total_count: getMessagesObject.total_count,
+        start_position: getMessagesObject.start_position,
+      };
+
       return {
-        data: response?.result.output as FullMessageResponse,
+        data: fullMessageResponse,
         error: null,
       };
     } catch (error) {
@@ -967,7 +1058,7 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async sendMessage(props: SendMessageProps): ApiResponse<Message> {
+  async sendMessage(props: SendMessageProps): ApiResponse<MessageWithReactions> {
     try {
       if (!props.message) {
         return {
@@ -996,7 +1087,7 @@ export class ClientApiDataSource implements ClientApi {
       const response = await getJsonRpcClient().execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
-        Message
+        { result: { output: { result: MessageWithReactions } } }
       >(
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
@@ -1028,8 +1119,26 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
 
+      const messageWithReactions = response?.result?.output?.result as MessageWithReactions | undefined;
+
+      if (!messageWithReactions) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "An unexpected error occurred during sendMessage",
+          },
+        };
+      }
+
+      // Transform reactions from array format to HashMap format
+      const transformedMessage: MessageWithReactions = {
+        ...messageWithReactions,
+        reactions: transformReactions(messageWithReactions.reactions),
+      };
+
       return {
-        data: response?.result.output as Message,
+        data: transformedMessage,
         error: null,
       };
     } catch (error) {
@@ -1269,6 +1378,7 @@ export class ClientApiDataSource implements ClientApi {
         messageId: props.messageId,
         emoji: props.emoji,
         add: props.add,
+        username: props.userId,
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

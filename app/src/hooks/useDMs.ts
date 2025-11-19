@@ -22,8 +22,6 @@ export function useDMs() {
       const response: ResponseData<DMChatInfo[]> =
         await new ClientApiDataSource().getDms();
 
-      console.log("response", response);
-
       if (response.data) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         // @ts-expect-error - response.data.data.result is not typed

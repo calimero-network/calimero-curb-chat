@@ -206,8 +206,8 @@ const StartDMPopup = memo(function StartDMPopup({
     const normalizedInput = inputValue.trim().toLowerCase();
     const matchedMember = normalizedMembers.find(
       (member) =>
-        member.username.toLowerCase() === normalizedInput ||
-        member.userId.toLowerCase() === normalizedInput,
+        (typeof member.username === 'string' && member.username.toLowerCase() === normalizedInput) ||
+        (typeof member.userId === 'string' && member.userId.toLowerCase() === normalizedInput),
     );
 
     if (!matchedMember) {
@@ -246,8 +246,8 @@ const StartDMPopup = memo(function StartDMPopup({
       const lowerValue = value.toLowerCase();
       const filteredSuggestions = normalizedMembers.filter(
         (member) =>
-          member.username.toLowerCase().startsWith(lowerValue) ||
-          member.userId.toLowerCase().startsWith(lowerValue),
+          (typeof member.username === 'string' && member.username.toLowerCase().startsWith(lowerValue)) ||
+          (typeof member.userId === 'string' && member.userId.toLowerCase().startsWith(lowerValue)),
       );
       setSuggestions(filteredSuggestions);
       setShowSuggestions(filteredSuggestions.length > 0);

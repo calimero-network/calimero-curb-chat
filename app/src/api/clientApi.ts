@@ -1,5 +1,6 @@
 import type { ApiResponse } from "@calimero-network/calimero-client";
 import type { HashMap } from "../types/Common";
+import type { MessageId } from "../components/virtualized-chat";
 
 export enum ChannelType {
   PUBLIC = "public",
@@ -67,18 +68,19 @@ export interface GetMessagesProps {
 export interface Message {
   id: string;
   sender: string;
-  sender_username: string;
+  senderUsername: string;
   text: string;
   timestamp: number;
   deleted?: boolean;
-  edited_on?: number;
+  editedAt?: number;
   reactions: HashMap<string, UserId[]>;
-  thread_count: number;
-  thread_last_timestamp: number;
+  threadCount: number;
+  threadLastTimestamp: number;
   group?: string;
   files?: AttachmentResponse[];
   images?: AttachmentResponse[];
 }
+
 
 export interface MessageWithReactions extends Message {
   reactions: HashMap<string, UserId[]>;
@@ -156,6 +158,10 @@ export interface FullMessageResponse {
   messages: MessageWithReactions[];
   total_count: number;
   start_position: number;
+}
+
+export interface GetMessagesResponse {
+  result: { output: { result: FullMessageResponse } };
 }
 
 export interface InviteToChannelProps {
@@ -382,7 +388,7 @@ export interface ClientApi {
   demoteModerator(props: DemoteModeratorProps): ApiResponse<string>;
   removeUserFromChannel(props: RemoveUserFromChannelProps): ApiResponse<string>;
   getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse>;
-  sendMessage(props: SendMessageProps): ApiResponse<Message>;
+  sendMessage(props: SendMessageProps): ApiResponse<{ id: MessageId }>;
   getDms(): ApiResponse<DMChatInfo[]>;
   getChatMembers(props: GetChatMembersProps): ApiResponse<Map<string, string>>;
   createDm(props: CreateDmProps): ApiResponse<string>;

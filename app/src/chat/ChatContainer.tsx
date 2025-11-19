@@ -193,14 +193,17 @@ function ChatContainer({
 
   const computeReaction = useCallback(
     (message: CurbMessage, reaction: string, username: string) => {
-      const accounts = message.reactions?.[reaction] ?? [];
+      // Ensure we have a reactions object to work with
+      const existingReactions = message.reactions || {};
+      const accounts = existingReactions[reaction] ?? [];
       let update;
       if (accounts.includes(username)) {
         update = accounts.filter((a: string) => a !== username);
       } else {
         update = [...accounts, username];
       }
-      return { reactions: { ...message.reactions, [reaction]: update } };
+      // Preserve all existing reactions and only update the specific emoji
+      return { reactions: { ...existingReactions, [reaction]: update } };
     },
     []
   );

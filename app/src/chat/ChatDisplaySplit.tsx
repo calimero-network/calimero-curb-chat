@@ -315,16 +315,20 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
       toggleEmojiSelector: toggleEmojiSelector,
       openMobileReactions: openMobileReactions,
       setOpenMobileReactions: setOpenMobileReactions,
-      editable: (message: CurbMessage) =>
-        message.sender ===
-        (activeChat.type === "direct_message"
+      editable: (message: CurbMessage) => {
+        if (!message.sender) return false;
+        const currentUser = activeChat.type === "direct_message"
           ? activeChat.account
-          : getExecutorPublicKey()),
-      deleteable: (message: CurbMessage) =>
-        message.sender ===
-        (activeChat.type === "direct_message"
+          : getExecutorPublicKey();
+        return message.sender === currentUser;
+      },
+      deleteable: (message: CurbMessage) => {
+        if (!message.sender) return false;
+        const currentUser = activeChat.type === "direct_message"
           ? activeChat.account
-          : getExecutorPublicKey()),
+          : getExecutorPublicKey();
+        return message.sender === currentUser;
+      },
       onEditModeRequested: (message: CurbMessage) =>
         onEditModeRequested(message, isThread),
       onEditModeCancelled: (message: CurbMessage) =>

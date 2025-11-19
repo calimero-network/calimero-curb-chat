@@ -164,6 +164,7 @@ const AutocompleteContainer: React.FC<AutocompleteContainerProps> = ({
 }) => {
   const filteredInviteUsers = Object.entries(inviteUsers).filter(
     ([userId, username]) =>
+      typeof username === 'string' &&
       username.toLowerCase().startsWith(value.toLowerCase()) &&
       !selectedUsers.includes(userId),
   );

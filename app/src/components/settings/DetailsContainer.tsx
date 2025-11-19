@@ -106,7 +106,7 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
     const lowerValue = value.toLowerCase();
     return Object.entries(nonInvitedUserList)
       .filter(([, username]) =>
-        username.toLowerCase().startsWith(lowerValue),
+        typeof username === 'string' && username.toLowerCase().startsWith(lowerValue),
       )
       .map(([userId]) => userId);
   };

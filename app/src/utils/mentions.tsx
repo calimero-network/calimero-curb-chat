@@ -46,7 +46,8 @@ export function extractAndAddMentions(
     }
 
     for (const [userId, username] of userEntries) {
-      if (username.toLowerCase() === mention.toLowerCase()) {
+      // Ensure username is a string before calling toLowerCase
+      if (typeof username === 'string' && username.toLowerCase() === mention.toLowerCase()) {
         uniqueUserIdMentions.add(userId);
         uniqueUsernameMentions.add(username);
         break;
