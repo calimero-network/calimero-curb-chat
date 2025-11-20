@@ -23,28 +23,7 @@ export function useDMs() {
         await new ClientApiDataSource().getDms();
 
       if (response.data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        // @ts-expect-error - response.data.data.result is not typed
-        const transformedDms = response.data.data.result.map((dm: any) => ({
-          channel_type: dm.channel_type,
-          created_at: dm.created_at,
-          created_by: dm.created_by,
-          channel_user: dm.channel_user,
-          context_id: dm.context_id,
-          other_identity_new: dm.other_identity_new,
-          other_identity_old: dm.other_identity_old,
-          other_username: dm.other_username,
-          own_identity: dm.own_identity,
-          own_identity_old: dm.own_identity_old,
-          own_username: dm.own_username,
-          did_join: dm.did_join,
-          invitation_payload: dm.invitation_payload,
-          old_hash: dm.old_hash,
-          new_hash: dm.new_hash,
-          unread_messages: dm.unread_messages,
-        }));
-
-        setDms(transformedDms);
+        setDms(response.data);
         return response.data;
       } else if (response.error) {
         setError(response.error.message || "Failed to fetch DMs");

@@ -137,7 +137,7 @@ export function useMessages() {
 
   /**
    * Check for and add new messages from websocket events
-   * Includes aggressive rate limiting to prevent API hammering
+   * Fetches messages starting from the offset of already-loaded messages
    */
   const checkForNewMessages = useCallback(
     async (
@@ -148,7 +148,13 @@ export function useMessages() {
     ): Promise<CurbMessage[]> => {
       if (!activeChat) return [];
 
-      // Removed throttling to allow real-time message updates
+      // Get the number of messages we've already loaded
+      // This will be used as the offset to fetch only new messages
+      const currentMessageCount = messagesRef.current.length;
+      
+      // If we haven't loaded any messages yet, start from offset 0
+      // Otherwise, start from where we left off
+      const fetchOffset = currentMessageCount;
 
       // If it's a DM, fetch the DM identity for this context
       let refetchIdentity: string | undefined = undefined;
@@ -167,7 +173,7 @@ export function useMessages() {
             name: (isDM ? "private_dm" : group) || "",
           },
           limit: RECENT_MESSAGES_CHECK_SIZE,
-          offset: 0,
+          offset: fetchOffset,
           is_dm: isDM,
           dm_identity: refetchIdentity || activeChat.account,
           parent_message: undefined, // Only get main chat messages, not thread messages
@@ -175,15 +181,25 @@ export function useMessages() {
 
       if (!response.data) return [];
 
-      // Transform messages - MessageStore will handle deduplication
-      const newMessages = response.data.messages.map((msg) =>
+      // Transform messages
+      const fetchedMessages = response.data.messages.map((msg) =>
         transformMessageToUI(msg),
       );
 
-      if (newMessages.length > 0) {
-        // Only update ref, not state (MessageStore will deduplicate in VirtualizedChat)
-        messagesRef.current = [...messagesRef.current, ...newMessages];
-        return newMessages;
+      // Get existing message IDs to filter out duplicates
+      const existingMessageIds = new Set(
+        messagesRef.current.map((msg) => msg.id)
+      );
+
+      // Only return messages that don't already exist
+      const trulyNewMessages = fetchedMessages.filter(
+        (msg) => !existingMessageIds.has(msg.id)
+      );
+
+      if (trulyNewMessages.length > 0) {
+        // Only update ref with truly new messages
+        messagesRef.current = [...messagesRef.current, ...trulyNewMessages];
+        return trulyNewMessages;
       }
 
       return [];

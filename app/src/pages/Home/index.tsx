@@ -665,11 +665,59 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   );
 
   const createDM = async (value: string): Promise<CreateContextResult> => {
-    // @ts-expect-error - chatMembers is a Map<string, string>
-    const creatorUsername = chatMembers[getExecutorPublicKey() || ""];
-    // @ts-expect-error - chatMembers is a Map<string, string>
-    const inviteeUsername = chatMembers[value];
-    const dmParams = generateDMParams(value, creatorUsername, inviteeUsername);
+    // Extract creator from chatMembers
+    // chatMembers is a Map where keys are numbers and values are {userId, username}
+    const executorPublicKey = getExecutorPublicKey();
+    if (!executorPublicKey) {
+      return {
+        data: "",
+        error: "Failed to create DM - executor public key not found",
+      };
+    }
+
+    // Find the creator entry - chatMembers entries are [key, value] where value is {userId, username}
+    const creatorEntry = Array.from(chatMembers.entries()).find(([_, memberData]) => {
+      // Handle both Map<string, string> and Map<number, {userId, username}> structures
+      if (typeof memberData === 'string') {
+        return memberData === executorPublicKey;
+      }
+      // memberData is an object with userId and username
+      const memberObj = memberData as { userId?: string; username?: string };
+      return memberObj?.userId === executorPublicKey;
+    });
+
+    if (!creatorEntry) {
+      return {
+        data: "",
+        error: "Failed to create DM - creator not found",
+      };
+    }
+
+    // Extract userId and username from the creator entry
+    // creatorEntry is [key, value] where value is {userId, username} or string
+    const [, creatorData] = creatorEntry;
+    let creatorUserId: string;
+    let creatorUsername: string;
+
+    if (typeof creatorData === 'string') {
+      // If it's a string, use it as userId and try to find username elsewhere
+      creatorUserId = creatorData;
+      creatorUsername = '';
+    } else {
+      // If it's an object, extract userId and username
+      const creatorObj = creatorData as { userId?: string; username?: string };
+      creatorUserId = creatorObj?.userId || '';
+      creatorUsername = creatorObj?.username || '';
+    }
+
+    if (!creatorUserId) {
+      return {
+        data: "",
+        error: "Failed to create DM - creator userId not found",
+      };
+    }
+
+    const dmParams = generateDMParams(value, creatorUsername, creatorUserId);
     const response = await apiClient
       .node()
       .createContext(

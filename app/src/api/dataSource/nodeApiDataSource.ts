@@ -14,6 +14,7 @@ import type {
   VerifyContextProps,
   VerifyContextResponse,
 } from "../nodeApi";
+import type { ContextCreationParams } from "@calimero-network/calimero-client/lib/api/nodeApi";
 
 const DEFAULT_NODE_ENDPOINT = "http://localhost:2428";
 
@@ -33,16 +34,10 @@ function getAuthHeaders() {
 
 export class ContextApiDataSource implements NodeApi {
   async createContext(
-    props: CreateContextProps,
+    props: ContextCreationParams,
   ): ApiResponse<CreateContextResponse> {
     try {
-      const jsonData = {
-        name: props.user,
-        is_dm: true,
-        default_channels: [{ name: "private_dm" }],
-        created_at: Date.now(),
-      };
-      const jsonString = JSON.stringify(jsonData);
+      const jsonString = JSON.stringify(props.params);
       const encoder = new TextEncoder();
       const bytes = encoder.encode(jsonString);
       const byteArray = Array.from(bytes);
@@ -52,8 +47,8 @@ export class ContextApiDataSource implements NodeApi {
       const response = await axios.post(
         `${nodeEndpoint}/admin-api/contexts`,
         {
-          applicationId: import.meta.env.VITE_APPLICATION_ID || "",
-          protocol: "near",
+          applicationId: props.applicationId,
+          protocol: props.protocol,
           initializationParams: byteArray,
         },
         {

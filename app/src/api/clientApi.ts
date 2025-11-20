@@ -217,6 +217,25 @@ export interface DMChatInfo {
   unread_messages: number;
 }
 
+export interface DMrawObject {
+  channelType: ChannelType;
+  contextId: string;
+  createdAt: number;
+  createdBy: UserId;
+  channelUser: UserId;
+  otherIdentityNew: UserId;
+  otherIdentityOld: UserId;
+  otherUsername: string;
+  ownIdentity: UserId;
+  ownIdentityOld: UserId;
+  ownUsername: string;
+  didJoin: boolean;
+  invitationPayload: string;
+  oldHash: string;
+  newHash: string;
+  unreadMessages: number;
+}
+
 export interface CreateDmProps {
   context_id: string;
   context_hash: string;
@@ -331,7 +350,7 @@ export interface ChannelDataResponse {
 }
 
 export enum ClientMethod {
-  JOIN_CHAT = "join_chat",
+  JOIN_CHAT = "joinChat",
   CREATE_CHANNEL = "createChannel",
   GET_CHANNELS = "getChannels",
   GET_ALL_CHANNELS_SEARCH = "getChannelDirectory",
@@ -356,7 +375,7 @@ export enum ClientMethod {
   UPDATE_NEW_IDENTITY = "update_new_identity",
   UPDATE_INVITATION_PAYLOAD = "update_invitation_payload",
   ACCEPT_INVITATION = "accept_invitation",
-  DELETE_DM = "delete_dm",
+  DELETE_DM = "deleteDM",
   GET_USERNAME = "getUsername",
   GET_CHAT_USERNAMES = "getMembers",
   READ_MESSAGE = "mark_messages_as_read",
