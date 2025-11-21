@@ -1639,8 +1639,10 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.UPDATE_NEW_IDENTITY,
           argsJson: {
-            other_user: props.other_user,
-            new_identity: props.new_identity,
+            input: {
+              otherUser: props.other_user,
+            newIdentity: props.new_identity
+          }
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },

@@ -374,7 +374,7 @@ export enum ClientMethod {
   UPDATE_REACTION = "updateReaction",
   DELETE_MESSAGE = "deleteMessage",
   EDIT_MESSAGE = "editMessage",
-  UPDATE_NEW_IDENTITY = "update_new_identity",
+  UPDATE_NEW_IDENTITY = "updateNewIdentity",
   UPDATE_INVITATION_PAYLOAD = "update_invitation_payload",
   ACCEPT_INVITATION = "accept_invitation",
   DELETE_DM = "deleteDM",

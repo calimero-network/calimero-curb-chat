@@ -46,7 +46,6 @@ export function useMessages() {
           hasMore: false,
         };
       }
-
       const isDM = activeChat.type === "direct_message";
       const response: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({
