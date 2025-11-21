@@ -86,7 +86,7 @@ export function generateDMParams(
   };
   const jsonString = JSON.stringify(jsonData);
   return {
-    applicationId: import.meta.env.VITE_APPLICATION_ID || "",
+    applicationId: (import.meta.env.VITE_APPLICATION_ID || "") as string,
     protocol: "near",
     params: jsonString,
   };

@@ -59,6 +59,7 @@ interface ChatDisplaySplitProps {
   isEmojiSelectorVisible: boolean;
   setIsEmojiSelectorVisible: (isVisible: boolean) => void;
   messageWithEmojiSelector: CurbMessage | null;
+  activeChannelMembers?: { userId: string; username: string }[];
 }
 
 const ContainerPadding = styled.div<{ $isThread?: boolean }>`
@@ -196,6 +197,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
   isEmojiSelectorVisible,
   setIsEmojiSelectorVisible,
   messageWithEmojiSelector,
+  activeChannelMembers,
 }: ChatDisplaySplitProps) {
   const [accountId, setAccountId] = useState<string | undefined>(undefined);
   const [username, setUsername] = useState<string>("");
@@ -396,6 +398,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
           isReadOnly={isReadOnly}
           isOwner={isOwner}
           isModerator={isModerator}
+          activeChannelMembers={activeChannelMembers}
         />
       </Wrapper>
       {isEmojiSelectorVisible && (

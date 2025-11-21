@@ -79,6 +79,8 @@ export interface Message {
   group?: string;
   files?: AttachmentResponse[];
   images?: AttachmentResponse[];
+  mentions: UserId[];
+  mentionUsernames: string[];
 }
 
 
@@ -354,7 +356,7 @@ export enum ClientMethod {
   CREATE_CHANNEL = "createChannel",
   GET_CHANNELS = "getChannels",
   GET_ALL_CHANNELS_SEARCH = "getChannelDirectory",
-  GET_CHANNEL_MEMBERS = "get_channel_members",
+  GET_CHANNEL_MEMBERS = "abc",
   GET_CHANNEL_INFO = "get_channel_info",
   INVITE_TO_CHANNEL = "addUserToChannel",
   GET_INVITE_USERS = "getInvitees",

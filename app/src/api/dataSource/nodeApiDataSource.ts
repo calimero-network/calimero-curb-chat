@@ -5,8 +5,6 @@ import {
   type ApiResponse,
 } from "@calimero-network/calimero-client";
 import type {
-  CreateContextProps,
-  CreateContextResponse,
   CreateIdentityResponse,
   DeleteContextProps,
   JoinContextProps,
@@ -14,7 +12,6 @@ import type {
   VerifyContextProps,
   VerifyContextResponse,
 } from "../nodeApi";
-import type { ContextCreationParams } from "@calimero-network/calimero-client/lib/api/nodeApi";
 
 const DEFAULT_NODE_ENDPOINT = "http://localhost:2428";
 
@@ -33,59 +30,6 @@ function getAuthHeaders() {
 }
 
 export class ContextApiDataSource implements NodeApi {
-  async createContext(
-    props: ContextCreationParams,
-  ): ApiResponse<CreateContextResponse> {
-    try {
-      const jsonString = JSON.stringify(props.params);
-      const encoder = new TextEncoder();
-      const bytes = encoder.encode(jsonString);
-      const byteArray = Array.from(bytes);
-
-      const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
-
-      const response = await axios.post(
-        `${nodeEndpoint}/admin-api/contexts`,
-        {
-          applicationId: props.applicationId,
-          protocol: props.protocol,
-          initializationParams: byteArray,
-        },
-        {
-          headers: getAuthHeaders(),
-        },
-      );
-
-      if (response.status === 200) {
-        return {
-          data: response.data.data,
-          error: null,
-        };
-      } else {
-        return {
-          data: null,
-          error: {
-            code: response.status,
-            message: response.statusText,
-          },
-        };
-      }
-    } catch (error) {
-      console.error("createContext failed:", error);
-      let errorMessage = "An unexpected error occurred during createContext";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      return {
-        data: null,
-        error: {
-          code: 500,
-          message: errorMessage,
-        },
-      };
-    }
-  }
-
   async joinContext(props: JoinContextProps): ApiResponse<string> {
     try {
       const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
@@ -251,6 +195,7 @@ export class ContextApiDataSource implements NodeApi {
 
         // Map the API response to our ContextInfo interface
         // API uses 'id' but our interface expects 'contextId'
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const contexts = rawContexts.map((ctx: any) => ({
           contextId: ctx.id,
           applicationId: ctx.applicationId,

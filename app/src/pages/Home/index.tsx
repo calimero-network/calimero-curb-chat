@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
   type ActiveChat,
@@ -812,6 +812,23 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     [], // NO DEPENDENCIES
   );
 
+  // Get channel members for the active channel (for mentions in MessageInput)
+  const activeChannelMembers = useMemo(() => {
+    if (activeChat?.type !== "channel") return [];
+    const channelMeta = channels.find(
+      (ch: ChannelMeta) => ch.name === activeChat.name,
+    );
+    if (!channelMeta?.members) return [];
+    
+    // Transform User[] to { userId: string; username: string }[]
+    return channelMeta.members
+      .filter((member) => member.id) // Filter out members without id
+      .map((member) => ({
+        userId: member.id,
+        username: member.name || member.id,
+      }));
+  }, [activeChat, channels]);
+
   return (
     <AppContainer
       isOpenSearchChannel={isOpenSearchChannel}
@@ -856,6 +873,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       onSearchMessages={handleSearchMessages}
       onLoadMoreSearch={handleLoadMoreSearch}
       onClearSearch={handleClearSearch}
+      activeChannelMembers={activeChannelMembers}
     />
   );
 }

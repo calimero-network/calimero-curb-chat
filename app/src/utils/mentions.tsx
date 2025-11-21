@@ -1,27 +1,14 @@
 import type { UserId } from "../api/clientApi";
 
-// Helper function to extract just usernames from users map
-export function extractUsernames(
-  users: Map<string, string> | Record<string, string> | null | undefined,
-): string[] {
-  if (!users) return [];
-
-  if (users instanceof Map) {
-    return Array.from(users.values());
-  } else {
-    return Object.values(users);
-  }
-}
 
 export function extractAndAddMentions(
   message: string,
-  users: Map<string, string> | Record<string, string> | null | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  users: any[],
 ): {
   userIdMentions: UserId[];
   usernameMentions: string[];
 } {
-  // users <public_key, username>
-  // mentions from username (value)
   const regexPattern = /(@everyone)|(@here)|(@[a-zA-Z\s]+)/g;
   const uniqueUserIdMentions = new Set<string>();
   const uniqueUsernameMentions = new Set<string>();
@@ -34,9 +21,6 @@ export function extractAndAddMentions(
     };
   }
 
-  const userEntries =
-    users instanceof Map ? Array.from(users.entries()) : Object.entries(users);
-
   while ((match = regexPattern.exec(message)) !== null) {
     const mention = match[0].slice(1).trim();
 
@@ -45,11 +29,10 @@ export function extractAndAddMentions(
       continue;
     }
 
-    for (const [userId, username] of userEntries) {
-      // Ensure username is a string before calling toLowerCase
-      if (typeof username === 'string' && username.toLowerCase() === mention.toLowerCase()) {
-        uniqueUserIdMentions.add(userId);
-        uniqueUsernameMentions.add(username);
+    for (const user of users) {
+      if (typeof user.username === 'string' && user.username.toLowerCase() === mention.toLowerCase()) {
+        uniqueUserIdMentions.add(user.userId);
+        uniqueUsernameMentions.add(user.username);
         break;
       }
     }

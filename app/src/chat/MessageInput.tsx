@@ -17,10 +17,7 @@ import MessageImageField from "./MessageImageField";
 import {
   blobClient,
   getContextId,
-  //type ResponseData,
 } from "@calimero-network/calimero-client";
-// import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
-// import { extractUsernames } from "../utils/mentions";
 import { RichTextEditor } from "@calimero-network/mero-ui";
 import { getDmContextId } from "../utils/session";
 import { useToast } from "../contexts/ToastContext";
@@ -374,6 +371,7 @@ interface MessageInputProps {
   isReadOnly: boolean;
   isOwner: boolean;
   isModerator: boolean;
+  activeChannelMembers?: { userId: string; username: string }[];
 }
 
 export default function MessageInput({
@@ -386,6 +384,7 @@ export default function MessageInput({
   isReadOnly,
   isOwner,
   isModerator,
+  activeChannelMembers,
 }: MessageInputProps) {
   const [canWriteMessage, setCanWriteMessage] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -616,19 +615,11 @@ export default function MessageInput({
         return;
       }
 
-      const tagList: string[] = [];
-      // WIP: FRAN - DISABLED FOR NOW
-      // try {
-      //   const channelUsers: ResponseData<Map<string, string>> =
-      //     await new ClientApiDataSource().getChannelMembers({
-      //       channel: { name: selectedChat },
-      //     });
-      //   if (channelUsers.data) {
-      //     tagList = extractUsernames(channelUsers.data);
-      //   }
-      // } catch (error) {
-      //   console.error("MessageInput", "Failed to fetch channel members", error);
-      // }
+      // Use activeChannelMembers if available (from channels fetch)
+      // Otherwise fallback to empty array
+      const tagList: string[] = activeChannelMembers
+        ? activeChannelMembers.map((member) => member.username)
+        : [];
 
       const payload: SendMessagePayload = {
         text: markdownParser(rawContent ?? "", tagList),
@@ -666,6 +657,7 @@ export default function MessageInput({
       setEmojiSelectorOpen,
       handleMessageChange,
       addToast,
+      activeChannelMembers,
     ]
   );
 

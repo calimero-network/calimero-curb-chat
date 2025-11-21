@@ -51,7 +51,7 @@ interface ChatContainerProps {
   setOpenThread: (thread: CurbMessage | undefined) => void;
   currentOpenThreadRef: React.RefObject<CurbMessage | undefined>;
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat) => void;
-  membersList: Map<string, string>;
+  membersList:  Map<string, string>;
   addOptimisticMessage?: (message: CurbMessage) => void;
   addOptimisticThreadMessage?: (message: CurbMessage) => void;
   clearThreadsMessagesOnSwitch: () => void;
@@ -66,6 +66,7 @@ interface ChatContainerProps {
   onClearSearch: () => void;
   isSearchOverlayOpen: boolean;
   onCloseSearchOverlay: () => void;
+  activeChannelMembers: { userId: string; username: string }[];
 }
 
 const ChatContainerWrapper = styled.div`
@@ -133,6 +134,7 @@ function ChatContainer({
   onClearSearch,
   isSearchOverlayOpen,
   onCloseSearchOverlay,
+  activeChannelMembers,
 }: ChatContainerProps) {
   const [updatedMessages, setUpdatedMessages] = useState<UpdatedMessages[]>([]);
   const [_updatedThreadMessages, setUpdatedThreadMessages] = useState<
@@ -273,6 +275,7 @@ function ChatContainer({
     );
     const isDM = activeChatRef.current?.type === "direct_message";
 
+    // @ts-expect-error - membersListRef.current is a Map
     const result = extractAndAddMentions(messageText, membersListRef.current);
     const mentions: UserId[] = [...result.userIdMentions];
     const usernames: string[] = [...result.usernameMentions];
@@ -701,6 +704,7 @@ function ChatContainer({
               isEmojiSelectorVisible={isEmojiSelectorVisible}
               setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
               messageWithEmojiSelector={messageWithEmojiSelector}
+              activeChannelMembers={activeChannelMembers}
             />
             {openThread && (
               <ThreadWrapper>
@@ -735,6 +739,7 @@ function ChatContainer({
                     return incomingThreadMessages;
                   })()}
                   loadPrevMessages={(id: string) => loadPrevThreadMessages(id)}
+                  activeChannelMembers={activeChannelMembers}
                   currentOpenThreadRef={currentOpenThreadRef}
                   isEmojiSelectorVisible={isEmojiSelectorVisible}
                   setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
@@ -828,6 +833,7 @@ function ChatContainer({
                 isEmojiSelectorVisible={isEmojiSelectorVisible}
                 setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
                 messageWithEmojiSelector={messageWithEmojiSelector}
+                activeChannelMembers={activeChannelMembers}
               />
               {openThread && (
                 <ThreadWrapper>
@@ -863,6 +869,7 @@ function ChatContainer({
                     loadPrevMessages={(id: string) =>
                       loadPrevThreadMessages(id)
                     }
+                    activeChannelMembers={activeChannelMembers}
                     currentOpenThreadRef={currentOpenThreadRef}
                     isEmojiSelectorVisible={isEmojiSelectorVisible}
                     setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}

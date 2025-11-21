@@ -1028,6 +1028,19 @@ export class ClientApiDataSource implements ClientApi {
         // Transform reactions from array format to HashMap format
         const reactionsHashMap = transformReactions(msg.reactions);
 
+        // Transform attachments: map blob_id_str to blob_id and ensure uploaded_at exists
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const transformAttachment = (attachment: any) => {
+          if (!attachment) return null;
+          return {
+            name: attachment.name,
+            blob_id: attachment.blob_id || attachment.blob_id_str || "",
+            mime_type: attachment.mime_type,
+            size: attachment.size,
+            uploaded_at: attachment.uploaded_at || 0,
+          };
+        };
+
         return {
           id: msg.id,
           sender: msg.senderId,
@@ -1044,8 +1057,10 @@ export class ClientApiDataSource implements ClientApi {
               : msg.threadLastTimestamp
             : 0,
           group: props.group.name,
-          files: msg.files || [],
-          images: msg.images || [],
+          mentions: msg.mentions,
+          mentionUsernames: msg.mentionUsernames,
+          files: (msg.files || []).map(transformAttachment).filter(Boolean),
+          images: (msg.images || []).map(transformAttachment).filter(Boolean),
         };
       });
 
@@ -1088,22 +1103,14 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
-
-      // Convert old props format to new SendMessageArgs format
-      const attachments =
-        (props.files && props.files.length > 0) ||
-        (props.images && props.images.length > 0)
-          ? {
-              files: props.files,
-              images: props.images,
-            }
-          : undefined;
-
       const sendMessageArgs = {
         channelId: props.group.name,
         text: props.message,
         parentId: props.parent_message || null,
-        attachments,
+        files: props.files,
+        images: props.images,
+        mentionUsernames: props.usernames,
+        mentions: props.mentions,
       };
 
       const response = await getJsonRpcClient().execute<
@@ -1141,11 +1148,10 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
 
-      const messageWithReactions = response?.result?.output?.result as
-        | MessageWithReactions
-        | undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawMessage = response?.result?.output?.result as any;
 
-      if (!messageWithReactions) {
+      if (!rawMessage) {
         return {
           data: null,
           error: {
@@ -1155,10 +1161,25 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
 
+      // Transform attachments: map blob_id_str to blob_id and ensure uploaded_at exists
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transformAttachment = (attachment: any) => {
+        if (!attachment) return null;
+        return {
+          name: attachment.name,
+          blob_id: attachment.blob_id || attachment.blob_id_str || "",
+          mime_type: attachment.mime_type,
+          size: attachment.size,
+          uploaded_at: attachment.uploaded_at || 0,
+        };
+      };
+
       // Transform reactions from array format to HashMap format
       const transformedMessage: MessageWithReactions = {
-        ...messageWithReactions,
-        reactions: transformReactions(messageWithReactions.reactions),
+        ...rawMessage,
+        reactions: transformReactions(rawMessage.reactions || []),
+        files: (rawMessage.files || []).map(transformAttachment).filter(Boolean),
+        images: (rawMessage.images || []).map(transformAttachment).filter(Boolean),
       };
 
       return {
@@ -1242,8 +1263,9 @@ export class ClientApiDataSource implements ClientApi {
 
   async getDms(): ApiResponse<DMChatInfo[]> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      
       const response = await getJsonRpcClient().execute<
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         { result: { output: { result: DMrawObject[] } } }
       >(

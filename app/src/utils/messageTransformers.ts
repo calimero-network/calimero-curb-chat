@@ -54,7 +54,7 @@ export function transformMessageToUI(
     threadCount: message.threadCount,
     threadLastTimestamp: threadLastTimestamp,
     editedOn: editedOn,
-    mentions: [],
+    mentions: message.mentionUsernames,
     files: (message.files ?? []).map(mapAttachmentToCurbFile),
     images: (message.images ?? []).map(mapAttachmentToCurbFile),
     editMode: false,
