@@ -16,7 +16,7 @@ export const MessageJoinWrapper = styled.div`
   align-items: center;
   @media (max-width: 1024px) {
     position: absolute;
-    top: 0;
+    top: 150px;
     left: 0;
     right: 0;
     bottom: 0;

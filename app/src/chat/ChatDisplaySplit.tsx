@@ -59,6 +59,7 @@ interface ChatDisplaySplitProps {
   isEmojiSelectorVisible: boolean;
   setIsEmojiSelectorVisible: (isVisible: boolean) => void;
   messageWithEmojiSelector: CurbMessage | null;
+  activeChannelMembers?: { userId: string; username: string }[];
 }
 
 const ContainerPadding = styled.div<{ $isThread?: boolean }>`
@@ -196,6 +197,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
   isEmojiSelectorVisible,
   setIsEmojiSelectorVisible,
   messageWithEmojiSelector,
+  activeChannelMembers,
 }: ChatDisplaySplitProps) {
   const [accountId, setAccountId] = useState<string | undefined>(undefined);
   const [username, setUsername] = useState<string>("");
@@ -315,16 +317,20 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
       toggleEmojiSelector: toggleEmojiSelector,
       openMobileReactions: openMobileReactions,
       setOpenMobileReactions: setOpenMobileReactions,
-      editable: (message: CurbMessage) =>
-        message.sender ===
-        (activeChat.type === "direct_message"
+      editable: (message: CurbMessage) => {
+        if (!message.sender) return false;
+        const currentUser = activeChat.type === "direct_message"
           ? activeChat.account
-          : getExecutorPublicKey()),
-      deleteable: (message: CurbMessage) =>
-        message.sender ===
-        (activeChat.type === "direct_message"
+          : getExecutorPublicKey();
+        return message.sender === currentUser;
+      },
+      deleteable: (message: CurbMessage) => {
+        if (!message.sender) return false;
+        const currentUser = activeChat.type === "direct_message"
           ? activeChat.account
-          : getExecutorPublicKey()),
+          : getExecutorPublicKey();
+        return message.sender === currentUser;
+      },
       onEditModeRequested: (message: CurbMessage) =>
         onEditModeRequested(message, isThread),
       onEditModeCancelled: (message: CurbMessage) =>
@@ -392,6 +398,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
           isReadOnly={isReadOnly}
           isOwner={isOwner}
           isModerator={isModerator}
+          activeChannelMembers={activeChannelMembers}
         />
       </Wrapper>
       {isEmojiSelectorVisible && (

@@ -1,14 +1,11 @@
 import { styled } from "styled-components";
 import Loader from "../loader/Loader";
 import type { ActiveChat, ChannelMeta } from "../../types/Common";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
-import {
-  getExecutorPublicKey,
-  type ResponseData,
-} from "@calimero-network/calimero-client";
-import type { Channels } from "../../api/clientApi";
 import { Button, SearchInput } from "@calimero-network/mero-ui";
+import { ChannelType } from "../../api/clientApi";
+import type { ChannelMember, ChannelDataResponse } from "../../api/clientApi";
 
 const SearchContainer = styled.div`
   padding: 24px;
@@ -189,102 +186,126 @@ interface SearchChannelsContainerProps {
 
 export default function SearchChannelsContainer({
   onChatSelected,
-  fetchChannels,
+  fetchChannels: refreshGlobalChannels,
 }: SearchChannelsContainerProps) {
+  const apiClient = useMemo(() => new ClientApiDataSource(), []);
   const [allChannels, setAllChannels] = useState<ChannelMeta[]>([]);
   const [inputValue, setInputValue] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [allChannelsCreators, setAllChannelsCreators] = useState<{
-    [key: string]: string;
-  }>({});
   const [isLoadingNameId, setIsLoadingNameId] = useState("");
+  const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const channelsStartingWithPrefix = inputValue
-    ? allChannels.filter((channel) => channel.name.startsWith(inputValue)) || []
-    : allChannels || [];
+  const lowerInput = inputValue.toLowerCase();
+  const channelsStartingWithPrefix = lowerInput
+    ? allChannels.filter((channel) =>
+        channel.name.toLowerCase().startsWith(lowerInput),
+      )
+    : allChannels;
+
+  const mapMembers = useCallback(
+    (members: ChannelMember[] | undefined, isModerator = false) =>
+      (members ?? []).map((member) => ({
+        id: member.publicKey,
+        name: member.username,
+        moderator: isModerator,
+        active: true,
+      })),
+    [],
+  );
+
+  const refreshDirectory = useCallback(async () => {
+    setIsLoadingDirectory(true);
+    setFetchError(null);
+    try {
+      const response = await apiClient.getAllChannelsSearch();
+      if (response.data) {
+        const defaultChannels = response.data;
+        const joined = defaultChannels.joined ?? [];
+        const available = defaultChannels.availablePublic ?? [];
+
+        const convertChannel = (
+          channel: ChannelDataResponse,
+          isMember: boolean,
+        ): ChannelMeta => ({
+          name: channel.channelId,
+          type: "channel",
+          channelType: channel.type,
+          description: "",
+          members: mapMembers(channel.members, false),
+          moderators: mapMembers(channel.moderators, true),
+          createdAt: channel.createdAt,
+          createdBy: channel.createdBy,
+          createdByUsername: channel.createdByUsername,
+          owner: channel.createdBy,
+          inviteOnly: channel.type === ChannelType.PRIVATE,
+          unreadMessages: { count: 0, mentions: 0 },
+          isMember,
+          readOnly: channel.readOnly,
+        });
+
+        const aggregated: ChannelMeta[] = [
+          ...joined.map((channel) => convertChannel(channel, true)),
+          ...available.map((channel) => convertChannel(channel, false)),
+        ];
+
+    
+
+        setAllChannels(aggregated);
+      } else {
+        setAllChannels([]);
+        setFetchError(
+          response.error?.message || "Failed to load channel directory",
+        );
+      }
+    } catch (error) {
+      console.error("SearchChannels", "Failed to load channel directory", error);
+      setAllChannels([]);
+      setFetchError("Failed to load channel directory");
+    } finally {
+      setIsLoadingDirectory(false);
+    }
+  }, [apiClient, mapMembers]);
 
   useEffect(() => {
-    const fetchChannels = async () => {
-      const channels: ResponseData<Channels> =
-        await new ClientApiDataSource().getAllChannelsSearch();
-      if (channels.data) {
-        const channelsArray: ChannelMeta[] = await Promise.all(
-          Object.entries(channels.data).map(async ([name, channelInfo]) => {
-            const channelMembers: ResponseData<Map<string, string>> =
-              await new ClientApiDataSource().getChannelMembers({
-                channel: { name: name },
-              });
-            let isMember = false;
-            if (channelMembers.data) {
-              isMember = Object.keys(channelMembers.data).includes(
-                getExecutorPublicKey() || "",
-              );
-            } else {
-              isMember = false;
-            }
-            return {
-              name,
-              type: "channel" as const,
-              channelType: channelInfo.channel_type,
-              description: "",
-              owner: channelInfo.created_by,
-              members: [],
-              createdBy: channelInfo.created_by,
-              createdByUsername: channelInfo.created_by_username,
-              inviteOnly: false,
-              unreadMessages: {
-                count: 0,
-                mentions: 0,
-              },
-              isMember: isMember,
-              readOnly: channelInfo.read_only,
-              createdAt: new Date(channelInfo.created_at * 1000).toISOString(),
-            };
-          }),
-        );
-        setAllChannels(channelsArray);
-      }
-    };
-    fetchChannels();
-  }, []);
+    refreshDirectory();
+  }, [refreshDirectory]);
 
   const clickChannelOption = useCallback(
     async (isMember: boolean, channelName: string) => {
       setIsLoadingNameId(channelName);
-      if (isMember) {
-        await new ClientApiDataSource().leaveChannel({
-          channel: { name: channelName },
-        });
-      } else {
-        await new ClientApiDataSource().joinChannel({
-          channel: { name: channelName },
-        });
-      }
-      const updatedChannel = allChannels.map((c) => {
-        if (c.name === channelName) {
-          return { ...c, isMember: !isMember };
+      try {
+        if (isMember) {
+          await apiClient.leaveChannel({
+            channel: { name: channelName },
+          });
         } else {
-          return { ...c };
+          await apiClient.joinChannel({
+            channel: { name: channelName },
+          });
         }
-      });
-      setAllChannels(updatedChannel);
-      setIsLoadingNameId("");
-      fetchChannels();
+        await refreshDirectory();
+        refreshGlobalChannels();
+      } finally {
+        setIsLoadingNameId("");
+      }
     },
-    [setAllChannels, allChannels],
+    [apiClient, refreshDirectory, refreshGlobalChannels],
   );
 
-  const onViewChannel = useCallback((chatSelected: ChannelMeta) => {
-    const chat: ActiveChat = {
-      type: chatSelected.type,
-      id: chatSelected.name,
-      name: chatSelected.name,
-      readOnly: chatSelected.readOnly,
-      account: chatSelected.owner,
-      canJoin: chatSelected.isMember === false,
-    };
-    onChatSelected(chat);
-  }, []);
+  const onViewChannel = useCallback(
+    (chatSelected: ChannelMeta) => {
+      const chat: ActiveChat = {
+        type: chatSelected.type,
+        id: chatSelected.name,
+        name: chatSelected.name,
+        readOnly: chatSelected.readOnly,
+        account: chatSelected.owner,
+        canJoin: chatSelected.isMember === false,
+      };
+      onChatSelected(chat);
+    },
+    [onChatSelected],
+  );
 
   return (
     <SearchContainer>
@@ -303,6 +324,14 @@ export default function SearchChannelsContainer({
       <div className="channelListWrapper">
         <div className="listHeader">Channel List</div>
         <div className="list">
+          {isLoadingDirectory && allChannels.length === 0 && (
+            <div className="spinnerWrapper">
+              <Loader size={24} />
+            </div>
+          )}
+          {!isLoadingDirectory &&
+            fetchError &&
+            allChannels.length === 0 && <div>{fetchError}</div>}
           {channelsStartingWithPrefix
             .filter((channel) => channel.name !== "")
             .map((channel: ChannelMeta, id: number) => (
@@ -345,7 +374,7 @@ export default function SearchChannelsContainer({
                     disabled={
                       channel.name === isLoadingNameId ||
                       channel.createdBy === localStorage.getItem("accountId") ||
-                      channel.channelType === "Default"
+                      channel.channelType === "default"
                     }
                     variant={channel.isMember ? "secondary" : "primary"}
                     onClick={() =>

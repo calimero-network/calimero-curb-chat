@@ -391,9 +391,9 @@ export function useChatHandlers(
 
                 // Parse the JSON to get channel/group and message_id
                 const parsed = JSON.parse(asciiString);
-                if (parsed.channel) {
-                  actions.fetchMessageGroup = parsed.channel;
-                  actions.isDM = parsed.channel === "private_dm";
+                if (parsed.channelId) {
+                  actions.fetchMessageGroup = parsed.channelId;
+                  actions.isDM = parsed.channelId === "private_dm";
                 }
               } catch (e) {
                 console.log(
@@ -413,9 +413,9 @@ export function useChatHandlers(
 
                 // Parse the JSON to get channel/group and message_id
                 const parsed = JSON.parse(asciiString);
-                if (parsed.channel) {
-                  actions.fetchMessageGroup = parsed.channel;
-                  actions.isDM = parsed.channel === "private_dm";
+                if (parsed.channelId) {
+                  actions.fetchMessageGroup = parsed.channelId;
+                  actions.isDM = parsed.channelId === "private_dm";
                   actions.shouldNotifyMessage = false;
                 }
               } catch (e) {

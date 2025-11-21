@@ -139,7 +139,7 @@ class MessageStore<
 
         if (matchingTempMsg) {
           // Update temp message in place
-          const { id, ...realDataWithoutId } = realMsg;
+          const { id: _ignoreId, ...realDataWithoutId } = realMsg;
           this._updateWithoutVersion(
             matchingTempMsg.id,
             realDataWithoutId as Partial<T>,
@@ -185,9 +185,25 @@ class MessageStore<
 
     const version = existingMessage?.version ? existingMessage.version + 1 : 1;
 
+    // Special handling for reactions - merge instead of replace
+    const updatedWithMergedReactions = { ...updatedFields };
+    if ('reactions' in updatedFields && updatedFields.reactions) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const existingReactions = (existingMessage as any)?.reactions;
+      if (existingReactions && typeof existingReactions === 'object' && !Array.isArray(existingReactions)) {
+        // Merge reactions: combine existing and new, preferring new if both have same emoji
+        // @ts-expect-error - reactions is not a valid property of T
+        updatedWithMergedReactions.reactions = {
+          ...existingReactions,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ...(updatedFields.reactions as any),
+        };
+      }
+    }
+
     this.messages[localIndex] = {
       ...existingMessage,
-      ...updatedFields,
+      ...updatedWithMergedReactions,
       version,
     };
 
@@ -203,16 +219,33 @@ class MessageStore<
     const localIndex = globalIndex - this.startOffset;
     const existingMessage = this.messages[localIndex];
 
+    // Special handling for reactions - merge instead of replace
+    const updatedWithMergedReactions = { ...updatedFields };
+    if ('reactions' in updatedFields && updatedFields.reactions) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const existingReactions = (existingMessage as any)?.reactions;
+      if (existingReactions && typeof existingReactions === 'object' && !Array.isArray(existingReactions)) {
+        // Merge reactions: combine existing and new, preferring new if both have same emoji
+        // @ts-expect-error - reactions is not a valid property of T
+        updatedWithMergedReactions.reactions = {
+          ...existingReactions,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ...(updatedFields.reactions as any),
+        };
+      }
+    }
+
     // Update without incrementing version to keep React key stable
     this.messages[localIndex] = {
       ...existingMessage,
-      ...updatedFields,
+      ...updatedWithMergedReactions,
     };
   }
 
   computeKey(item: InternalMessage<T>): string {
     // Use timestamp and nonce as additional uniqueness factors
     // Following Virtuoso best practice for stable, unique keys
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const itemAny = item as any;
     const nonce = itemAny.nonce || "";
     return `${item.id}_${nonce}_${item.version ?? 0}`;
