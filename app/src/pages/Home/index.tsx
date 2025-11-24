@@ -338,6 +338,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   notifyDMRef.current = notifyDM;
   notifyChannelRef.current = notifyChannel;
 
+  // Create refs for channel selection
+  const onChannelSelectedRef = useRef((channel: ActiveChat) => {
+    updateSelectedActiveChatRef.current(channel);
+  });
+  const getChannelsRef = useRef(() => {
+    return [] as ActiveChat[];
+  });
+
   const chatHandlersRefs = useRef({
     mainMessages: mainMessagesRef,
     threadMessages: threadMessagesRef,
@@ -356,6 +364,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     fetchMembers: useRef(async () => {
       await debouncedFetchMembers();
     }),
+    onChannelSelected: onChannelSelectedRef,
+    getChannels: getChannelsRef,
   }).current;
 
   // Store updateSelectedActiveChat in ref to avoid dependency
@@ -481,6 +491,21 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const channels = channelsHook.channels;
   const fetchChannels = channelsHook.fetchChannels;
 
+  // Update getChannels ref when channels change
+  useEffect(() => {
+    getChannelsRef.current = () => {
+      return channels.map((ch: ChannelMeta): ActiveChat => ({
+        type: "channel",
+        id: ch.name,
+        name: ch.name,
+        channelType: ch.channelType,
+        channelMeta: ch,
+        readOnly: ch.readOnly,
+        canJoin: !ch.isMember,
+      }));
+    };
+  }, [channels]);
+
   const privateDMs = dmsHook.dms;
   const fetchDms = dmsHook.fetchDms;
 
@@ -497,12 +522,28 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     if (!latestMeta) return;
 
     const prevMeta = activeChatRef.current.channelMeta;
-    if (
-      prevMeta &&
-      prevMeta.members?.length === latestMeta.members?.length &&
-      prevMeta.createdAt === latestMeta.createdAt
-    ) {
-      return;
+    if (prevMeta) {
+      // Check if members count changed
+      const membersCountChanged = prevMeta.members?.length !== latestMeta.members?.length;
+      // Check if createdAt changed
+      const createdAtChanged = prevMeta.createdAt !== latestMeta.createdAt;
+      // Check if moderators changed (count or IDs)
+      const prevModeratorIds = new Set(prevMeta.moderators?.map(m => m.id) || []);
+      const latestModeratorIds = new Set(latestMeta.moderators?.map(m => m.id) || []);
+      const moderatorsChanged = 
+        prevModeratorIds.size !== latestModeratorIds.size ||
+        [...prevModeratorIds].some(id => !latestModeratorIds.has(id)) ||
+        [...latestModeratorIds].some(id => !prevModeratorIds.has(id));
+      // Check if any member's moderator status changed
+      const memberModeratorStatusChanged = prevMeta.members?.some(prevMember => {
+        const latestMember = latestMeta.members?.find(m => m.id === prevMember.id);
+        return latestMember && prevMember.moderator !== latestMember.moderator;
+      });
+      
+      // Only skip update if nothing changed
+      if (!membersCountChanged && !createdAtChanged && !moderatorsChanged && !memberModeratorStatusChanged) {
+        return;
+      }
     }
 
     const memberRecord: Record<string, string> = {};
@@ -828,7 +869,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         username: member.name || member.id,
       }));
   }, [activeChat, channels]);
-
+  
   return (
     <AppContainer
       isOpenSearchChannel={isOpenSearchChannel}

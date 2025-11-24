@@ -89,12 +89,12 @@ export default function ChannelDetailsPopup({
       return Object.entries(channelUserList).map(([id, name]) => ({
         id,
         name,
-        moderator: false,
+        moderator: channelMeta.moderators?.some((mod) => mod.id === id) ?? false,
         active: true,
       }));
     }
     return [];
-  }, [channelMeta.members, channelUserList]);
+  }, [channelMeta.members, channelMeta.moderators, channelUserList]);
 
   const updateMembersState = useCallback(
     (updater: (members: User[]) => User[]) => {

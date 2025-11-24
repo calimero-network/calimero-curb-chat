@@ -46,10 +46,23 @@ export function useChannels() {
               });
             };
 
-            channel.members.forEach((member) => upsertMember(member, false));
-            channel.moderators.forEach((moderator) =>
-              upsertMember(moderator, true),
+            // Create a Set of moderator publicKeys for quick lookup
+            const moderatorKeys = new Set(
+              channel.moderators.map((mod) => mod.publicKey)
             );
+            
+            // Process members first, checking if they're also moderators
+            channel.members.forEach((member) => {
+              const isModerator = moderatorKeys.has(member.publicKey);
+              upsertMember(member, isModerator);
+            });
+            
+            // Then add any moderators that aren't in the members list
+            channel.moderators.forEach((moderator) => {
+              if (!membersMap.has(moderator.publicKey)) {
+                upsertMember(moderator, true);
+              }
+            });
 
             const members = Array.from(membersMap.values());
             const isMember = currentUserId
