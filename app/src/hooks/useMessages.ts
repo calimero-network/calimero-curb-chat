@@ -148,12 +148,17 @@ export function useMessages() {
       if (!activeChat) return [];
 
       // Get the number of messages we've already loaded
-      // This will be used as the offset to fetch only new messages
-      const currentMessageCount = messagesRef.current.length;
+      // Exclude optimistic messages (temp- IDs) from the count since they're not in the backend yet
+      const realMessages = messagesRef.current.filter(
+        (msg) => !msg.id.startsWith("temp-")
+      );
+      const currentMessageCount = realMessages.length;
       
       // If we haven't loaded any messages yet, start from offset 0
-      // Otherwise, start from where we left off
-      const fetchOffset = currentMessageCount;
+      // Otherwise, start from where we left off (excluding optimistic messages)
+      // For receiver nodes, fetch from a slightly earlier offset to catch messages that might
+      // not be indexed yet (backend indexing can lag behind websocket events)
+      const fetchOffset = Math.max(0, currentMessageCount - 2);
 
       // If it's a DM, fetch the DM identity for this context
       let refetchIdentity: string | undefined = undefined;
@@ -179,6 +184,8 @@ export function useMessages() {
         });
 
       if (!response.data) return [];
+
+      console.log("response", response);
 
       // Transform messages
       const fetchedMessages = response.data.messages.map((msg) =>

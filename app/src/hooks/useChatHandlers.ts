@@ -609,12 +609,33 @@ export function useChatHandlers(
       }
       // Execute only the necessary actions with proper sequencing
       if (actions.fetchMessages) {
-        handleMessageUpdates(
-          actions.isDM,
-          actions.fetchMessageGroup,
-          contextId,
-          actions.shouldNotifyMessage
+        // For MessageSent events, add a delay to allow backend to index the message
+        // This prevents race conditions where the message isn't available yet
+        // This is especially important on receiver nodes where messages come via websocket
+        const isMessageSent = executionEvents.some(
+          (e) => e.kind === "MessageSent" || e.kind === "MessageSentThread"
         );
+        
+        if (isMessageSent) {
+          // Longer delay for receiver nodes - backend needs time to index
+          // The fetch will also use a slightly earlier offset to catch messages
+          setTimeout(() => {
+            handleMessageUpdates(
+              actions.isDM,
+              actions.fetchMessageGroup,
+              contextId,
+              actions.shouldNotifyMessage
+            );
+          }, 500);
+        } else {
+          // For other events (MessageReceived, ReactionUpdated), fetch immediately
+          handleMessageUpdates(
+            actions.isDM,
+            actions.fetchMessageGroup,
+            contextId,
+            actions.shouldNotifyMessage
+          );
+        }
       }
       if (actions.fetchChannels) {
         // Always refresh channels when fetchChannels is true
