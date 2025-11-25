@@ -192,23 +192,33 @@ export function useMessages() {
         transformMessageToUI(msg),
       );
 
-      // Get existing message IDs to filter out duplicates
+      // Get existing message IDs to track which ones are new vs updated
       const existingMessageIds = new Set(
         messagesRef.current.map((msg) => msg.id)
       );
 
-      // Only return messages that don't already exist
-      const trulyNewMessages = fetchedMessages.filter(
-        (msg) => !existingMessageIds.has(msg.id)
-      );
+      // Separate new messages from updated messages
+      const newMessages: CurbMessage[] = [];
+      const updatedMessages: CurbMessage[] = [];
 
-      if (trulyNewMessages.length > 0) {
-        // Only update ref with truly new messages
-        messagesRef.current = [...messagesRef.current, ...trulyNewMessages];
-        return trulyNewMessages;
+      for (const msg of fetchedMessages) {
+        if (existingMessageIds.has(msg.id)) {
+          // Message already exists - this is an update (edit/delete)
+          updatedMessages.push(msg);
+        } else {
+          // New message
+          newMessages.push(msg);
+        }
       }
 
-      return [];
+      // Update ref with new messages only (MessageStore will handle updates)
+      if (newMessages.length > 0) {
+        messagesRef.current = [...messagesRef.current, ...newMessages];
+      }
+
+      // Return ALL messages (both new and updated) so MessageStore can handle updates
+      // MessageStore.append() has logic to update existing messages in place
+      return fetchedMessages;
     },
     [],
   );
