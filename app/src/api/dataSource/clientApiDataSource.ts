@@ -1850,8 +1850,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.READ_MESSAGE,
           argsJson: {
-            channel: props.channel,
-            timestamp: props.timestamp,
+            channelId: props.channelId,
+            messageId: props.messageId,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1901,9 +1901,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.UPDATE_DM_HASH,
           argsJson: {
-            sender_id: props.sender_id,
-            other_user_id: props.other_user_id,
-            new_hash: props.new_hash,
+            contextId: props.dmContextId,
+            newHash: props.newHash,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1953,7 +1952,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.READ_DM,
           argsJson: {
-            other_user_id: props.other_user_id,
+            contextId: props.dmContextId,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },

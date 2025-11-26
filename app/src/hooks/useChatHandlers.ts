@@ -392,6 +392,9 @@ export function useChatHandlers(
         switch (executionEvent.kind) {
           case "MessageSent":
             actions.fetchMessages = true;
+            // Refetch channels and DMs to update unread message counts
+            actions.fetchChannels = true;
+            actions.fetchDMs = true;
             // Convert bytes to ASCII and extract channel/group
             if (executionEvent.data) {
               try {
@@ -414,6 +417,9 @@ export function useChatHandlers(
             break;
           case "MessageSentThread":
             actions.fetchMessages = true;
+            // Refetch channels and DMs to update unread message counts
+            actions.fetchChannels = true;
+            actions.fetchDMs = true;
             // Convert bytes to ASCII and extract channel/group
             if (executionEvent.data) {
               try {
@@ -638,8 +644,20 @@ export function useChatHandlers(
         }
       }
       if (actions.fetchChannels) {
-        // Always refresh channels when fetchChannels is true
-        refs.fetchChannels.current();
+        // For MessageSent events, add a small delay to allow backend to update unread counts
+        const isMessageSent = executionEvents.some(
+          (e) => e.kind === "MessageSent" || e.kind === "MessageSentThread"
+        );
+        
+        if (isMessageSent) {
+          // Delay channel refetch to ensure backend has updated unread counts
+          setTimeout(() => {
+            refs.fetchChannels.current();
+          }, 500);
+        } else {
+          // For other events, refresh immediately
+          refs.fetchChannels.current();
+        }
         
         // If user was uninvited from a channel, check if it was the current user
         if (actions.uninvitedChannelId && actions.uninvitedTargetId) {
@@ -750,7 +768,21 @@ export function useChatHandlers(
         }
       }
       if (actions.fetchDMs) {
-        refs.fetchDMs.current();
+        // For MessageSent events, add a small delay to allow backend to update unread counts
+        const isMessageSent = executionEvents.some(
+          (e) => e.kind === "MessageSent" || e.kind === "MessageSentThread"
+        );
+        
+        if (isMessageSent) {
+          // Delay DM refetch to ensure backend has updated unread counts
+          setTimeout(() => {
+            refs.fetchDMs.current();
+          }, 500);
+        } else {
+          // For other events, refresh immediately
+          refs.fetchDMs.current();
+        }
+        
         // Trigger DM state update to refresh UI and handle deletion
         const sessionChat = getStoredSession();
         if (sessionChat?.type === "direct_message") {

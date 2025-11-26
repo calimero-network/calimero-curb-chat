@@ -81,10 +81,7 @@ export function useChannels() {
               moderators,
               createdBy: channel.createdBy,
               inviteOnly: channel.type === ChannelType.PRIVATE,
-              unreadMessages: {
-                count: 0,
-                mentions: 0,
-              },
+              unreadMessages: channel.unreadMessages,
               isMember,
               readOnly: channel.readOnly,
               createdAt: parseTimestampToIso(channel.createdAt),

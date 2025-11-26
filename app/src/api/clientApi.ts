@@ -307,18 +307,17 @@ export interface DeleteDMProps {
 }
 
 export interface ReadMessageProps {
-  channel: Channel;
-  timestamp: number;
+  channelId: string;
+  messageId: string;
 }
 
 export interface UpdateDmHashProps {
-  sender_id: UserId;
-  other_user_id: UserId;
-  new_hash: string;
+  newHash: string;
+  dmContextId: string;
 }
 
 export interface ReadDmProps {
-  other_user_id: UserId;
+  dmContextId: string;
 }
 
 export interface GetDmUnreadCountProps {
@@ -349,6 +348,10 @@ export interface ChannelDataResponse {
   members: ChannelMember[];
   moderators: ChannelMember[];
   readOnly: boolean;
+  unreadMessages: {
+    count: number;
+    mentions: number;
+  };
 }
 
 export enum ClientMethod {
@@ -380,9 +383,9 @@ export enum ClientMethod {
   DELETE_DM = "deleteDM",
   GET_USERNAME = "getUsername",
   GET_CHAT_USERNAMES = "getMembers",
-  READ_MESSAGE = "mark_messages_as_read",
-  UPDATE_DM_HASH = "update_dm_hashes",
-  READ_DM = "mark_dm_as_read",
+  READ_MESSAGE = "readMessage",
+  UPDATE_DM_HASH = "updateDmHash",
+  READ_DM = "readDm",
   GET_DM_UNREAD_COUNT = "get_dm_unread_count",
   GET_TOTAL_DM_UNREAD_COUNT = "get_total_dm_unread_count",
   GET_DM_IDENTITY_BY_CONTEXT = "get_dm_identity_by_context",

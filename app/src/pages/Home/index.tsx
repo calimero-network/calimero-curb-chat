@@ -451,7 +451,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       if (refetch) {
         try {
           await new ClientApiDataSource().readDm({
-            other_user_id: dm?.other_identity_old || "",
+            dmContextId: dm?.context_id || "",
           });
           await fetchDmsRef.current();
         } catch (error) {
@@ -478,8 +478,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         const lastMessage = result.messages[result.messages.length - 1];
         if (lastMessage?.timestamp) {
           await new ClientApiDataSource().readMessage({
-            channel: { name: activeChatRef.current.name },
-            timestamp: lastMessage.timestamp,
+            channelId: activeChatRef.current.name,
+            messageId: lastMessage.id,
           });
         }
       }

@@ -143,7 +143,7 @@ export function useMessages() {
       activeChat: ActiveChat | null,
       isDM: boolean,
       group: string,
-      contextId: string,
+      _contextId: string,
     ): Promise<CurbMessage[]> => {
       if (!activeChat) return [];
 
@@ -161,15 +161,16 @@ export function useMessages() {
       const fetchOffset = Math.max(0, currentMessageCount - 2);
 
       // If it's a DM, fetch the DM identity for this context
-      let refetchIdentity: string | undefined = undefined;
-      if (isDM && contextId) {
-        const identityResponse = await new ClientApiDataSource().getDmIdentityByContext({
-          context_id: contextId,
-        });
-        if (identityResponse.data) {
-          refetchIdentity = identityResponse.data;
-        }
-      }
+      const refetchIdentity: string | undefined = undefined;
+      // TODO: FRAN
+      // if (isDM && contextId) {
+      //   const identityResponse = await new ClientApiDataSource().getDmIdentityByContext({
+      //     context_id: contextId,
+      //   });
+      //   if (identityResponse.data) {
+      //     refetchIdentity = identityResponse.data;
+      //   }
+      // }
 
       const response: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({

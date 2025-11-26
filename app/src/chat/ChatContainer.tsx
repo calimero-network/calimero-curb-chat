@@ -432,9 +432,8 @@ function ChatContainer({
         .node()
         .getContext(activeChatRef.current?.contextId || "");
       await new ClientApiDataSource().updateDmHash({
-        sender_id: getExecutorPublicKey() || "",
-        other_user_id: activeChatRef.current?.name || "",
-        new_hash: (fetchContextResponse.data?.rootHash as string) || "",
+        newHash: (fetchContextResponse.data?.rootHash as string) || "",
+        dmContextId: activeChatRef.current?.contextId || "",
       });
     }
 
