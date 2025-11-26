@@ -185,8 +185,6 @@ export function useMessages() {
 
       if (!response.data) return [];
 
-      console.log("response", response);
-
       // Transform messages
       const fetchedMessages = response.data.messages.map((msg) =>
         transformMessageToUI(msg),

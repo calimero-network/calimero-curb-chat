@@ -577,7 +577,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   useWebSocketEvents(
     useCallback(
       async (event: WebSocketEvent) => {
-        console.log("WebSocketEvent", event);
         try {
           await handleStateMutation(event);
 
