@@ -64,7 +64,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     await new ClientApiDataSource().createChannel({
       channel: { name: channelName },
       channel_type: isPublic ? ChannelType.PUBLIC : ChannelType.PRIVATE,
-      read_only: isReadyOnly,
+      readOnly: isReadyOnly,
       moderators: [],
       links_allowed: true,
       created_at: Math.floor(Date.now() / 1000),

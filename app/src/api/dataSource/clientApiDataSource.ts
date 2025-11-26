@@ -170,7 +170,7 @@ export class ClientApiDataSource implements ClientApi {
           argsJson: {
             name: props.channel.name,
             type: props.channel_type,
-            read_only: props.read_only,
+            readOnly: props.readOnly,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -216,8 +216,8 @@ export class ClientApiDataSource implements ClientApi {
 
   async getChannels(): ApiResponse<ChannelDataResponse[]> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         { result: ChannelDataResponse[] }
       >(
@@ -269,8 +269,8 @@ export class ClientApiDataSource implements ClientApi {
 
   async getAllChannelsSearch(): ApiResponse<AllChannelsResponse> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         { result: AllChannelsResponse }
       >(
@@ -1178,8 +1178,12 @@ export class ClientApiDataSource implements ClientApi {
       const transformedMessage: MessageWithReactions = {
         ...rawMessage,
         reactions: transformReactions(rawMessage.reactions || []),
-        files: (rawMessage.files || []).map(transformAttachment).filter(Boolean),
-        images: (rawMessage.images || []).map(transformAttachment).filter(Boolean),
+        files: (rawMessage.files || [])
+          .map(transformAttachment)
+          .filter(Boolean),
+        images: (rawMessage.images || [])
+          .map(transformAttachment)
+          .filter(Boolean),
       };
 
       return {
@@ -1263,9 +1267,8 @@ export class ClientApiDataSource implements ClientApi {
 
   async getDms(): ApiResponse<DMChatInfo[]> {
     try {
-      
       const response = await getJsonRpcClient().execute<
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         { result: { output: { result: DMrawObject[] } } }
       >(
@@ -1641,8 +1644,8 @@ export class ClientApiDataSource implements ClientApi {
           argsJson: {
             input: {
               otherUser: props.other_user,
-            newIdentity: props.new_identity
-          }
+              newIdentity: props.new_identity,
+            },
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1994,8 +1997,8 @@ export class ClientApiDataSource implements ClientApi {
 
   async getUsername(props: GetUsernameProps): ApiResponse<string> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         { result: string }
       >(

@@ -247,17 +247,30 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
     setUserInfo();
   }, [activeChat]);
 
-  // const isModerator = useMemo(
-  //   () =>
-  //     //channelUserList?.some(
-  //     channelMeta.moderators?.some(
-  //       (user) => user.id === accountId && user.moderator === true
-  //     ),
-  //   [channelMeta, accountId]
-  // );
-  const isModerator = false;
+  // Use activeChat.channelMeta as primary source (it has members/moderators)
+  // channelMeta prop is ChannelInfo type which doesn't have these properties
+  const effectiveChannelMeta = activeChat?.channelMeta;
 
-  const isOwner = accountId === channelMeta.created_by;
+  const isModerator = useMemo(() => {
+    if (!accountId || !effectiveChannelMeta) return false;
+    
+    // Check if user is in the moderators array
+    const isInModeratorsList = effectiveChannelMeta.moderators?.some(
+      (mod) => mod.id === accountId
+    );
+    
+    // Check if user is in members list with moderator flag
+    const isModeratorInMembers = effectiveChannelMeta.members?.some(
+      (member) => member.id === accountId && member.moderator === true
+    );
+    
+    return isInModeratorsList || isModeratorInMembers || false;
+  }, [effectiveChannelMeta, accountId]);
+
+  const isOwner = useMemo(() => {
+    if (!accountId || !effectiveChannelMeta?.createdBy) return false;
+    return accountId === effectiveChannelMeta.createdBy;
+  }, [effectiveChannelMeta, accountId]);
 
   const currentChatStyle = { ...chatStyle };
   const currentContainerPaddingStyle = { ...containerPaddingStyle };

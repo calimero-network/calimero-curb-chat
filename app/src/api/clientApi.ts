@@ -18,7 +18,7 @@ export type Username = string;
 export interface CreateChannelProps {
   channel: Channel;
   channel_type: ChannelType;
-  read_only: boolean;
+  readOnly: boolean;
   moderators: UserId[];
   links_allowed: boolean;
   created_at: number;
