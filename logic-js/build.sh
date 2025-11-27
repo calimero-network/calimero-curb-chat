@@ -1,11 +1,12 @@
 #!/bin/bash
 
-# Build script for counter example
+# Build script for curb example
 
 set -e
 
-echo "Building counter example..."
+echo "Building curb example..."
 
-pnpm build
+rm -rf build && pnpm build:manual
 
 echo "✅ Build complete: build/contract.wasm"
+
