@@ -184,12 +184,14 @@ const StartDMPopup = memo(function StartDMPopup({
     }
 
     const result = await functionLoader(matchedMember.userId);
-    if (result.data) {
+    if (result.data && !result.error) {
+      // Only close popup on successful creation
       setIsProcessing(false);
       setInputValue(""); // Clear input on success
       setIsOpen(false);
     } else {
-      setErrorMessage(result.error);
+      // Keep popup open and show error message
+      setErrorMessage(result.error || "Failed to create DM");
       setIsProcessing(false);
     }
   };
@@ -277,7 +279,7 @@ const StartDMPopup = memo(function StartDMPopup({
       </InputWrapper>
       <Button
         onClick={runProcess}
-        disabled={inputValue ? !!isInvalid : true}
+        disabled={(inputValue ? !!isInvalid : true) || isProcessing}
         style={{ width: "100%", marginTop: "1rem" }}
       >
         {isProcessing ? <Loader size={16} /> : buttonText}

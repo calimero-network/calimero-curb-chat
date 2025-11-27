@@ -72,6 +72,8 @@ interface ChatHandlersRefs {
     (channel: ActiveChat) => void
   >;
   getChannels: React.MutableRefObject<() => ActiveChat[]>;
+  getChannelUsers: React.MutableRefObject<(channelId: string) => Promise<void>>;
+  getNonInvitedUsers: React.MutableRefObject<(channelId: string) => Promise<void>>;
 }
 
 export function useChatHandlers(
@@ -209,8 +211,8 @@ export function useChatHandlers(
                 if (lastMessage?.timestamp) {
                   new ClientApiDataSource()
                     .readMessage({
-                      channel: { name: activeChat?.name },
-                      timestamp: lastMessage.timestamp,
+                      channelId: activeChat?.id || "",
+                      messageId: lastMessage.id,
                     })
                     .then(() => {
                       refs.fetchChannels.current();
@@ -226,7 +228,7 @@ export function useChatHandlers(
               } else {
                 new ClientApiDataSource()
                   .readDm({
-                    other_user_id: activeChatRef.current?.name || "",
+                    dmContextId: activeChatRef.current?.contextId || "",
                   })
                   .then(() => {
                     refs.fetchDMs.current();
@@ -575,6 +577,16 @@ export function useChatHandlers(
             actions.fetchMembers = true;
             break;
 
+          case "UserJoined":
+            // When a user joins, refresh channels and refetch channel members (invitees/non-invited)
+            actions.fetchChannels = true;
+            actions.fetchMembers = true;
+            log.debug(
+              "ChatHandlers",
+              "User joined, refreshing channels and channel members"
+            );
+            break;
+
           case "DMCreated":
             // Refresh DM list and potentially trigger DM selection
             actions.fetchDMs = true;
@@ -825,6 +837,34 @@ export function useChatHandlers(
         if (actions.isDM && actions.fetchDMs) {
           // DM member updates are handled through DM list refresh
           refs.fetchDMs.current();
+        }
+      }
+
+      // Handle UserJoined event - refetch channel members and non-invited users
+      const isUserJoined = executionEvents.some((e) => e.kind === "UserJoined");
+      if (isUserJoined) {
+        const currentChat = activeChatRef.current;
+        // Only refetch channel members if we're currently viewing a channel
+        if (currentChat?.type === "channel") {
+          const channelId = currentChat.id || currentChat.name;
+          if (channelId) {
+            setTimeout(() => {
+              try {
+                refs.getChannelUsers.current(channelId);
+                refs.getNonInvitedUsers.current(channelId);
+                log.debug(
+                  "ChatHandlers",
+                  `UserJoined: Refetched channel members for ${channelId}`
+                );
+              } catch (e) {
+                log.error(
+                  "ChatHandlers",
+                  "Error refetching channel members on UserJoined",
+                  e
+                );
+              }
+            }, 300);
+          }
         }
       }
 

@@ -129,14 +129,22 @@ export default function CreateChannelPopup({
 
   const runProcess = async () => {
     setIsProcessing(true);
-    await createChannel(
-      inputValue,
-      visibility === "public",
-      readOnly === "yes",
-    );
-    setInputValue("");
-    setIsProcessing(false);
-    setIsOpen(false);
+    setErrorMessage("");
+    try {
+      await createChannel(
+        inputValue,
+        visibility === "public",
+        readOnly === "yes",
+      );
+      setInputValue("");
+      setIsProcessing(false);
+      setIsOpen(false);
+    } catch (error) {
+      setIsProcessing(false);
+      const errorMsg = error instanceof Error ? error.message : "Failed to create channel";
+      setErrorMessage(errorMsg);
+      setValidInput(false);
+    }
   };
 
   const handleClosePopup = () => {
