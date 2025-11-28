@@ -280,7 +280,7 @@ export function useMessages() {
             offset: effectiveOffset,
             is_dm: isDM,
             dm_identity: activeChat.account,
-            search_term: normalizedQuery,
+            searchTerm: normalizedQuery,
           });
 
         if (response.data) {

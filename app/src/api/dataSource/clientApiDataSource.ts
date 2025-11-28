@@ -953,10 +953,10 @@ export class ClientApiDataSource implements ClientApi {
       };
 
       // Add search_term if present (legacy support - might need to be handled differently)
-      if (props.search_term) {
+      if (props.searchTerm) {
         // Note: search_term might need to be part of GetMessagesArgs in the future
         // For now, keeping it separate for backward compatibility
-        argsJson.search_term = props.search_term;
+        argsJson.rawInput.input.searchTerm = props.searchTerm;
       }
 
       const response = await getJsonRpcClient().execute<

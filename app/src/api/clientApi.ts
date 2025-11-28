@@ -62,7 +62,7 @@ export interface GetMessagesProps {
   dm_identity?: UserId;
   refetch_context_id?: string;
   refetch_identity?: UserId;
-  search_term?: string;
+  searchTerm?: string;
 }
 
 export interface Message {
