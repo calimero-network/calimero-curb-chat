@@ -1,10 +1,11 @@
 import type { ApiResponse } from "@calimero-network/calimero-client";
 import type { HashMap } from "../types/Common";
+import type { MessageId } from "../components/virtualized-chat";
 
 export enum ChannelType {
-  PUBLIC = "Public",
-  PRIVATE = "Private",
-  GROUP = "Default",
+  PUBLIC = "public",
+  PRIVATE = "private",
+  GROUP = "default",
 }
 
 export interface Channel {
@@ -12,11 +13,12 @@ export interface Channel {
 }
 
 export type UserId = string;
+export type Username = string;
 
 export interface CreateChannelProps {
   channel: Channel;
   channel_type: ChannelType;
-  read_only: boolean;
+  readOnly: boolean;
   moderators: UserId[];
   links_allowed: boolean;
   created_at: number;
@@ -35,7 +37,10 @@ export interface ChannelInfo {
   unread_mentions: number;
 }
 
-export type Channels = Map<string, ChannelInfo>;
+export type AllChannelsResponse = {
+  availablePublic: ChannelDataResponse[];
+  joined: ChannelDataResponse[];
+};
 
 interface ChannelOperationProps {
   channel: Channel;
@@ -46,6 +51,7 @@ export type GetChannelInfoProps = ChannelOperationProps;
 export type GetNonMemberUsersProps = ChannelOperationProps;
 export type JoinChannelProps = ChannelOperationProps;
 export type LeaveChannelProps = ChannelOperationProps;
+export type DeleteChannelProps = ChannelOperationProps;
 
 export interface GetMessagesProps {
   group: Channel;
@@ -56,24 +62,27 @@ export interface GetMessagesProps {
   dm_identity?: UserId;
   refetch_context_id?: string;
   refetch_identity?: UserId;
-  search_term?: string;
+  searchTerm?: string;
 }
 
 export interface Message {
   id: string;
   sender: string;
-  sender_username: string;
+  senderUsername: string;
   text: string;
   timestamp: number;
   deleted?: boolean;
-  edited_on?: number;
+  editedAt?: number;
   reactions: HashMap<string, UserId[]>;
-  thread_count: number;
-  thread_last_timestamp: number;
+  threadCount: number;
+  threadLastTimestamp: number;
   group?: string;
   files?: AttachmentResponse[];
   images?: AttachmentResponse[];
+  mentions: UserId[];
+  mentionUsernames: string[];
 }
+
 
 export interface MessageWithReactions extends Message {
   reactions: HashMap<string, UserId[]>;
@@ -92,6 +101,46 @@ export interface AttachmentResponse {
   mime_type: string;
   size: number;
   uploaded_at: number;
+}
+
+export interface MessageAttachments {
+  files?: AttachmentRequest[];
+  images?: AttachmentRequest[];
+}
+
+// New backend API types
+export interface SendMessageArgs {
+  channelId: string;
+  text: string;
+  parentId?: string | null;
+  attachments?: MessageAttachments;
+  messageId?: string;
+}
+
+export interface GetMessagesArgs {
+  channelId: string;
+  parentId?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface EditMessageArgs {
+  channelId: string;
+  messageId: string;
+  text: string;
+  parentId?: string | null;
+}
+
+export interface DeleteMessageArgs {
+  channelId: string;
+  messageId: string;
+  parentId?: string | null;
+}
+
+export interface UpdateReactionArgs {
+  messageId: string;
+  emoji: string;
+  add: boolean;
 }
 
 export interface SendMessageProps {
@@ -113,7 +162,40 @@ export interface FullMessageResponse {
   start_position: number;
 }
 
+export interface GetMessagesResponse {
+  result: { output: { result: FullMessageResponse } };
+}
+
 export interface InviteToChannelProps {
+  channel: Channel;
+  user: UserId;
+  username?: Username;
+}
+
+export type ChannelId = string;
+
+export interface ChannelMembershipInput {
+  channelId: ChannelId;
+  userId: UserId;
+  username?: Username;
+}
+
+export interface ModeratorInput {
+  channelId: ChannelId;
+  userId: UserId;
+}
+
+export interface PromoteModeratorProps {
+  channel: Channel;
+  user: UserId;
+}
+
+export interface DemoteModeratorProps {
+  channel: Channel;
+  user: UserId;
+}
+
+export interface RemoveUserFromChannelProps {
   channel: Channel;
   user: UserId;
 }
@@ -135,6 +217,25 @@ export interface DMChatInfo {
   old_hash: string;
   new_hash: string;
   unread_messages: number;
+}
+
+export interface DMrawObject {
+  channelType: ChannelType;
+  contextId: string;
+  createdAt: number;
+  createdBy: UserId;
+  channelUser: UserId;
+  otherIdentityNew: UserId;
+  otherIdentityOld: UserId;
+  otherUsername: string;
+  ownIdentity: UserId;
+  ownIdentityOld: UserId;
+  ownUsername: string;
+  didJoin: boolean;
+  invitationPayload: string;
+  oldHash: string;
+  newHash: string;
+  unreadMessages: number;
 }
 
 export interface CreateDmProps {
@@ -206,18 +307,17 @@ export interface DeleteDMProps {
 }
 
 export interface ReadMessageProps {
-  channel: Channel;
-  timestamp: number;
+  channelId: string;
+  messageId: string;
 }
 
 export interface UpdateDmHashProps {
-  sender_id: UserId;
-  other_user_id: UserId;
-  new_hash: string;
+  newHash: string;
+  dmContextId: string;
 }
 
 export interface ReadDmProps {
-  other_user_id: UserId;
+  dmContextId: string;
 }
 
 export interface GetDmUnreadCountProps {
@@ -234,34 +334,58 @@ export type GetTotalDmUnreadCountProps = Record<string, never>;
 
 export type MarkAllDmsAsReadProps = Record<string, never>;
 
+export interface ChannelMember {
+  publicKey: string;
+  username: string;
+}
+
+export interface ChannelDataResponse {
+  channelId: string;
+  createdAt: string;
+  createdBy: string;
+  createdByUsername: string;
+  type: ChannelType;
+  members: ChannelMember[];
+  moderators: ChannelMember[];
+  readOnly: boolean;
+  unreadMessages: {
+    count: number;
+    mentions: number;
+  };
+}
+
 export enum ClientMethod {
-  JOIN_CHAT = "join_chat",
-  CREATE_CHANNEL = "create_channel",
-  GET_CHANNELS = "get_channels",
-  GET_ALL_CHANNELS_SEARCH = "get_all_channels",
-  GET_CHANNEL_MEMBERS = "get_channel_members",
+  JOIN_CHAT = "joinChat",
+  CREATE_CHANNEL = "createChannel",
+  GET_CHANNELS = "getChannels",
+  GET_ALL_CHANNELS_SEARCH = "getChannelDirectory",
+  GET_CHANNEL_MEMBERS = "abc",
   GET_CHANNEL_INFO = "get_channel_info",
-  INVITE_TO_CHANNEL = "invite_to_channel",
-  GET_INVITE_USERS = "get_non_member_users",
-  JOIN_CHANNEL = "join_channel",
-  LEAVE_CHANNEL = "leave_channel",
-  GET_MESSAGES = "get_messages",
-  SEND_MESSAGE = "send_message",
-  GET_DMS = "get_dms",
+  INVITE_TO_CHANNEL = "addUserToChannel",
+  GET_INVITE_USERS = "getInvitees",
+  JOIN_CHANNEL = "joinPublicChannel",
+  LEAVE_CHANNEL = "leaveChannel",
+  DELETE_CHANNEL = "deleteChannel",
+  PROMOTE_MODERATOR = "promoteModerator",
+  DEMOTE_MODERATOR = "demoteModerator",
+  REMOVE_USER_FROM_CHANNEL = "removeUserFromChannel",
+  GET_MESSAGES = "getMessages",
+  SEND_MESSAGE = "sendMessage",
+  GET_DMS = "getDMs",
   GET_CHAT_MEMBERS = "get_chat_members",
-  CREATE_DM = "create_dm_chat",
-  UPDATE_REACTION = "update_reaction",
-  DELETE_MESSAGE = "delete_message",
-  EDIT_MESSAGE = "edit_message",
-  UPDATE_NEW_IDENTITY = "update_new_identity",
+  CREATE_DM = "createDMChat",
+  UPDATE_REACTION = "updateReaction",
+  DELETE_MESSAGE = "deleteMessage",
+  EDIT_MESSAGE = "editMessage",
+  UPDATE_NEW_IDENTITY = "updateNewIdentity",
   UPDATE_INVITATION_PAYLOAD = "update_invitation_payload",
   ACCEPT_INVITATION = "accept_invitation",
-  DELETE_DM = "delete_dm",
-  GET_USERNAME = "get_username",
-  GET_CHAT_USERNAMES = "get_chat_usernames",
-  READ_MESSAGE = "mark_messages_as_read",
-  UPDATE_DM_HASH = "update_dm_hashes",
-  READ_DM = "mark_dm_as_read",
+  DELETE_DM = "deleteDM",
+  GET_USERNAME = "getUsername",
+  GET_CHAT_USERNAMES = "getMembers",
+  READ_MESSAGE = "readMessage",
+  UPDATE_DM_HASH = "updateDmHash",
+  READ_DM = "readDm",
   GET_DM_UNREAD_COUNT = "get_dm_unread_count",
   GET_TOTAL_DM_UNREAD_COUNT = "get_total_dm_unread_count",
   GET_DM_IDENTITY_BY_CONTEXT = "get_dm_identity_by_context",
@@ -271,18 +395,24 @@ export enum ClientMethod {
 export interface ClientApi {
   joinChat(props: JoinChatProps): ApiResponse<string>;
   createChannel(props: CreateChannelProps): ApiResponse<CreateChannelResponse>;
-  getChannels(): ApiResponse<Channels>;
-  getAllChannelsSearch(): ApiResponse<Channels>;
+  getChannels(): ApiResponse<ChannelDataResponse[]>;
+  getAllChannelsSearch(): ApiResponse<AllChannelsResponse>;
   getChannelMembers(
     props: GetChannelMembersProps,
   ): ApiResponse<Map<string, string>>;
   getChannelInfo(props: GetChannelInfoProps): ApiResponse<ChannelInfo>;
   inviteToChannel(props: InviteToChannelProps): ApiResponse<string>;
-  getNonMemberUsers(props: GetNonMemberUsersProps): ApiResponse<UserId[]>;
+  getNonMemberUsers(
+    props: GetNonMemberUsersProps,
+  ): ApiResponse<Record<string, string>>;
   joinChannel(props: JoinChannelProps): ApiResponse<string>;
   leaveChannel(props: LeaveChannelProps): ApiResponse<string>;
+  deleteChannel(props: DeleteChannelProps): ApiResponse<string>;
+  promoteModerator(props: PromoteModeratorProps): ApiResponse<string>;
+  demoteModerator(props: DemoteModeratorProps): ApiResponse<string>;
+  removeUserFromChannel(props: RemoveUserFromChannelProps): ApiResponse<string>;
   getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse>;
-  sendMessage(props: SendMessageProps): ApiResponse<Message>;
+  sendMessage(props: SendMessageProps): ApiResponse<{ id: MessageId }>;
   getDms(): ApiResponse<DMChatInfo[]>;
   getChatMembers(props: GetChatMembersProps): ApiResponse<Map<string, string>>;
   createDm(props: CreateDmProps): ApiResponse<string>;

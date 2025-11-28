@@ -3,7 +3,6 @@ import styled from "styled-components";
 import BaseModal from "./BaseModal";
 import Loader from "../../loader/Loader";
 import { Avatar, Button, Input } from "@calimero-network/mero-ui";
-import type { UserId } from "../../../api/clientApi";
 
 interface MultipleInputPopupProps {
   title: string;
@@ -13,7 +12,7 @@ interface MultipleInputPopupProps {
   buttonText: string;
   isChild?: boolean;
   autocomplete?: boolean;
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
   selectedUsers: string[];
   setSelectedUsers: (users: string[]) => void;
   updateUsers: (value: string) => void;
@@ -152,7 +151,7 @@ const SelectedAccountsWrapper = styled.div`
 
 interface AutocompleteContainerProps {
   value: string;
-  inviteUsers: UserId[];
+  inviteUsers: Record<string, string>;
   selectUser: (userId: string) => void;
   selectedUsers: string[];
 }
@@ -163,21 +162,28 @@ const AutocompleteContainer: React.FC<AutocompleteContainerProps> = ({
   selectUser,
   selectedUsers,
 }) => {
-  const filteredInviteUsers = Object.values(inviteUsers).filter(
-    (user) =>
-      user.toLowerCase().startsWith(value.toLowerCase()) &&
-      user !== value &&
-      !selectedUsers.includes(user),
+  const filteredInviteUsers = Object.entries(inviteUsers).filter(
+    ([userId, username]) =>
+      typeof username === 'string' &&
+      username.toLowerCase().startsWith(value.toLowerCase()) &&
+      !selectedUsers.includes(userId),
   );
   return (
     <>
       {filteredInviteUsers.length > 0 && (
         <UserList>
-          {filteredInviteUsers.map((user, id) => (
-            <UserListItem key={id} onClick={() => selectUser(user)}>
+          {filteredInviteUsers.map(([userId, username], id) => (
+            <UserListItem
+              key={id}
+              onClick={() => {
+                if (!selectedUsers.includes(userId)) {
+                  selectUser(userId);
+                }
+              }}
+            >
               <UserInfo>
-                <Avatar size="xs" name={user} />
-                <UserText>{user}</UserText>
+                <Avatar size="xs" name={username} />
+                <UserText>{username}</UserText>
               </UserInfo>
             </UserListItem>
           ))}
@@ -214,6 +220,7 @@ const MultipleInputPopup: React.FC<MultipleInputPopupProps> = (props) => {
     showAutocomplete;
 
   const selectUser = (userId: string) => {
+    if (selectedUsers.includes(userId)) return;
     const updatedList = [...selectedUsers, userId];
     setSelectedUsers(updatedList);
     setInputValue("");
@@ -269,14 +276,16 @@ const MultipleInputPopup: React.FC<MultipleInputPopupProps> = (props) => {
       <Text>{title}</Text>
       <InputWrapper>
         {selectedUsers.length > 0 && (
-          <SelectedAccountsWrapper>
-            {selectedUsers.map((accountId, id) => (
-              <div className="selectedItem" key={id}>
-                <span className="accountName">{accountId}</span>
-                <div
-                  className="removeButton"
-                  onClick={() => unselectUser(accountId)}
-                >
+      <SelectedAccountsWrapper>
+        {selectedUsers.map((accountId, id) => (
+          <div className="selectedItem" key={id}>
+            <span className="accountName">
+              {nonInvitedUserList[accountId] ?? accountId}
+            </span>
+            <div
+              className="removeButton"
+              onClick={() => unselectUser(accountId)}
+            >
                   <svg
                     width="12"
                     height="12"

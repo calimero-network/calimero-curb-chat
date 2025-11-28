@@ -5,6 +5,7 @@ import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import { ChannelType } from "../../api/clientApi";
 import { memo } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
+import { checkCreateChannelResponse } from "../../utils/checkResponse";
 
 const Container = styled.div<{ $isCollapsed?: boolean }>`
   display: flex;
@@ -61,14 +62,23 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     isPublic: boolean,
     isReadyOnly: boolean,
   ) => {
-    await new ClientApiDataSource().createChannel({
+    const response = await new ClientApiDataSource().createChannel({
       channel: { name: channelName },
       channel_type: isPublic ? ChannelType.PUBLIC : ChannelType.PRIVATE,
-      read_only: isReadyOnly,
+      readOnly: isReadyOnly,
       moderators: [],
       links_allowed: true,
       created_at: Math.floor(Date.now() / 1000),
     });
+
+    // @ts-expect-error - response.data is a string
+    if (response.error || checkCreateChannelResponse(response.data?.result as string)) {
+      // Extract error message from API response
+      // @ts-expect-error - response.error is a string
+      const errorMsg = response.data?.result || response.error?.message || "Failed to create channel";
+      throw new Error(errorMsg);
+    }
+
     // Clear the input and close modal after successful creation
     setInputValue("");
     setIsOpen(false);

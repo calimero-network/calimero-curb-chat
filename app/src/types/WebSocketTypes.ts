@@ -20,6 +20,7 @@ export type ExecutionEventKind =
   | "NewIdentityUpdated"
   | "InvitationPayloadUpdated"
   | "InvitationAccepted"
+  | "UserJoined"
   | string;
 
 export interface ExecutionEventData {

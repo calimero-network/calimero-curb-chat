@@ -53,10 +53,12 @@ const DMHeader = memo(function DMHeader({
         chatMembers instanceof Map
           ? Array.from(chatMembers.entries())
           : Object.entries(chatMembers);
-      const usernames = userEntries.map(([_, username]) =>
-        (username as string).toLowerCase(),
-      );
-      const isMember = usernames.includes(value.toLowerCase());
+      const usernames = userEntries.map(([_, user]) => {
+        // @ts-expect-error - value is not typed
+        return (user.username as string).toLowerCase();
+    });
+
+    const isMember = usernames.includes(value.toLowerCase());
 
       if (!isMember) {
         return {

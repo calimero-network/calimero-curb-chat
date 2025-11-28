@@ -232,23 +232,50 @@ export function useThreadMessages() {
         return [];
       }
 
-      // Transform messages - MessageStore will handle deduplication
-      const newMessages = response.data.messages.map((msg) =>
+      // Transform messages
+      const fetchedMessages = response.data.messages.map((msg) =>
         transformMessageToUI(msg),
       );
 
-      if (newMessages.length > 0) {
-        log.debug(
-          "useThreadMessages",
-          `Found ${newMessages.length} new thread messages`,
-        );
-        // Only update ref, not state (MessageStore will deduplicate in VirtualizedChat)
-        messagesRef.current = [...messagesRef.current, ...newMessages];
-        return newMessages;
+      // Get existing message IDs to track which ones are new vs updated
+      const existingMessageIds = new Set(
+        messagesRef.current.map((msg) => msg.id)
+      );
+
+      // Separate new messages from updated messages
+      const newMessages: CurbMessage[] = [];
+      const updatedMessages: CurbMessage[] = [];
+
+      for (const msg of fetchedMessages) {
+        if (existingMessageIds.has(msg.id)) {
+          // Message already exists - this is an update (edit/delete)
+          updatedMessages.push(msg);
+        } else {
+          // New message
+          newMessages.push(msg);
+        }
       }
 
-      log.debug("useThreadMessages", "No new thread messages found");
-      return [];
+      // Update ref with new messages only (MessageStore will handle updates)
+      if (newMessages.length > 0) {
+        messagesRef.current = [...messagesRef.current, ...newMessages];
+        log.debug(
+          "useThreadMessages",
+          `Found ${newMessages.length} new thread messages, ${updatedMessages.length} updated`,
+        );
+      } else if (updatedMessages.length > 0) {
+        log.debug(
+          "useThreadMessages",
+          `Found ${updatedMessages.length} updated thread messages`,
+        );
+      } else {
+        log.debug("useThreadMessages", "No new or updated thread messages found");
+        return [];
+      }
+
+      // Return ALL messages (both new and updated) so MessageStore can handle updates
+      // MessageStore.append() has logic to update existing messages in place
+      return fetchedMessages;
     },
     [],
   );

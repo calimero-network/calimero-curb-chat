@@ -4,9 +4,8 @@ import DetailsDropdown from "./DetailsDropdown";
 import ChannelDetailsPopup from "../popups/ChannelDetailsPopup";
 import UsersButtonGroup from "./UsersButtonGroup";
 import { useState } from "react";
-import type { UserId } from "../../api/clientApi";
 import SettingsIcon from "./SettingsIcon";
-import NotificationCenterWidget from "./NotificationCenterWidget";
+// import NotificationCenterWidget from "./NotificationCenterWidget";
 import { WebSocketStatus } from "../WebSocketStatus";
 import CurbLogoIcon from "/logo.svg";
 
@@ -199,8 +198,8 @@ interface CurbNavbarProps {
   setIsSidebarOpen: (isOpen: boolean) => void;
   isOpenSearchChannel: boolean;
   setIsOpenSearchChannel: (isOpen: boolean) => void;
-  channelUserList: Map<string, string>;
-  nonInvitedUserList: UserId[];
+  channelUserList: Record<string, string>;
+  nonInvitedUserList: Record<string, string>;
   reFetchChannelMembers: () => void;
   setActiveChat: (chat: ActiveChat) => void;
   fetchChannels: () => void;
@@ -224,8 +223,8 @@ export default function CurbNavbar({
   wsIsSubscribed = false,
   wsContextId = null,
   wsSubscriptionCount = 0,
-  onToggleSearchOverlay,
   isSearchOverlayOpen,
+  onToggleSearchOverlay
 }: CurbNavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -250,6 +249,7 @@ export default function CurbNavbar({
             activeChat={activeChat}
             isOpenSearchChannel={isOpenSearchChannel}
             channelUserList={channelUserList}
+            channelMeta={activeChat.channelMeta}
             nonInvitedUserList={nonInvitedUserList}
             reFetchChannelMembers={reFetchChannelMembers}
             setActiveChat={setActiveChat}
@@ -260,23 +260,31 @@ export default function CurbNavbar({
       <FlexContainer>
         {activeChat &&
           activeChat?.type === "channel" &&
-          Object.keys(channelUserList).length > 0 && (
+          (activeChat.channelMeta?.members?.length ??
+            Object.keys(channelUserList).length) > 0 && (
             <ItemsContainer $align={false}>
               <ChannelDetailsPopup
                 toggle={
                   <div>
                     <UsersButtonGroup
-                      channelUserList={channelUserList}
+                      members={
+                        activeChat.channelMeta?.members ??
+                        Object.entries(channelUserList).map(([id, name]) => ({
+                          id,
+                          name,
+                        }))
+                      }
                       openMemberList={() => {}}
                     />
                   </div>
                 }
                 chat={activeChat}
+                channelMeta={activeChat.channelMeta}
                 channelUserList={channelUserList}
                 nonInvitedUserList={nonInvitedUserList}
                 isOpen={isOpen}
                 setIsOpen={setIsOpen}
-                selectedTabIndex={0}
+                selectedTabIndex={1}
                 reFetchChannelMembers={reFetchChannelMembers}
                 setActiveChat={setActiveChat}
                 fetchChannels={fetchChannels}
@@ -296,7 +304,7 @@ export default function CurbNavbar({
         >
           <SearchIcon />
         </SearchButton>
-        <NotificationCenterWidget />
+        {/* <NotificationCenterWidget /> */}
         <SettingsIcon />
       </FlexContainer>
     </NavigationBar>
