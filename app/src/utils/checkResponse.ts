@@ -33,5 +33,8 @@ export function checkCreateChannelResponse(response: string | null | undefined):
     if (response.includes("Failed to create channel")) {
         return true;
     }
+    if (response.includes("Channel created")) {
+        return false;
+    }
     return true;
 }
