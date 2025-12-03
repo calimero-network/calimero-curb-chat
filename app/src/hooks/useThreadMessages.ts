@@ -77,7 +77,8 @@ export function useThreadMessages() {
         dm_identity: activeChat.account,
       });
 
-      const response: ResponseData<FullMessageResponse> =
+      // First, get the total count by fetching with offset: 0
+      const initialResponse: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({
           group: { name: groupName },
           limit: MESSAGE_PAGE_SIZE,
@@ -87,33 +88,82 @@ export function useThreadMessages() {
           dm_identity: activeChat.account,
         });
 
-      log.debug("useThreadMessages", `API response:`, response);
+      log.debug("useThreadMessages", `Initial API response:`, initialResponse);
 
-      if (response.error) {
-        const parsedError = parseErrorMessage(response.error.message);
-        log.error("useThreadMessages", `API returned error:`, response.error);
+      if (initialResponse.error) {
+        const parsedError = parseErrorMessage(initialResponse.error.message);
+        log.error("useThreadMessages", `API returned error:`, initialResponse.error);
         log.error("useThreadMessages", `Parsed error message: ${parsedError}`);
       }
 
-      if (response.data) {
-        const messagesArray = transformMessagesToUI(response.data.messages);
+      if (!initialResponse.data) {
+        log.debug("useThreadMessages", "No response data, returning empty");
+        return {
+          messages: [],
+          totalCount: 0,
+          hasMore: false,
+        };
+      }
+
+      const totalCount = initialResponse.data.total_count;
+      
+      // If total count is less than or equal to page size, use the initial response
+      if (totalCount <= MESSAGE_PAGE_SIZE) {
+        const messagesArray = transformMessagesToUI(initialResponse.data.messages);
         log.debug(
           "useThreadMessages",
-          `loadInitial loaded ${messagesArray.length} messages`,
+          `loadInitial loaded ${messagesArray.length} messages (total: ${totalCount})`,
         );
         messagesRef.current = messagesArray;
         setMessages(messagesArray);
-        setTotalCount(response.data.total_count);
+        setTotalCount(totalCount);
         setOffset(MESSAGE_PAGE_SIZE);
 
         return {
           messages: messagesArray,
-          totalCount: response.data.total_count,
-          hasMore: response.data.start_position < response.data.total_count,
+          totalCount: totalCount,
+          hasMore: false,
         };
       }
 
-      log.debug("useThreadMessages", "No response data, returning empty");
+      // If there are more messages than the page size, calculate offset to get the most recent ones
+      const calculatedOffset = Math.max(0, totalCount - MESSAGE_PAGE_SIZE);
+      log.debug(
+        "useThreadMessages",
+        `Total count (${totalCount}) > page size (${MESSAGE_PAGE_SIZE}), fetching most recent messages with offset: ${calculatedOffset}`,
+      );
+
+      const recentResponse: ResponseData<FullMessageResponse> =
+        await new ClientApiDataSource().getMessages({
+          group: { name: groupName },
+          limit: MESSAGE_PAGE_SIZE,
+          offset: calculatedOffset,
+          parent_message: parentMessageId,
+          is_dm: isDM,
+          dm_identity: activeChat.account,
+        });
+
+      log.debug("useThreadMessages", `Recent messages API response:`, recentResponse);
+
+      if (recentResponse.data) {
+        const messagesArray = transformMessagesToUI(recentResponse.data.messages);
+        log.debug(
+          "useThreadMessages",
+          `loadInitial loaded ${messagesArray.length} most recent messages (total: ${totalCount})`,
+        );
+        messagesRef.current = messagesArray;
+        setMessages(messagesArray);
+        setTotalCount(totalCount);
+        setOffset(calculatedOffset + MESSAGE_PAGE_SIZE);
+
+        return {
+          messages: messagesArray,
+          totalCount: totalCount,
+          hasMore: calculatedOffset > 0,
+        };
+      }
+
+      log.debug("useThreadMessages", "No response data from recent fetch, returning empty");
       return {
         messages: [],
         totalCount: 0,
@@ -131,7 +181,7 @@ export function useThreadMessages() {
       activeChat: ActiveChat | null,
       parentMessageId: string,
     ): Promise<ChatMessagesDataWithOlder> => {
-      if (!activeChat || offset >= totalCount) {
+      if (!activeChat) {
         return {
           messages: [],
           totalCount,
@@ -139,14 +189,38 @@ export function useThreadMessages() {
         };
       }
 
+      // Calculate the earliest position we've loaded so far
+      const earliestLoadedPosition = offset - MESSAGE_PAGE_SIZE;
+      
+      // If we've already loaded from position 0, there are no more older messages
+      if (earliestLoadedPosition <= 0) {
+        log.debug(
+          "useThreadMessages",
+          `loadPrevious: Already at the beginning (earliestLoadedPosition: ${earliestLoadedPosition})`,
+        );
+        return {
+          messages: [],
+          totalCount,
+          hasOlder: false,
+        };
+      }
+
+      // Calculate offset for the next batch of older messages
+      const olderOffset = Math.max(0, earliestLoadedPosition - MESSAGE_PAGE_SIZE);
+
       const isDM = activeChat.type === "direct_message";
       const groupName = isDM ? "private_dm" : activeChat.name || "";
+
+      log.debug(
+        "useThreadMessages",
+        `loadPrevious: earliestLoaded=${earliestLoadedPosition}, fetching from offset=${olderOffset}, current offset=${offset}`,
+      );
 
       const response: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({
           group: { name: groupName },
           limit: MESSAGE_PAGE_SIZE,
-          offset,
+          offset: olderOffset,
           parent_message: parentMessageId,
           is_dm: isDM,
           dm_identity: activeChat.account,
@@ -154,12 +228,29 @@ export function useThreadMessages() {
 
       if (response.data) {
         const messagesArray = transformMessagesToUI(response.data.messages);
-        setOffset(offset + MESSAGE_PAGE_SIZE);
+        
+        if (messagesArray.length === 0) {
+          log.debug("useThreadMessages", `loadPrevious: No messages returned`);
+          return {
+            messages: [],
+            totalCount: response.data.total_count,
+            hasOlder: false,
+          };
+        }
+
+        // Update offset to reflect the new earliest position
+        const newOffset = olderOffset + MESSAGE_PAGE_SIZE;
+        setOffset(newOffset);
+        
+        log.debug(
+          "useThreadMessages",
+          `loadPrevious loaded ${messagesArray.length} older messages, new offset: ${newOffset}, hasOlder: ${olderOffset > 0}`,
+        );
 
         return {
           messages: messagesArray,
           totalCount: response.data.total_count,
-          hasOlder: response.data.start_position < response.data.total_count,
+          hasOlder: olderOffset > 0,
         };
       }
 

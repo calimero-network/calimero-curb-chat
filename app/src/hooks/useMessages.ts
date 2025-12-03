@@ -47,7 +47,9 @@ export function useMessages() {
         };
       }
       const isDM = activeChat.type === "direct_message";
-      const response: ResponseData<FullMessageResponse> =
+      
+      // First, get the total count by fetching with offset: 0
+      const initialResponse: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({
           group: { name: (isDM ? "private_dm" : activeChat.name) || "" },
           limit: MESSAGE_PAGE_SIZE,
@@ -56,17 +58,54 @@ export function useMessages() {
           dm_identity: activeChat.account,
         });
 
-      if (response.data) {
-        const messagesArray = transformMessagesToUI(response.data.messages);
+      if (!initialResponse.data) {
+        return {
+          messages: [],
+          totalCount: 0,
+          hasMore: false,
+        };
+      }
+
+      const totalCount = initialResponse.data.total_count;
+
+      // If total count is less than or equal to page size, use the initial response
+      if (totalCount <= MESSAGE_PAGE_SIZE) {
+        const messagesArray = transformMessagesToUI(initialResponse.data.messages);
         messagesRef.current = messagesArray;
         setMessages(messagesArray);
-        setTotalCount(response.data.total_count);
+        setTotalCount(totalCount);
         setOffset(MESSAGE_PAGE_SIZE);
 
         return {
           messages: messagesArray,
-          totalCount: response.data.total_count,
-          hasMore: response.data.start_position < response.data.total_count,
+          totalCount: totalCount,
+          hasMore: false,
+        };
+      }
+
+      // If there are more messages than the page size, calculate offset to get the most recent ones
+      const calculatedOffset = Math.max(0, totalCount - MESSAGE_PAGE_SIZE);
+
+      const recentResponse: ResponseData<FullMessageResponse> =
+        await new ClientApiDataSource().getMessages({
+          group: { name: (isDM ? "private_dm" : activeChat.name) || "" },
+          limit: MESSAGE_PAGE_SIZE,
+          offset: calculatedOffset,
+          is_dm: isDM,
+          dm_identity: activeChat.account,
+        });
+
+      if (recentResponse.data) {
+        const messagesArray = transformMessagesToUI(recentResponse.data.messages);
+        messagesRef.current = messagesArray;
+        setMessages(messagesArray);
+        setTotalCount(totalCount);
+        setOffset(calculatedOffset + MESSAGE_PAGE_SIZE);
+
+        return {
+          messages: messagesArray,
+          totalCount: totalCount,
+          hasMore: calculatedOffset > 0,
         };
       }
 
@@ -87,13 +126,28 @@ export function useMessages() {
       activeChat: ActiveChat | null,
       _chatId: string,
     ): Promise<ChatMessagesDataWithOlder> => {
-      if (!activeChat || offset >= totalCount) {
+      if (!activeChat) {
         return {
           messages: [],
           totalCount,
           hasOlder: false,
         };
       }
+
+      // Calculate the earliest position we've loaded so far
+      const earliestLoadedPosition = offset - MESSAGE_PAGE_SIZE;
+      
+      // If we've already loaded from position 0, there are no more older messages
+      if (earliestLoadedPosition <= 0) {
+        return {
+          messages: [],
+          totalCount,
+          hasOlder: false,
+        };
+      }
+
+      // Calculate offset for the next batch of older messages
+      const olderOffset = Math.max(0, earliestLoadedPosition - MESSAGE_PAGE_SIZE);
 
       const isDM = activeChat.type === "direct_message";
       const response: ResponseData<FullMessageResponse> =
@@ -102,26 +156,30 @@ export function useMessages() {
             name: (isDM ? "private_dm" : activeChat.name) || "",
           },
           limit: MESSAGE_PAGE_SIZE,
-          offset,
+          offset: olderOffset,
           is_dm: isDM,
           dm_identity: activeChat.account,
         });
 
       if (response.data) {
         const messagesArray = transformMessagesToUI(response.data.messages);
-        const returnedCount = messagesArray.length;
-        if (returnedCount > 0) {
-          setOffset((prev) => prev + returnedCount);
+        
+        if (messagesArray.length === 0) {
+          return {
+            messages: [],
+            totalCount: response.data.total_count,
+            hasOlder: false,
+          };
         }
 
-        const nextOffset = offset + returnedCount;
-        const total = response.data.total_count;
-        const hasOlder = nextOffset < total;
+        // Update offset to reflect the new earliest position
+        const newOffset = olderOffset + MESSAGE_PAGE_SIZE;
+        setOffset(newOffset);
 
         return {
           messages: messagesArray,
-          totalCount: total,
-          hasOlder,
+          totalCount: response.data.total_count,
+          hasOlder: olderOffset > 0,
         };
       }
 

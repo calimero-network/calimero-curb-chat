@@ -762,7 +762,15 @@ function ChatContainer({
                     );
                     return incomingThreadMessages;
                   })()}
-                  loadPrevMessages={(id: string) => loadPrevThreadMessages(id)}
+                  loadPrevMessages={(_id: string) => {
+                    // Use parent message ID from openThread, not the oldest child message ID
+                    const parentMessageId = openThread.key || openThread.id;
+                    log.debug(
+                      "ChatContainer",
+                      `Thread loadPrevMessages called, using parent ID: ${parentMessageId}`
+                    );
+                    return loadPrevThreadMessages(parentMessageId);
+                  }}
                   activeChannelMembers={activeChannelMembers}
                   currentOpenThreadRef={currentOpenThreadRef}
                   isEmojiSelectorVisible={isEmojiSelectorVisible}
@@ -890,9 +898,15 @@ function ChatContainer({
                       return loadInitialThreadMessages(openThread.id);
                     }}
                     incomingMessages={incomingThreadMessages}
-                    loadPrevMessages={(id: string) =>
-                      loadPrevThreadMessages(id)
-                    }
+                    loadPrevMessages={(_id: string) => {
+                      // Use parent message ID from openThread, not the oldest child message ID
+                      const parentMessageId = openThread.key || openThread.id;
+                      log.debug(
+                        "ChatContainer",
+                        `Thread loadPrevMessages called, using parent ID: ${parentMessageId}`
+                      );
+                      return loadPrevThreadMessages(parentMessageId);
+                    }}
                     activeChannelMembers={activeChannelMembers}
                     currentOpenThreadRef={currentOpenThreadRef}
                     isEmojiSelectorVisible={isEmojiSelectorVisible}
