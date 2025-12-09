@@ -169,10 +169,9 @@ export class ClientApiDataSource implements ClientApi {
           method: ClientMethod.CREATE_CHANNEL,
           argsJson: {
             name: props.channel.name,
-            type: props.channel_type,
-            readOnly: props.readOnly,
           },
           executorPublicKey: getExecutorPublicKey() || "",
+          substitute: [],
         },
         {
           headers: {
@@ -434,13 +433,9 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.INVITE_TO_CHANNEL,
           argsJson: {
-            rawInput: {
-              input: {
-                channelId: props.channel.name,
-                userId: props.user,
-                username: props.username,
-              },
-            },
+            channelId: props.channel.name,
+            userId: props.user,
+            username: props.username,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -492,11 +487,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.GET_INVITE_USERS,
           argsJson: {
-            rawInput: {
-              input: {
-                channelId: props.channel.name,
-              },
-            },
+            channelId: props.channel.name,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -667,9 +658,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: getContextId() || "",
           method: ClientMethod.LEAVE_CHANNEL,
-          argsJson: {
-            input: { channelId: props.channel.name },
-          },
+          argsJson: { channelId: props.channel.name },
           executorPublicKey: getExecutorPublicKey() || "",
         },
         {
@@ -717,9 +706,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: getContextId() || "",
           method: ClientMethod.DELETE_CHANNEL,
-          argsJson: {
-            input: { channelId: props.channel.name },
-          },
+          argsJson: { channelId: props.channel.name },
           executorPublicKey: getExecutorPublicKey() || "",
         },
         {
@@ -768,12 +755,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.PROMOTE_MODERATOR,
           argsJson: {
-            rawInput: {
-              input: {
-                channelId: props.channel.name,
-                userId: props.user,
-              },
-            },
+            channelId: props.channel.name,
+            userId: props.user,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -823,12 +806,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.DEMOTE_MODERATOR,
           argsJson: {
-            rawInput: {
-              input: {
-                channelId: props.channel.name,
-                userId: props.user,
-              },
-            },
+            channelId: props.channel.name,
+            userId: props.user,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -880,12 +859,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.REMOVE_USER_FROM_CHANNEL,
           argsJson: {
-            rawInput: {
-              input: {
-                channelId: props.channel.name,
-                userId: props.user,
-              },
-            },
+            channelId: props.channel.name,
+            userId: props.user,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -946,17 +921,13 @@ export class ClientApiDataSource implements ClientApi {
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const argsJson: any = {
-        rawInput: {
-          input: getMessagesArgs,
-        },
-      };
+      const argsJson: any = getMessagesArgs;
 
       // Add search_term if present (legacy support - might need to be handled differently)
       if (props.searchTerm) {
         // Note: search_term might need to be part of GetMessagesArgs in the future
         // For now, keeping it separate for backward compatibility
-        argsJson.rawInput.input.searchTerm = props.searchTerm;
+        argsJson.searchTerm = props.searchTerm;
       }
 
       const response = await getJsonRpcClient().execute<
@@ -1121,11 +1092,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.SEND_MESSAGE,
-          argsJson: {
-            rawInput: {
-              input: sendMessageArgs,
-            },
-          },
+          argsJson: sendMessageArgs,
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
         },
@@ -1402,15 +1369,13 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.CREATE_DM,
           argsJson: {
-            input: {
-              contextId: props.context_id,
-              contextHash: props.context_hash,
-              creator: props.creator,
-              creatorNewIdentity: props.creator_new_identity,
-              invitee: props.invitee,
-              timestamp: props.timestamp,
-              invitationPayload: props.payload,
-            },
+            contextId: props.context_id,
+            contextHash: props.context_hash,
+            creator: props.creator,
+            creatorNewIdentity: props.creator_new_identity,
+            invitee: props.invitee,
+            timestamp: props.timestamp,
+            invitationPayload: props.payload,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1467,11 +1432,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.UPDATE_REACTION,
-          argsJson: {
-            rawInput: {
-              input: updateReactionArgs,
-            },
-          },
+          argsJson: updateReactionArgs,
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
         },
@@ -1527,11 +1488,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.DELETE_MESSAGE,
-          argsJson: {
-            rawInput: {
-              input: deleteMessageArgs,
-            },
-          },
+          argsJson: deleteMessageArgs,
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
         },
@@ -1588,11 +1545,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.EDIT_MESSAGE,
-          argsJson: {
-            rawInput: {
-              input: editMessageArgs,
-            },
-          },
+          argsJson: editMessageArgs,
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
         },
@@ -1642,10 +1595,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.UPDATE_NEW_IDENTITY,
           argsJson: {
-            input: {
-              otherUser: props.other_user,
-              newIdentity: props.new_identity,
-            },
+            otherUser: props.other_user,
+            newIdentity: props.new_identity,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1799,9 +1750,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: getContextId() || "",
           method: ClientMethod.DELETE_DM,
-          argsJson: {
-            input: { otherUser: props.other_user },
-          },
+          argsJson: { otherUser: props.other_user },
           executorPublicKey: getExecutorPublicKey() || "",
         },
         {
