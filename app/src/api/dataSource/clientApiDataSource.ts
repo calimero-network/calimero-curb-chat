@@ -171,6 +171,7 @@ export class ClientApiDataSource implements ClientApi {
             name: props.channel.name,
           },
           executorPublicKey: getExecutorPublicKey() || "",
+          // @ts-expect-error - substitute is not used in the createChannel method
           substitute: [],
         },
         {
