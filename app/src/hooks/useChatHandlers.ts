@@ -68,6 +68,12 @@ interface ChatHandlersRefs {
   fetchChannels: React.MutableRefObject<() => Promise<void>>;
   fetchDMs: React.MutableRefObject<() => Promise<void>>;
   fetchMembers: React.MutableRefObject<() => Promise<void>>;
+  onChannelSelected: React.MutableRefObject<
+    (channel: ActiveChat) => void
+  >;
+  getChannels: React.MutableRefObject<() => ActiveChat[]>;
+  getChannelUsers: React.MutableRefObject<(channelId: string) => Promise<void>>;
+  getNonInvitedUsers: React.MutableRefObject<(channelId: string) => Promise<void>>;
 }
 
 export function useChatHandlers(
@@ -205,8 +211,8 @@ export function useChatHandlers(
                 if (lastMessage?.timestamp) {
                   new ClientApiDataSource()
                     .readMessage({
-                      channel: { name: activeChat?.name },
-                      timestamp: lastMessage.timestamp,
+                      channelId: activeChat?.id || "",
+                      messageId: lastMessage.id,
                     })
                     .then(() => {
                       refs.fetchChannels.current();
@@ -222,7 +228,7 @@ export function useChatHandlers(
               } else {
                 new ClientApiDataSource()
                   .readDm({
-                    other_user_id: activeChatRef.current?.name || "",
+                    dmContextId: activeChatRef.current?.contextId || "",
                   })
                   .then(() => {
                     refs.fetchDMs.current();
@@ -378,12 +384,19 @@ export function useChatHandlers(
         fetchDMs: false,
         dmDeleted: false,
         fetchMembers: false,
+        uninvitedChannelId: "" as string | undefined,
+        uninvitedTargetId: "" as string | undefined,
+        leftChannelId: "" as string | undefined,
+        leftActorId: "" as string | undefined,
       };
 
       for (const executionEvent of executionEvents) {
         switch (executionEvent.kind) {
           case "MessageSent":
             actions.fetchMessages = true;
+            // Refetch channels and DMs to update unread message counts
+            actions.fetchChannels = true;
+            actions.fetchDMs = true;
             // Convert bytes to ASCII and extract channel/group
             if (executionEvent.data) {
               try {
@@ -391,9 +404,9 @@ export function useChatHandlers(
 
                 // Parse the JSON to get channel/group and message_id
                 const parsed = JSON.parse(asciiString);
-                if (parsed.channel) {
-                  actions.fetchMessageGroup = parsed.channel;
-                  actions.isDM = parsed.channel === "private_dm";
+                if (parsed.channelId) {
+                  actions.fetchMessageGroup = parsed.channelId;
+                  actions.isDM = parsed.channelId === "private_dm";
                 }
               } catch (e) {
                 console.log(
@@ -406,6 +419,9 @@ export function useChatHandlers(
             break;
           case "MessageSentThread":
             actions.fetchMessages = true;
+            // Refetch channels and DMs to update unread message counts
+            actions.fetchChannels = true;
+            actions.fetchDMs = true;
             // Convert bytes to ASCII and extract channel/group
             if (executionEvent.data) {
               try {
@@ -413,9 +429,9 @@ export function useChatHandlers(
 
                 // Parse the JSON to get channel/group and message_id
                 const parsed = JSON.parse(asciiString);
-                if (parsed.channel) {
-                  actions.fetchMessageGroup = parsed.channel;
-                  actions.isDM = parsed.channel === "private_dm";
+                if (parsed.channelId) {
+                  actions.fetchMessageGroup = parsed.channelId;
+                  actions.isDM = parsed.channelId === "private_dm";
                   actions.shouldNotifyMessage = false;
                 }
               } catch (e) {
@@ -465,9 +481,29 @@ export function useChatHandlers(
             break;
 
           case "ChannelLeft":
-            // Refresh channel list and members
+            // Refresh channel list and members when someone leaves
             actions.fetchChannels = true;
             actions.fetchMembers = true;
+            actions.isDM = false;
+            // Parse event data to get channelId and actorId
+            if (executionEvent.data) {
+              try {
+                const asciiString = bytesParser(executionEvent.data);
+                const parsed = JSON.parse(asciiString);
+                if (parsed.channelId) {
+                  actions.leftChannelId = parsed.channelId;
+                }
+                if (parsed.actorId) {
+                  actions.leftActorId = parsed.actorId;
+                }
+              } catch (e) {
+                console.log(
+                  `ChannelLeft - Couldn't decode data:`,
+                  executionEvent.data,
+                  e
+                );
+              }
+            }
             log.debug(
               "ChatHandlers",
               "Channel left, refreshing channel list and members"
@@ -484,9 +520,71 @@ export function useChatHandlers(
             );
             break;
 
+          case "ChannelModeratorPromoted":
+            // Refresh channel list and members when moderator is promoted
+            actions.fetchChannels = true;
+            actions.fetchMembers = true;
+            actions.isDM = false;
+            log.debug(
+              "ChatHandlers",
+              "Channel moderator promoted, refreshing channel list and members"
+            );
+            break;
+
+          case "ChannelModeratorDemoted":
+            // Refresh channel list and members when moderator is demoted
+            actions.fetchChannels = true;
+            actions.fetchMembers = true;
+            actions.isDM = false;
+            log.debug(
+              "ChatHandlers",
+              "Channel moderator demoted, refreshing channel list and members"
+            );
+            break;
+
+          case "ChannelUninvited":
+            // Refresh channel list and members when user is uninvited
+            actions.fetchChannels = true;
+            actions.fetchMembers = true;
+            actions.isDM = false;
+            // Parse event data to get channelId and targetId
+            if (executionEvent.data) {
+              try {
+                const asciiString = bytesParser(executionEvent.data);
+                const parsed = JSON.parse(asciiString);
+                if (parsed.channelId) {
+                  actions.uninvitedChannelId = parsed.channelId;
+                }
+                if (parsed.targetId) {
+                  actions.uninvitedTargetId = parsed.targetId;
+                }
+              } catch (e) {
+                console.log(
+                  `ChannelUninvited - Couldn't decode data:`,
+                  executionEvent.data,
+                  e
+                );
+              }
+            }
+            log.debug(
+              "ChatHandlers",
+              "User uninvited from channel, refreshing channel list and members"
+            );
+            break;
+
           case "ChatJoined":
             // When a new user joins the chat, refresh members list
             actions.fetchMembers = true;
+            break;
+
+          case "UserJoined":
+            // When a user joins, refresh channels and refetch channel members (invitees/non-invited)
+            actions.fetchChannels = true;
+            actions.fetchMembers = true;
+            log.debug(
+              "ChatHandlers",
+              "User joined, refreshing channels and channel members"
+            );
             break;
 
           case "DMCreated":
@@ -529,18 +627,174 @@ export function useChatHandlers(
       }
       // Execute only the necessary actions with proper sequencing
       if (actions.fetchMessages) {
-        handleMessageUpdates(
-          actions.isDM,
-          actions.fetchMessageGroup,
-          contextId,
-          actions.shouldNotifyMessage
+        // For MessageSent events, add a delay to allow backend to index the message
+        // This prevents race conditions where the message isn't available yet
+        // This is especially important on receiver nodes where messages come via websocket
+        const isMessageSent = executionEvents.some(
+          (e) => e.kind === "MessageSent" || e.kind === "MessageSentThread"
         );
+        
+        if (isMessageSent) {
+          // Longer delay for receiver nodes - backend needs time to index
+          // The fetch will also use a slightly earlier offset to catch messages
+          setTimeout(() => {
+            handleMessageUpdates(
+              actions.isDM,
+              actions.fetchMessageGroup,
+              contextId,
+              actions.shouldNotifyMessage
+            );
+          }, 500);
+        } else {
+          // For other events (MessageReceived, ReactionUpdated), fetch immediately
+          handleMessageUpdates(
+            actions.isDM,
+            actions.fetchMessageGroup,
+            contextId,
+            actions.shouldNotifyMessage
+          );
+        }
       }
       if (actions.fetchChannels) {
-        refs.fetchChannels.current();
+        // For MessageSent events, add a small delay to allow backend to update unread counts
+        const isMessageSent = executionEvents.some(
+          (e) => e.kind === "MessageSent" || e.kind === "MessageSentThread"
+        );
+        
+        if (isMessageSent) {
+          // Delay channel refetch to ensure backend has updated unread counts
+          setTimeout(() => {
+            refs.fetchChannels.current();
+          }, 500);
+        } else {
+          // For other events, refresh immediately
+          refs.fetchChannels.current();
+        }
+        
+        // If user was uninvited from a channel, check if it was the current user
+        if (actions.uninvitedChannelId && actions.uninvitedTargetId) {
+          const uninvitedChannelId = actions.uninvitedChannelId;
+          const uninvitedTargetId = actions.uninvitedTargetId;
+          
+          // Get the current user's identity (executor public key)
+          const ownIdentity = getExecutorPublicKey() || "";
+          
+          // Only switch channels if the targetId matches our own identity
+          // This means WE were uninvited, not someone else
+          if (uninvitedTargetId === ownIdentity) {
+            setTimeout(async () => {
+              try {
+                const currentChat = activeChatRef.current;
+                // Check if the current active chat is the uninvited channel
+                if (
+                  currentChat?.type === "channel" &&
+                  (currentChat.name === uninvitedChannelId ||
+                    currentChat.id === uninvitedChannelId)
+                ) {
+                  // Get available channels and switch to the first one
+                  const availableChannels = refs.getChannels.current();
+                  if (availableChannels && availableChannels.length > 0) {
+                    // Switch to the first available channel
+                    refs.onChannelSelected.current(availableChannels[0]);
+                    log.debug(
+                      "ChatHandlers",
+                      `Current user was uninvited from ${uninvitedChannelId}, switched to first available channel`
+                    );
+                  } else {
+                    // No channels available
+                    log.debug(
+                      "ChatHandlers",
+                      "No channels available after being uninvited"
+                    );
+                  }
+                }
+              } catch (e) {
+                log.error(
+                  "ChatHandlers",
+                  "Error handling ChannelUninvited switch",
+                  e
+                );
+              }
+            }, 150);
+          } else {
+            // Someone else was uninvited, not us - just refresh channels normally
+            log.debug(
+              "ChatHandlers",
+              `ChannelUninvited event for different user (targetId: ${uninvitedTargetId}, ownIdentity: ${ownIdentity}), not switching channels`
+            );
+          }
+        }
+        
+        // If someone left a channel, check if it was the current user
+        if (actions.leftChannelId && actions.leftActorId) {
+          const leftChannelId = actions.leftChannelId;
+          const leftActorId = actions.leftActorId;
+          
+          // Get the current user's identity (executor public key)
+          const ownIdentity = getExecutorPublicKey() || "";
+          
+          // Only switch channels if the actorId matches our own identity
+          // This means WE left the channel, not someone else
+          if (leftActorId === ownIdentity) {
+            setTimeout(async () => {
+              try {
+                const currentChat = activeChatRef.current;
+                // Check if the current active chat is the channel we left
+                if (
+                  currentChat?.type === "channel" &&
+                  (currentChat.name === leftChannelId ||
+                    currentChat.id === leftChannelId)
+                ) {
+                  // Get available channels and switch to the first one
+                  const availableChannels = refs.getChannels.current();
+                  if (availableChannels && availableChannels.length > 0) {
+                    // Switch to the first available channel
+                    refs.onChannelSelected.current(availableChannels[0]);
+                    log.debug(
+                      "ChatHandlers",
+                      `Current user left ${leftChannelId}, switched to first available channel`
+                    );
+                  } else {
+                    // No channels available
+                    log.debug(
+                      "ChatHandlers",
+                      "No channels available after leaving channel"
+                    );
+                  }
+                }
+              } catch (e) {
+                log.error(
+                  "ChatHandlers",
+                  "Error handling ChannelLeft switch",
+                  e
+                );
+              }
+            }, 150);
+          } else {
+            // Someone else left the channel - channels already refreshed above
+            log.debug(
+              "ChatHandlers",
+              `ChannelLeft event for different user (actorId: ${leftActorId}, ownIdentity: ${ownIdentity}), channels refreshed`
+            );
+          }
+        }
       }
       if (actions.fetchDMs) {
-        refs.fetchDMs.current();
+        // For MessageSent events, add a small delay to allow backend to update unread counts
+        const isMessageSent = executionEvents.some(
+          (e) => e.kind === "MessageSent" || e.kind === "MessageSentThread"
+        );
+        
+        if (isMessageSent) {
+          // Delay DM refetch to ensure backend has updated unread counts
+          setTimeout(() => {
+            refs.fetchDMs.current();
+          }, 500);
+        } else {
+          // For other events, refresh immediately
+          refs.fetchDMs.current();
+        }
+        
         // Trigger DM state update to refresh UI and handle deletion
         const sessionChat = getStoredSession();
         if (sessionChat?.type === "direct_message") {
@@ -583,6 +837,34 @@ export function useChatHandlers(
         if (actions.isDM && actions.fetchDMs) {
           // DM member updates are handled through DM list refresh
           refs.fetchDMs.current();
+        }
+      }
+
+      // Handle UserJoined event - refetch channel members and non-invited users
+      const isUserJoined = executionEvents.some((e) => e.kind === "UserJoined");
+      if (isUserJoined) {
+        const currentChat = activeChatRef.current;
+        // Only refetch channel members if we're currently viewing a channel
+        if (currentChat?.type === "channel") {
+          const channelId = currentChat.id || currentChat.name;
+          if (channelId) {
+            setTimeout(() => {
+              try {
+                refs.getChannelUsers.current(channelId);
+                refs.getNonInvitedUsers.current(channelId);
+                log.debug(
+                  "ChatHandlers",
+                  `UserJoined: Refetched channel members for ${channelId}`
+                );
+              } catch (e) {
+                log.error(
+                  "ChatHandlers",
+                  "Error refetching channel members on UserJoined",
+                  e
+                );
+              }
+            }, 300);
+          }
         }
       }
 

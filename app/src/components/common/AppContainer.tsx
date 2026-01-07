@@ -11,7 +11,7 @@ import ChannelsContainer from "./ChannelsContainer";
 import CurbNavbar from "../navbar/CurbNavbar";
 import SearchChannelsContainer from "../searchChannels/SearchChannelsContainer";
 import ChatContainer from "../../chat/ChatContainer";
-import type { DMChatInfo, UserId } from "../../api/clientApi";
+import type { DMChatInfo } from "../../api/clientApi";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 
 const ContentDivContainer = styled.div`
@@ -36,8 +36,8 @@ interface AppContainerProps {
   activeChat: ActiveChat | null;
   updateSelectedActiveChat: (chat: ActiveChat) => void;
   openSearchPage: () => void;
-  channelUsers: Map<string, string>;
-  nonInvitedUserList: UserId[];
+  channelUsers: Record<string, string>;
+  nonInvitedUserList: Record<string, string>;
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
   loadInitialChatMessages: () => Promise<ChatMessagesData>;
   incomingMessages: CurbMessage[];
@@ -73,6 +73,7 @@ interface AppContainerProps {
   onSearchMessages: (query: string) => Promise<void>;
   onLoadMoreSearch: () => Promise<void>;
   onClearSearch: () => void;
+  activeChannelMembers: { userId: string; username: string }[];
 }
 function AppContainer({
   activeChat,
@@ -117,6 +118,7 @@ function AppContainer({
   onSearchMessages,
   onLoadMoreSearch,
   onClearSearch,
+  activeChannelMembers,
 }: AppContainerProps) {
   const [isSearchOverlayOpen, setIsSearchOverlayOpen] = useState(false);
 
@@ -198,6 +200,7 @@ function AppContainer({
                 onClearSearch={onClearSearch}
                 isSearchOverlayOpen={isSearchOverlayOpen}
                 onCloseSearchOverlay={() => setIsSearchOverlayOpen(false)}
+                activeChannelMembers={activeChannelMembers}
               />
             )}
             {isOpenSearchChannel && (

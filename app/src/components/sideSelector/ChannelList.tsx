@@ -112,6 +112,7 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
                 id: channel.name,
                 readOnly: channel.readOnly,
                 channelType: channel.channelType,
+                channelMeta: channel,
               })
             }
             style={{

@@ -46,9 +46,10 @@ export function useMessages() {
           hasMore: false,
         };
       }
-
       const isDM = activeChat.type === "direct_message";
-      const response: ResponseData<FullMessageResponse> =
+      
+      // First, get the total count by fetching with offset: 0
+      const initialResponse: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({
           group: { name: (isDM ? "private_dm" : activeChat.name) || "" },
           limit: MESSAGE_PAGE_SIZE,
@@ -57,17 +58,54 @@ export function useMessages() {
           dm_identity: activeChat.account,
         });
 
-      if (response.data) {
-        const messagesArray = transformMessagesToUI(response.data.messages);
+      if (!initialResponse.data) {
+        return {
+          messages: [],
+          totalCount: 0,
+          hasMore: false,
+        };
+      }
+
+      const totalCount = initialResponse.data.total_count;
+
+      // If total count is less than or equal to page size, use the initial response
+      if (totalCount <= MESSAGE_PAGE_SIZE) {
+        const messagesArray = transformMessagesToUI(initialResponse.data.messages);
         messagesRef.current = messagesArray;
         setMessages(messagesArray);
-        setTotalCount(response.data.total_count);
+        setTotalCount(totalCount);
         setOffset(MESSAGE_PAGE_SIZE);
 
         return {
           messages: messagesArray,
-          totalCount: response.data.total_count,
-          hasMore: response.data.start_position < response.data.total_count,
+          totalCount: totalCount,
+          hasMore: false,
+        };
+      }
+
+      // If there are more messages than the page size, calculate offset to get the most recent ones
+      const calculatedOffset = Math.max(0, totalCount - MESSAGE_PAGE_SIZE);
+
+      const recentResponse: ResponseData<FullMessageResponse> =
+        await new ClientApiDataSource().getMessages({
+          group: { name: (isDM ? "private_dm" : activeChat.name) || "" },
+          limit: MESSAGE_PAGE_SIZE,
+          offset: calculatedOffset,
+          is_dm: isDM,
+          dm_identity: activeChat.account,
+        });
+
+      if (recentResponse.data) {
+        const messagesArray = transformMessagesToUI(recentResponse.data.messages);
+        messagesRef.current = messagesArray;
+        setMessages(messagesArray);
+        setTotalCount(totalCount);
+        setOffset(calculatedOffset + MESSAGE_PAGE_SIZE);
+
+        return {
+          messages: messagesArray,
+          totalCount: totalCount,
+          hasMore: calculatedOffset > 0,
         };
       }
 
@@ -88,13 +126,28 @@ export function useMessages() {
       activeChat: ActiveChat | null,
       _chatId: string,
     ): Promise<ChatMessagesDataWithOlder> => {
-      if (!activeChat || offset >= totalCount) {
+      if (!activeChat) {
         return {
           messages: [],
           totalCount,
           hasOlder: false,
         };
       }
+
+      // Calculate the earliest position we've loaded so far
+      const earliestLoadedPosition = offset - MESSAGE_PAGE_SIZE;
+      
+      // If we've already loaded from position 0, there are no more older messages
+      if (earliestLoadedPosition <= 0) {
+        return {
+          messages: [],
+          totalCount,
+          hasOlder: false,
+        };
+      }
+
+      // Calculate offset for the next batch of older messages
+      const olderOffset = Math.max(0, earliestLoadedPosition - MESSAGE_PAGE_SIZE);
 
       const isDM = activeChat.type === "direct_message";
       const response: ResponseData<FullMessageResponse> =
@@ -103,26 +156,30 @@ export function useMessages() {
             name: (isDM ? "private_dm" : activeChat.name) || "",
           },
           limit: MESSAGE_PAGE_SIZE,
-          offset,
+          offset: olderOffset,
           is_dm: isDM,
           dm_identity: activeChat.account,
         });
 
       if (response.data) {
         const messagesArray = transformMessagesToUI(response.data.messages);
-        const returnedCount = messagesArray.length;
-        if (returnedCount > 0) {
-          setOffset((prev) => prev + returnedCount);
+        
+        if (messagesArray.length === 0) {
+          return {
+            messages: [],
+            totalCount: response.data.total_count,
+            hasOlder: false,
+          };
         }
 
-        const nextOffset = offset + returnedCount;
-        const total = response.data.total_count;
-        const hasOlder = nextOffset < total;
+        // Update offset to reflect the new earliest position
+        const newOffset = olderOffset + MESSAGE_PAGE_SIZE;
+        setOffset(newOffset);
 
         return {
           messages: messagesArray,
-          totalCount: total,
-          hasOlder,
+          totalCount: response.data.total_count,
+          hasOlder: olderOffset > 0,
         };
       }
 
@@ -137,29 +194,41 @@ export function useMessages() {
 
   /**
    * Check for and add new messages from websocket events
-   * Includes aggressive rate limiting to prevent API hammering
+   * Fetches messages starting from the offset of already-loaded messages
    */
   const checkForNewMessages = useCallback(
     async (
       activeChat: ActiveChat | null,
       isDM: boolean,
       group: string,
-      contextId: string,
+      _contextId: string,
     ): Promise<CurbMessage[]> => {
       if (!activeChat) return [];
 
-      // Removed throttling to allow real-time message updates
+      // Get the number of messages we've already loaded
+      // Exclude optimistic messages (temp- IDs) from the count since they're not in the backend yet
+      const realMessages = messagesRef.current.filter(
+        (msg) => !msg.id.startsWith("temp-")
+      );
+      const currentMessageCount = realMessages.length;
+      
+      // If we haven't loaded any messages yet, start from offset 0
+      // Otherwise, start from where we left off (excluding optimistic messages)
+      // For receiver nodes, fetch from a slightly earlier offset to catch messages that might
+      // not be indexed yet (backend indexing can lag behind websocket events)
+      const fetchOffset = Math.max(0, currentMessageCount - 2);
 
       // If it's a DM, fetch the DM identity for this context
-      let refetchIdentity: string | undefined = undefined;
-      if (isDM && contextId) {
-        const identityResponse = await new ClientApiDataSource().getDmIdentityByContext({
-          context_id: contextId,
-        });
-        if (identityResponse.data) {
-          refetchIdentity = identityResponse.data;
-        }
-      }
+      const refetchIdentity: string | undefined = undefined;
+      // TODO: FRAN
+      // if (isDM && contextId) {
+      //   const identityResponse = await new ClientApiDataSource().getDmIdentityByContext({
+      //     context_id: contextId,
+      //   });
+      //   if (identityResponse.data) {
+      //     refetchIdentity = identityResponse.data;
+      //   }
+      // }
 
       const response: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({
@@ -167,7 +236,7 @@ export function useMessages() {
             name: (isDM ? "private_dm" : group) || "",
           },
           limit: RECENT_MESSAGES_CHECK_SIZE,
-          offset: 0,
+          offset: fetchOffset,
           is_dm: isDM,
           dm_identity: refetchIdentity || activeChat.account,
           parent_message: undefined, // Only get main chat messages, not thread messages
@@ -175,18 +244,38 @@ export function useMessages() {
 
       if (!response.data) return [];
 
-      // Transform messages - MessageStore will handle deduplication
-      const newMessages = response.data.messages.map((msg) =>
+      // Transform messages
+      const fetchedMessages = response.data.messages.map((msg) =>
         transformMessageToUI(msg),
       );
 
-      if (newMessages.length > 0) {
-        // Only update ref, not state (MessageStore will deduplicate in VirtualizedChat)
-        messagesRef.current = [...messagesRef.current, ...newMessages];
-        return newMessages;
+      // Get existing message IDs to track which ones are new vs updated
+      const existingMessageIds = new Set(
+        messagesRef.current.map((msg) => msg.id)
+      );
+
+      // Separate new messages from updated messages
+      const newMessages: CurbMessage[] = [];
+      const updatedMessages: CurbMessage[] = [];
+
+      for (const msg of fetchedMessages) {
+        if (existingMessageIds.has(msg.id)) {
+          // Message already exists - this is an update (edit/delete)
+          updatedMessages.push(msg);
+        } else {
+          // New message
+          newMessages.push(msg);
+        }
       }
 
-      return [];
+      // Update ref with new messages only (MessageStore will handle updates)
+      if (newMessages.length > 0) {
+        messagesRef.current = [...messagesRef.current, ...newMessages];
+      }
+
+      // Return ALL messages (both new and updated) so MessageStore can handle updates
+      // MessageStore.append() has logic to update existing messages in place
+      return fetchedMessages;
     },
     [],
   );
@@ -249,7 +338,7 @@ export function useMessages() {
             offset: effectiveOffset,
             is_dm: isDM,
             dm_identity: activeChat.account,
-            search_term: normalizedQuery,
+            searchTerm: normalizedQuery,
           });
 
         if (response.data) {

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { DMChatInfo } from "../api/clientApi";
@@ -32,6 +32,12 @@ export function useDMs() {
     } catch (err) {
       log.error("DMs", "Error fetching DMs", err);
       setError("Failed to fetch DMs");
+      return [];
+    } finally {
+      setLoading(false);
+    }
+    try {
+      setDms([]);
       return [];
     } finally {
       setLoading(false);

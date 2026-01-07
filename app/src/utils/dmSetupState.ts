@@ -78,17 +78,15 @@ export function generateDMParams(
   inviteeUsername: string,
 ) {
   const jsonData = {
-    name: value,
-    default_channels: [{ name: "private_dm" }],
-    created_at: Date.now(),
-    is_dm: true,
+    defaultChannels: [{ name: "private_dm" }],
+    isDm: true,
     invitee: value,
-    owner_username: creatorUsername,
-    invitee_username: inviteeUsername,
+    ownerUsername: creatorUsername,
+    inviteeUsername: inviteeUsername,
   };
   const jsonString = JSON.stringify(jsonData);
   return {
-    applicationId: import.meta.env.VITE_APPLICATION_ID || "",
+    applicationId: (import.meta.env.VITE_APPLICATION_ID || "") as string,
     protocol: "near",
     params: jsonString,
   };

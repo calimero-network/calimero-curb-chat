@@ -155,7 +155,6 @@ export default function ChatTab({
         // try {
         //   const nodeApi = new ContextApiDataSource();
         //   const response = await nodeApi.listContexts();
-        //   console.log("response", response);
         //   if (response.data && response.data.length > 0) {
         //     //setAvailableContexts(response.data);
         //     // Auto-select first context if only one available

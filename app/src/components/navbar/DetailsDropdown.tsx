@@ -1,8 +1,7 @@
 import { styled } from "styled-components";
-import type { ActiveChat } from "../../types/Common";
+import type { ActiveChat, ChannelMeta } from "../../types/Common";
 import ChannelDetailsPopup from "../popups/ChannelDetailsPopup";
 import { useState } from "react";
-import type { UserId } from "../../api/clientApi";
 
 const DropdownSelector = styled.div`
   display: flex;
@@ -79,8 +78,9 @@ const PaddingContainer = styled.div`
 interface DetailsDropdownProps {
   activeChat: ActiveChat;
   isOpenSearchChannel: boolean;
-  channelUserList: Map<string, string>;
-  nonInvitedUserList: UserId[];
+  channelUserList: Record<string, string>;
+  channelMeta?: ChannelMeta;
+  nonInvitedUserList: Record<string, string>;
   reFetchChannelMembers: () => void;
   setActiveChat: (chat: ActiveChat) => void;
   fetchChannels: () => void;
@@ -114,6 +114,7 @@ export default function DetailsDropdown({
   activeChat,
   isOpenSearchChannel,
   channelUserList,
+  channelMeta,
   nonInvitedUserList,
   reFetchChannelMembers,
   setActiveChat,
@@ -163,11 +164,12 @@ export default function DetailsDropdown({
       <ChannelDetailsPopup
         toggle={toggle}
         chat={activeChat}
+        channelMeta={channelMeta}
         channelUserList={channelUserList}
         isOpen={isOpen}
         setIsOpen={setIsOpen}
         nonInvitedUserList={nonInvitedUserList}
-        selectedTabIndex={1}
+        selectedTabIndex={0}
         reFetchChannelMembers={reFetchChannelMembers}
         setActiveChat={setActiveChat}
         fetchChannels={fetchChannels}

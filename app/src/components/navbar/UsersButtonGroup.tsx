@@ -2,8 +2,10 @@ import styled from "styled-components";
 import { useState } from "react";
 import { Avatar } from "@calimero-network/mero-ui";
 
+import type { User } from "../../types/Common";
+
 interface UsersButtonGroupProps {
-  channelUserList: Map<string, string>;
+  members: User[];
   openMemberList: () => void;
 }
 
@@ -52,18 +54,16 @@ export default function UsersButtonGroup(props: UsersButtonGroupProps) {
         setIsHovered(false);
       }}
     >
-      {Object.entries(props.channelUserList)
-        .slice(0, 3)
-        .map(([publicKey, userName]) => (
-          <div key={publicKey}>
+      {props.members.slice(0, 3).map((member) => (
+        <div key={member.id}>
             <ProfileIconContainerGroup $isHovered={isHovered}>
-              <Avatar size="xs" name={userName} />
+            <Avatar size="xs" name={member.name ?? member.id} />
             </ProfileIconContainerGroup>
           </div>
         ))}
-      {Object.keys(props.channelUserList).length > 3 && (
+      {props.members.length > 3 && (
         <ProfileIconContainerGroup $counter={true} $isHovered={isHovered}>
-          {Object.keys(props.channelUserList).length}
+          {props.members.length}
         </ProfileIconContainerGroup>
       )}
     </AvatarContainer>

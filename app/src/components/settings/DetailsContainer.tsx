@@ -3,9 +3,8 @@ import styled from "styled-components";
 import AboutDetails from "./AboutDetails";
 import MemberDetails from "./MemberDetails";
 import TabSwitch from "./TabSwitch";
-import type { ChannelMeta } from "../../types/Common";
+import type { ChannelMeta, User } from "../../types/Common";
 import type { UserId } from "../../api/clientApi";
-import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 
 const Wrapper = styled.div``;
@@ -26,24 +25,32 @@ const ChannelTitle = styled.div`
 interface DetailsContainerProps {
   channelName: string;
   selectedTabIndex?: number;
-  userList: Map<string, string>;
-  nonInvitedUserList: UserId[];
+  nonInvitedUserList: Record<string, string>;
   channelMeta: ChannelMeta;
   handleLeaveChannel: () => void;
-  addMember: (user: string) => void;
+  addMember: (user: string, username?: string) => void;
   promoteModerator: (user: string) => void;
+  demoteModerator: (user: string) => void;
   removeUserFromChannel: (user: string) => void;
   reFetchChannelMembers: () => void;
+  members: User[];
+  currentUserId?: string;
+  canDeleteChannel?: boolean;
+  onDeleteChannel?: () => void;
 }
 
 const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
   const channelName = props.channelName;
-  const initialTabIndex = props.selectedTabIndex ? 0 : 1;
-  const userCount = Object.keys(props.userList).length;
-  const userList = props.userList;
+  const initialTabIndex =
+    typeof props.selectedTabIndex === "number" ? props.selectedTabIndex : 0;
+  const members = props.members.length
+    ? props.members
+    : props.channelMeta.members ?? [];
+  const userCount = members.length;
   const channelMeta = props.channelMeta;
   const handleLeaveChannel = props.handleLeaveChannel;
   const promoteModerator = props.promoteModerator;
+  const demoteModerator = props.demoteModerator;
   const removeUserFromChannel = props.removeUserFromChannel;
   const nonInvitedUserList = props.nonInvitedUserList;
   const reFetchChannelMembers = props.reFetchChannelMembers;
@@ -81,20 +88,27 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
     );
   };
 
-  const addMember = async (account: string, channel: string) => {
+  const addMember = async (
+    account: string,
+    channel: string,
+    username?: string,
+  ) => {
     await new ClientApiDataSource().inviteToChannel({
       channel: { name: channel },
       user: account,
+      username,
     });
     await reFetchChannelMembers();
   };
 
   const getNonInvitedUsers = (value: string): UserId[] => {
-    return nonInvitedUserList
-      ? Object.values(nonInvitedUserList).filter((u) => {
-          return u.startsWith(value);
-        })
-      : [];
+    if (!nonInvitedUserList) return [];
+    const lowerValue = value.toLowerCase();
+    return Object.entries(nonInvitedUserList)
+      .filter(([, username]) =>
+        typeof username === 'string' && username.toLowerCase().startsWith(lowerValue),
+      )
+      .map(([userId]) => userId);
   };
 
   return (
@@ -111,39 +125,23 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
           manager={channelMeta.createdByUsername}
           handleLeaveChannel={handleLeaveChannel}
           channelName={channelName}
+          isOwner={props.canDeleteChannel ?? false}
+          canDeleteChannel={props.canDeleteChannel}
+          onDeleteChannel={props.onDeleteChannel}
         />
       )}
       {selectedTabIndex === 1 && (
         <MemberDetails
-          id={0}
-          user={getExecutorPublicKey() as unknown as UserId}
-          promoteModerator={(userId: string, isModerator: boolean) => {
-            if (!isModerator) {
-              return;
-            }
-            // @ts-expect-error - userList is a Map<string, string>
-            const user = userList[userId];
-            if (user) {
-              promoteModerator(userId);
-            }
-          }}
-          removeUserFromChannel={(userId: string) => {
-            // @ts-expect-error - userList is a Map<string, string>
-            const user = userList[userId];
-            if (user) {
-              removeUserFromChannel(userId);
-            }
-          }}
           channelOwner={channelMeta.createdBy}
-          optionsOpen={0}
-          setOptionsOpen={() => {}}
-          selectedUser={null}
-          setSelectedUser={() => {}}
-          userList={userList}
           addMember={addMember}
           channelName={channelName}
           getNonInvitedUsers={getNonInvitedUsers}
           nonInvitedUserList={nonInvitedUserList}
+          members={members}
+          currentUserId={props.currentUserId}
+          promoteModerator={promoteModerator}
+          demoteModerator={demoteModerator}
+          removeUserFromChannel={removeUserFromChannel}
         />
       )}
     </Wrapper>

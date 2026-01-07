@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
-  MessageStatus,
   type ActiveChat,
   type ChannelMeta,
   type ChatMessagesData,
@@ -10,7 +9,6 @@ import {
   type CurbMessage,
 } from "../../types/Common";
 import {
-  getDmContextId,
   getStoredSession,
   setDmContextId,
   updateSessionChat,
@@ -23,13 +21,7 @@ import {
   getExecutorPublicKey,
   useCalimero,
 } from "@calimero-network/calimero-client";
-import {
-  type Channels,
-  type DMChatInfo,
-  type FullMessageResponse,
-  type UserId,
-} from "../../api/clientApi";
-import type { MessageWithReactions } from "../../api/clientApi";
+import { type DMChatInfo } from "../../api/clientApi";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
 import { generateDMParams } from "../../utils/dmSetupState";
 import { useAppNotifications } from "../../hooks/useAppNotifications";
@@ -42,9 +34,13 @@ import { useChatMembers } from "../../hooks/useChatMembers";
 import { useChannelMembers } from "../../hooks/useChannelMembers";
 import { useMessages } from "../../hooks/useMessages";
 import { useThreadMessages } from "../../hooks/useThreadMessages";
-import { useWebSocket, useWebSocketEvents } from "../../contexts/WebSocketContext";
+import {
+  useWebSocket,
+  useWebSocketEvents,
+} from "../../contexts/WebSocketContext";
 import { useChatHandlers } from "../../hooks/useChatHandlers";
 import type { ContextInviteByOpenInvitationResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
+import { checkCreateDMResponse } from "../../utils/checkResponse";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
@@ -57,7 +53,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const activeChatRef = useRef<ActiveChat | null>(null);
   const currentOpenThreadRef = useRef<CurbMessage | undefined>(undefined);
   const [openThread, setOpenThread] = useState<CurbMessage | undefined>(
-    undefined,
+    undefined
   );
 
   // Get WebSocket subscription from context
@@ -92,10 +88,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const dmsHook = useDMs();
   const chatMembersHook = useChatMembers();
   const channelMembersHook = useChannelMembers();
+  const {
+    setChannelUsers: setChannelUsersDirect,
+    setNonInvitedUsers: setNonInvitedUsersDirect,
+  } = channelMembersHook;
 
   // Expose for compatibility with existing code
-  const messagesRef = mainMessages.messagesRef;
-  const incomingMessages = mainMessages.incomingMessages;
+  const _messagesRef = mainMessages.messagesRef;
+  const _incomingMessages = mainMessages.incomingMessages;
   const addOptimisticMessage = mainMessages.addOptimistic;
   const addOptimisticThreadMessage = threadMessages.addOptimistic;
 
@@ -119,8 +119,16 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   useEffect(() => {
     if (!isConfigSet) {
       window.location.href = "/login";
+    } else if (activeChat?.type !== "channel") {
+      setChannelUsersDirect({});
+      setNonInvitedUsersDirect({});
     }
-  }, [isConfigSet]);
+  }, [
+    isConfigSet,
+    activeChat?.type,
+    setChannelUsersDirect,
+    setNonInvitedUsersDirect,
+  ]);
 
   useEffect(() => {
     currentOpenThreadRef.current = currentOpenThread;
@@ -144,7 +152,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const reFetchChannelMembers = useCallback(async () => {
     const isDM = activeChatRef.current?.type === "direct_message";
     await getChannelUsersRef.current(
-      (isDM ? "private_dm" : activeChatRef.current?.id) || "",
+      (isDM ? "private_dm" : activeChatRef.current?.id) || ""
     );
   }, []);
 
@@ -152,12 +160,28 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const lastSelectedChatIdRef = useRef<string>("");
 
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
-    // Find the channel metadata to get channelType
-    const channelMeta = channels.find(
-      (ch: ChannelMeta) => ch.name === selectedChat.name,
-    );
-    if (channelMeta && selectedChat.type === "channel") {
-      selectedChat.channelType = channelMeta.channelType;
+    const channelMetaFromSelection =
+      selectedChat.type === "channel"
+        ? (selectedChat.channelMeta ??
+          channels.find((ch: ChannelMeta) => ch.name === selectedChat.name))
+        : undefined;
+
+    if (channelMetaFromSelection && selectedChat.type === "channel") {
+      selectedChat.channelType = channelMetaFromSelection.channelType;
+      selectedChat.channelMeta = channelMetaFromSelection;
+
+      const membersRecord: Record<string, string> = {};
+      channelMetaFromSelection.members.forEach((member) => {
+        if (!member.id) {
+          return;
+        }
+        const displayName = member.name ?? member.id;
+        membersRecord[member.id] = member.moderator
+          ? `${displayName}`
+          : displayName;
+      });
+      setChannelUsersDirect(membersRecord);
+      setNonInvitedUsersDirect({});
     }
 
     // Clear message state using hooks
@@ -181,7 +205,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       // Only fetch for channels, not for DMs
       if (selectedChat.type === "channel") {
-        getChannelUsers(selectedChat.id);
+        if (!channelMetaFromSelection) {
+          getChannelUsers(selectedChat.id);
+        }
         getNonInvitedUsers(selectedChat.id);
       }
     }
@@ -194,7 +220,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
     // Note: With multi-context subscription, we're already subscribed to all channels
     // No need to switch subscriptions when changing active chat
-    log.debug("Home", `Active chat changed to: ${selectedChat.name} (multi-context subscription active)`);
+    log.debug(
+      "Home",
+      `Active chat changed to: ${selectedChat.name} (multi-context subscription active)`
+    );
   };
 
   const openSearchPage = useCallback(() => {
@@ -205,9 +234,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   const handleSearchMessages = useCallback(
     async (query: string) => {
-      await executeSearchMessages(activeChatRef.current, query, { reset: true });
+      await executeSearchMessages(activeChatRef.current, query, {
+        reset: true,
+      });
     },
-    [executeSearchMessages],
+    [executeSearchMessages]
   );
 
   const handleLoadMoreSearch = useCallback(async () => {
@@ -252,13 +283,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   // Simple debounce timers - no complex closures
   const channelsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
+    undefined
   );
   const dmsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
+    undefined
   );
   const membersDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
+    undefined
   );
 
   // Store latest fetch functions in refs
@@ -276,7 +307,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     clearTimeout(channelsDebounceRef.current);
     channelsDebounceRef.current = setTimeout(
       () => fetchChannelsRef.current(),
-      3000,
+      3000
     );
   }, []);
 
@@ -289,7 +320,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     clearTimeout(membersDebounceRef.current);
     membersDebounceRef.current = setTimeout(
       () => fetchMembersRef.current(),
-      3000,
+      3000
     );
   }, []);
 
@@ -312,6 +343,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   notifyDMRef.current = notifyDM;
   notifyChannelRef.current = notifyChannel;
 
+  // Create refs for channel selection
+  const onChannelSelectedRef = useRef((channel: ActiveChat) => {
+    updateSelectedActiveChatRef.current(channel);
+  });
+  const getChannelsRef = useRef(() => {
+    return [] as ActiveChat[];
+  });
+
   const chatHandlersRefs = useRef({
     mainMessages: mainMessagesRef,
     threadMessages: threadMessagesRef,
@@ -321,9 +360,19 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     notifyChannel: notifyChannelRef,
     fetchDms: fetchDmsRef,
     onDMSelected: onDMSelectedRef,
-    fetchChannels: { current: debouncedFetchChannels },
-    fetchDMs: { current: debouncedFetchDMs },
-    fetchMembers: { current: debouncedFetchMembers },
+    fetchChannels: useRef(async () => {
+      await debouncedFetchChannels();
+    }),
+    fetchDMs: useRef(async () => {
+      await debouncedFetchDMs();
+    }),
+    fetchMembers: useRef(async () => {
+      await debouncedFetchMembers();
+    }),
+    onChannelSelected: onChannelSelectedRef,
+    getChannels: getChannelsRef,
+    getChannelUsers: getChannelUsersRef,
+    getNonInvitedUsers: getNonInvitedUsersRef,
   }).current;
 
   // Store updateSelectedActiveChat in ref to avoid dependency
@@ -354,14 +403,17 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       if (verifyContextResponse.data) {
         canJoin = !(verifyContextResponse.data.rootHash ? true : false);
       }
-      const isSynced = verifyContextResponse.data ? 
-        verifyContextResponse.data?.rootHash !==
-        "11111111111111111111111111111111" : false;
+      const isSynced = verifyContextResponse.data
+        ? verifyContextResponse.data?.rootHash !==
+          "11111111111111111111111111111111"
+        : false;
 
       if ((sc?.account || dm?.own_identity) && isSynced) {
         // Use session identity information if available, fallback to DM data
-        const executor = sc?.ownIdentity || sc?.account || dm?.own_identity || "";
-        const username = sc?.ownUsername || sc?.username || dm?.own_username || "";
+        const executor =
+          sc?.ownIdentity || sc?.account || dm?.own_identity || "";
+        const username =
+          sc?.ownUsername || sc?.username || dm?.own_username || "";
         if (executor && username) {
           await new ClientApiDataSource().joinChat({
             contextId: dm?.context_id || "",
@@ -370,7 +422,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
             username: username,
           });
         } else {
-          console.warn("Missing executor or username for DM join:", { executor, username });
+          console.warn("Missing executor or username for DM join:", {
+            executor,
+            username,
+          });
         }
       }
 
@@ -409,7 +464,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       if (refetch) {
         try {
           await new ClientApiDataSource().readDm({
-            other_user_id: dm?.other_identity_old || "",
+            dmContextId: dm?.context_id || "",
           });
           await fetchDmsRef.current();
         } catch (error) {
@@ -417,7 +472,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         }
       }
     },
-    [], // NO DEPENDENCIES - everything through refs
+    [] // NO DEPENDENCIES - everything through refs
   );
 
   // Update onDMSelected ref (no useEffect - direct assignment)
@@ -426,7 +481,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const loadInitialChatMessages =
     useCallback(async (): Promise<ChatMessagesData> => {
       const result = await mainMessagesRef.current.loadInitial(
-        activeChatRef.current,
+        activeChatRef.current
       );
 
       if (
@@ -436,8 +491,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         const lastMessage = result.messages[result.messages.length - 1];
         if (lastMessage?.timestamp) {
           await new ClientApiDataSource().readMessage({
-            channel: { name: activeChatRef.current.name },
-            timestamp: lastMessage.timestamp,
+            channelId: activeChatRef.current.name,
+            messageId: lastMessage.id,
           });
         }
       }
@@ -449,40 +504,135 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const channels = channelsHook.channels;
   const fetchChannels = channelsHook.fetchChannels;
 
+  // Update getChannels ref when channels change
+  useEffect(() => {
+    getChannelsRef.current = () => {
+      return channels.map(
+        (ch: ChannelMeta): ActiveChat => ({
+          type: "channel",
+          id: ch.name,
+          name: ch.name,
+          channelType: ch.channelType,
+          channelMeta: ch,
+          readOnly: ch.readOnly,
+          canJoin: !ch.isMember,
+        })
+      );
+    };
+  }, [channels]);
+
   const privateDMs = dmsHook.dms;
   const fetchDms = dmsHook.fetchDms;
 
   const chatMembers = chatMembersHook.members;
-  const fetchChatMembers = chatMembersHook.fetchMembers;
+  const _fetchChatMembers = chatMembersHook.fetchMembers;
+
+  // Keep active channel metadata & members in sync when the channels list updates
+  useEffect(() => {
+    if (activeChatRef.current?.type !== "channel") return;
+    const currentChannelName = activeChatRef.current.name;
+    const latestMeta = channels.find(
+      (channel: ChannelMeta) => channel.name === currentChannelName
+    );
+    if (!latestMeta) return;
+
+    const prevMeta = activeChatRef.current.channelMeta;
+    if (prevMeta) {
+      // Check if members count changed
+      const membersCountChanged =
+        prevMeta.members?.length !== latestMeta.members?.length;
+      // Check if createdAt changed
+      const createdAtChanged = prevMeta.createdAt !== latestMeta.createdAt;
+      // Check if moderators changed (count or IDs)
+      const prevModeratorIds = new Set(
+        prevMeta.moderators?.map((m) => m.id) || []
+      );
+      const latestModeratorIds = new Set(
+        latestMeta.moderators?.map((m) => m.id) || []
+      );
+      const moderatorsChanged =
+        prevModeratorIds.size !== latestModeratorIds.size ||
+        [...prevModeratorIds].some((id) => !latestModeratorIds.has(id)) ||
+        [...latestModeratorIds].some((id) => !prevModeratorIds.has(id));
+      // Check if any member's moderator status changed
+      const memberModeratorStatusChanged = prevMeta.members?.some(
+        (prevMember) => {
+          const latestMember = latestMeta.members?.find(
+            (m) => m.id === prevMember.id
+          );
+          return (
+            latestMember && prevMember.moderator !== latestMember.moderator
+          );
+        }
+      );
+
+      // Only skip update if nothing changed
+      if (
+        !membersCountChanged &&
+        !createdAtChanged &&
+        !moderatorsChanged &&
+        !memberModeratorStatusChanged
+      ) {
+        return;
+      }
+    }
+
+    const memberRecord: Record<string, string> = {};
+    latestMeta.members.forEach((member) => {
+      if (!member.id) return;
+      memberRecord[member.id] = member.name ?? member.id;
+    });
+    setChannelUsersDirect(memberRecord);
+
+    setActiveChat((prev) => {
+      if (
+        !prev ||
+        prev.type !== "channel" ||
+        prev.name !== currentChannelName
+      ) {
+        return prev;
+      }
+      const updated: ActiveChat = {
+        ...prev,
+        channelMeta: latestMeta,
+        channelType: latestMeta.channelType,
+      };
+      activeChatRef.current = updated;
+      return updated;
+    });
+  }, [channels, setChannelUsersDirect, setActiveChat]);
 
   // Use chat handlers hook - simplified with refs
-  const {
-    handleMessageUpdates,
-    handleThreadMessageUpdates,
-    handleDMUpdates,
-    handleStateMutation,
-    handleExecutionEvents,
-  } = useChatHandlers(activeChatRef, activeChat, chatHandlersRefs);
+  const { handleThreadMessageUpdates, handleStateMutation } = useChatHandlers(
+    activeChatRef,
+    activeChat,
+    chatHandlersRefs
+  );
 
   // Listen to WebSocket events via context
-  useWebSocketEvents(useCallback(async (event: WebSocketEvent) => {
-    try {
-      await handleStateMutation(event);
+  useWebSocketEvents(
+    useCallback(
+      async (event: WebSocketEvent) => {
+        try {
+          await handleStateMutation(event);
 
-      // Also handle thread messages if a thread is open
-      if (openThread) {
-        const sessionChat = getStoredSession();
-        const useDM = (sessionChat?.type === "direct_message" &&
-          sessionChat?.account &&
-          !sessionChat?.canJoin &&
-          sessionChat?.otherIdentityNew) as boolean;
+          // Also handle thread messages if a thread is open
+          if (openThread) {
+            const sessionChat = getStoredSession();
+            const useDM = (sessionChat?.type === "direct_message" &&
+              sessionChat?.account &&
+              !sessionChat?.canJoin &&
+              sessionChat?.otherIdentityNew) as boolean;
 
-        await handleThreadMessageUpdates(useDM, openThread.id);
-      }
-    } catch (error) {
-      log.error("Home", "Error processing WebSocket event", error);
-    }
-  }, [handleStateMutation, handleThreadMessageUpdates, openThread]));
+            await handleThreadMessageUpdates(useDM, openThread.id);
+          }
+        } catch (error) {
+          log.error("Home", "Error processing WebSocket event", error);
+        }
+      },
+      [handleStateMutation, handleThreadMessageUpdates, openThread]
+    )
+  );
 
   // Track if initial fetch has been done - using useState to ensure it persists
   const initialFetchDone = useRef(false);
@@ -518,16 +668,16 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     if (!app) return;
 
     const mainContextId = getContextId();
-    
+
     // Collect all context IDs to subscribe to
     const contextIds: string[] = [];
-    
+
     // Add main context (for ALL channels - they share one context)
     if (mainContextId) {
       contextIds.push(mainContextId);
       log.debug("Home", `Adding main context for channels: ${mainContextId}`);
     }
-    
+
     // Add ALL DM contexts (each DM has its own context_id)
     if (privateDMs && privateDMs.length > 0) {
       privateDMs.forEach((dm) => {
@@ -541,9 +691,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     // Subscribe to all collected contexts via context
     if (contextIds.length > 0) {
       log.info(
-        "Home", 
+        "Home",
         `Subscribing to ${contextIds.length} contexts (1 main + ${contextIds.length - 1} DMs)`,
-        { totalContexts: contextIds.length, mainContext: mainContextId, dmCount: privateDMs.length }
+        {
+          totalContexts: contextIds.length,
+          mainContext: mainContextId,
+          dmCount: privateDMs.length,
+        }
       );
       webSocket.subscribeToContexts(contextIds);
     } else {
@@ -561,7 +715,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         await fetchDms();
         // Note: Multi-context subscription will automatically pick up the new DM context
         // when DMs are refetched above
-        log.info("Home", "Joined chat successfully, multi-context subscription will update");
+        log.info(
+          "Home",
+          "Joined chat successfully, multi-context subscription will update"
+        );
       } else {
         canJoin = true;
       }
@@ -585,24 +742,85 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     async (chatId: string): Promise<ChatMessagesDataWithOlder> => {
       return await mainMessagesRef.current.loadPrevious(
         activeChatRef.current,
-        chatId,
+        chatId
       );
     },
-    [], // NO DEPENDENCIES
+    [] // NO DEPENDENCIES
   );
 
   const createDM = async (value: string): Promise<CreateContextResult> => {
-    // @ts-expect-error - chatMembers is a Map<string, string>
-    const creatorUsername = chatMembers[getExecutorPublicKey() || ""];
-    // @ts-expect-error - chatMembers is a Map<string, string>
-    const inviteeUsername = chatMembers[value];
-    const dmParams = generateDMParams(value, creatorUsername, inviteeUsername);
+    // Check if DM already exists before attempting to create
+    const existingDM = privateDMs.find(
+      (dm) => dm.other_identity_old === value || dm.other_identity_new === value
+    );
+    if (existingDM) {
+      return {
+        data: "",
+        error: "DM already exists with this user",
+      };
+    }
+
+    // Extract creator from chatMembers
+    // chatMembers is a Map where keys are numbers and values are {userId, username}
+    const executorPublicKey = getExecutorPublicKey();
+    if (!executorPublicKey) {
+      return {
+        data: "",
+        error: "Failed to create DM - executor public key not found",
+      };
+    }
+
+    // Find the creator entry - chatMembers entries are [key, value] where value is {userId, username}
+    const creatorEntry = Array.from(chatMembers.entries()).find(
+      ([_, memberData]) => {
+        // Handle both Map<string, string> and Map<number, {userId, username}> structures
+        if (typeof memberData === "string") {
+          return memberData === executorPublicKey;
+        }
+        // memberData is an object with userId and username
+        const memberObj = memberData as { userId?: string; username?: string };
+        return memberObj?.userId === executorPublicKey;
+      }
+    );
+
+    if (!creatorEntry) {
+      return {
+        data: "",
+        error: "Failed to create DM - creator not found",
+      };
+    }
+
+    // Extract userId and username from the creator entry
+    // creatorEntry is [key, value] where value is {userId, username} or string
+    const [, creatorData] = creatorEntry;
+    let creatorUserId: string;
+    let creatorUsername: string;
+
+    if (typeof creatorData === "string") {
+      // If it's a string, use it as userId and try to find username elsewhere
+      creatorUserId = creatorData;
+      creatorUsername = "";
+    } else {
+      // If it's an object, extract userId and username
+      const creatorObj = creatorData as { userId?: string; username?: string };
+      creatorUserId = creatorObj?.userId || "";
+      creatorUsername = creatorObj?.username || "";
+    }
+
+    if (!creatorUserId) {
+      return {
+        data: "",
+        error: "Failed to create DM - creator userId not found",
+      };
+    }
+
+    const dmParams = generateDMParams(value, creatorUsername, creatorUserId);
     const response = await apiClient
       .node()
       .createContext(
         dmParams.applicationId,
         dmParams.params,
-        dmParams.protocol,
+        dmParams.protocol
       );
 
     const verifyContextResponse = await apiClient
@@ -623,9 +841,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           );
       if (invitationPayloadResponse.error) {
         await apiClient.node().deleteContext(response.data.contextId);
+        // Extract error message from API response
+        const errorMsg =
+          invitationPayloadResponse.error?.message ||
+          "Failed to create DM - failed to generate invitation payload";
         return {
           data: "",
-          error: "Failed to create DM - failed to generate invitation payload",
+          error: errorMsg,
         };
       }
       const createDMResponse = await new ClientApiDataSource().createDm({
@@ -637,7 +859,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         timestamp: Date.now(),
         payload: JSON.stringify(invitationPayloadResponse.data),
       });
-      if (createDMResponse.data) {
+
+      // @ts-expect-error - createDMResponse.data is a string
+      if (checkCreateDMResponse(createDMResponse.data?.result as string)) {
         await fetchDms();
         return {
           data: "DM created successfully",
@@ -645,15 +869,23 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         };
       } else {
         await apiClient.node().deleteContext(response.data.contextId);
+        // Extract error message from API response
+        const errorMsg =
+          // @ts-expect-error - createDMResponse.data is a string
+          createDMResponse.data?.result ||
+          createDMResponse.error?.message ||
+          "Failed to create DM";
         return {
           data: "",
-          error: "Failed to create DM - DM already exists",
+          error: errorMsg,
         };
       }
     } else {
+      // Extract error message from API response
+      const errorMsg = response.error?.message || "Failed to create DM";
       return {
         data: "",
-        error: "Failed to create DM",
+        error: errorMsg,
       };
     }
   };
@@ -662,34 +894,51 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     async (parentMessageId: string): Promise<ChatMessagesData> => {
       log.debug(
         "Home",
-        `loadInitialThreadMessages called for parent: ${parentMessageId}`,
+        `loadInitialThreadMessages called for parent: ${parentMessageId}`
       );
       const result = await threadMessagesRef.current.loadInitial(
         activeChatRef.current,
-        parentMessageId,
+        parentMessageId
       );
       log.debug("Home", `loadInitialThreadMessages result:`, result);
       return result;
     },
-    [], // NO DEPENDENCIES
+    [] // NO DEPENDENCIES
   );
 
   const updateCurrentOpenThread = useCallback(
     (thread: CurbMessage | undefined) => {
       setCurrentOpenThread(thread);
     },
-    [],
+    []
   );
 
   const loadPrevThreadMessages = useCallback(
     async (parentMessageId: string): Promise<ChatMessagesDataWithOlder> => {
       return await threadMessagesRef.current.loadPrevious(
         activeChatRef.current,
-        parentMessageId,
+        parentMessageId
       );
     },
-    [], // NO DEPENDENCIES
+    [] // NO DEPENDENCIES
   );
+
+  // Get channel members for the active channel (for mentions in MessageInput)
+  const activeChannelMembers = useMemo(() => {
+    if (activeChat?.type !== "channel") return [];
+    const channelMeta = channels.find(
+      (ch: ChannelMeta) => ch.name === activeChat.name
+    );
+    if (!channelMeta?.members) return [];
+
+    // Transform User[] to { userId: string; username: string }[]
+    return channelMeta.members
+      .filter((member) => member.id) // Filter out members without id
+      .map((member) => ({
+        userId: member.id,
+        username: member.name || member.id,
+      }));
+  }, [activeChat, channels]);
 
   return (
     <AppContainer
@@ -735,6 +984,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       onSearchMessages={handleSearchMessages}
       onLoadMoreSearch={handleLoadMoreSearch}
       onClearSearch={handleClearSearch}
+      activeChannelMembers={activeChannelMembers}
     />
   );
 }

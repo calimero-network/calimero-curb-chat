@@ -21,7 +21,7 @@ import {
   apiClient,
   getContextId,
   getExecutorPublicKey,
-  type ResponseData,
+  // type ResponseData,
 } from "@calimero-network/calimero-client";
 import type { ChannelInfo, DMChatInfo, UserId } from "../api/clientApi";
 import HandleDMSetup from "./HandleDMSetup";
@@ -31,6 +31,7 @@ import InvitationPending from "./InvitationPending";
 import { getDMSetupState } from "../utils/dmSetupState";
 import SyncWaiting from "./SyncWaiting";
 import { extractAndAddMentions } from "../utils/mentions";
+import { markdownParser } from "../utils/markdownParser";
 import { getDmContextId } from "../utils/session";
 import ChatSearchOverlay from "./ChatSearchOverlay";
 
@@ -51,7 +52,7 @@ interface ChatContainerProps {
   setOpenThread: (thread: CurbMessage | undefined) => void;
   currentOpenThreadRef: React.RefObject<CurbMessage | undefined>;
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat) => void;
-  membersList: Map<string, string>;
+  membersList:  Map<string, string>;
   addOptimisticMessage?: (message: CurbMessage) => void;
   addOptimisticThreadMessage?: (message: CurbMessage) => void;
   clearThreadsMessagesOnSwitch: () => void;
@@ -66,6 +67,7 @@ interface ChatContainerProps {
   onClearSearch: () => void;
   isSearchOverlayOpen: boolean;
   onCloseSearchOverlay: () => void;
+  activeChannelMembers: { userId: string; username: string }[];
 }
 
 const ChatContainerWrapper = styled.div`
@@ -133,13 +135,14 @@ function ChatContainer({
   onClearSearch,
   isSearchOverlayOpen,
   onCloseSearchOverlay,
+  activeChannelMembers,
 }: ChatContainerProps) {
   const [updatedMessages, setUpdatedMessages] = useState<UpdatedMessages[]>([]);
   const [_updatedThreadMessages, setUpdatedThreadMessages] = useState<
     UpdatedMessages[]
   >([]);
   const [isEmojiSelectorVisible, setIsEmojiSelectorVisible] = useState(false);
-  const [channelMeta, setChannelMeta] = useState<ChannelInfo>(
+  const [channelMeta, _setChannelMeta] = useState<ChannelInfo>(
     {} as ChannelInfo
   );
   const [openMobileReactions, setOpenMobileReactions] = useState("");
@@ -148,36 +151,36 @@ function ChatContainer({
   const [searchInputValue, setSearchInputValue] = useState(searchQuery);
 
   // Track last fetched channel to prevent excessive API calls
-  const lastFetchedChannelRef = useRef<string>("");
+  const _lastFetchedChannelRef = useRef<string>("");
 
   useEffect(() => {
     setSearchInputValue(searchQuery);
   }, [searchQuery]);
 
   useEffect(() => {
-    const fetchChannelMeta = async () => {
-      // Skip for DMs - they don't have channel info
-      if (activeChat.type === "direct_message") {
-        setChannelMeta({} as ChannelInfo);
-        return;
-      }
+    // const fetchChannelMeta = async () => {
+    //   // Skip for DMs - they don't have channel info
+    //   if (activeChat.type === "direct_message") {
+    //     setChannelMeta({} as ChannelInfo);
+    //     return;
+    //   }
 
-      // Only fetch if we haven't fetched for this channel yet
-      if (lastFetchedChannelRef.current === activeChat.name) {
-        return;
-      }
+    //   // Only fetch if we haven't fetched for this channel yet
+    //   if (lastFetchedChannelRef.current === activeChat.name) {
+    //     return;
+    //   }
 
-      lastFetchedChannelRef.current = activeChat.name;
+    //   lastFetchedChannelRef.current = activeChat.name;
 
-      const channelMeta: ResponseData<ChannelInfo> =
-        await new ClientApiDataSource().getChannelInfo({
-          channel: { name: activeChat.name },
-        });
-      if (channelMeta.data) {
-        setChannelMeta(channelMeta.data);
-      }
-    };
-    fetchChannelMeta();
+    //   const channelMeta: ResponseData<ChannelInfo> =
+    //     await new ClientApiDataSource().getChannelInfo({
+    //       channel: { name: activeChat.name },
+    //     });
+    //   if (channelMeta.data) {
+    //     setChannelMeta(channelMeta.data);
+    //   }
+    // };
+    // fetchChannelMeta();
   }, [activeChat.name, activeChat.type]);
 
   const activeChatRef = useRef(activeChat);
@@ -193,14 +196,17 @@ function ChatContainer({
 
   const computeReaction = useCallback(
     (message: CurbMessage, reaction: string, username: string) => {
-      const accounts = message.reactions?.[reaction] ?? [];
+      // Ensure we have a reactions object to work with
+      const existingReactions = message.reactions || {};
+      const accounts = existingReactions[reaction] ?? [];
       let update;
       if (accounts.includes(username)) {
         update = accounts.filter((a: string) => a !== username);
       } else {
         update = [...accounts, username];
       }
-      return { reactions: { ...message.reactions, [reaction]: update } };
+      // Preserve all existing reactions and only update the specific emoji
+      return { reactions: { ...existingReactions, [reaction]: update } };
     },
     []
   );
@@ -270,6 +276,7 @@ function ChatContainer({
     );
     const isDM = activeChatRef.current?.type === "direct_message";
 
+    // @ts-expect-error - membersListRef.current is a Map
     const result = extractAndAddMentions(messageText, membersListRef.current);
     const mentions: UserId[] = [...result.userIdMentions];
     const usernames: string[] = [...result.usernameMentions];
@@ -425,9 +432,8 @@ function ChatContainer({
         .node()
         .getContext(activeChatRef.current?.contextId || "");
       await new ClientApiDataSource().updateDmHash({
-        sender_id: getExecutorPublicKey() || "",
-        other_user_id: activeChatRef.current?.name || "",
-        new_hash: (fetchContextResponse.data?.rootHash as string) || "",
+        newHash: (fetchContextResponse.data?.rootHash as string) || "",
+        dmContextId: activeChatRef.current?.contextId || "",
       });
     }
 
@@ -512,6 +518,29 @@ function ChatContainer({
       const isDM = activeChatRef.current?.type === "direct_message";
       const editedOn = Math.floor(Date.now() / 1000);
       
+      // Extract plain text from HTML to extract mentions
+      // The message.text might be HTML from the rich text editor
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = message.text || "";
+      const plainText = tempDiv.textContent || tempDiv.innerText || message.text || "";
+      
+      // Extract mentions from the plain text using the same logic as sendMessage
+      // Use activeChannelMembers for channels, membersList for DMs
+      const membersForMentions = isDM 
+        ? Array.from(membersListRef.current.entries()).map(([userId, username]) => ({
+            userId: typeof username === 'string' ? username : userId,
+            username: typeof username === 'string' ? username : userId,
+          }))
+        : activeChannelMembers || [];
+      
+      const result = extractAndAddMentions(plainText, membersForMentions);
+      const mentions: UserId[] = [...result.userIdMentions];
+      const usernames: string[] = [...result.usernameMentions];
+      
+      // Re-format the text with mentions using markdownParser
+      // This ensures mentions are properly formatted in the text
+      const formattedText = markdownParser(plainText, usernames);
+      
       // Get parent message ID for thread messages
       const parentMessageId = isThread
         ? currentOpenThreadRef.current?.key || currentOpenThreadRef.current?.id
@@ -520,7 +549,7 @@ function ChatContainer({
       const response = await new ClientApiDataSource().editMessage({
         group: { name: activeChatRef.current?.name ?? "" },
         messageId: message.id,
-        newMessage: message.text,
+        newMessage: formattedText,
         timestamp: editedOn,
         is_dm: isDM,
         dm_identity: activeChatRef.current?.account,
@@ -533,9 +562,10 @@ function ChatContainer({
             id: message.id,
             descriptor: {
               updatedFields: {
-                text: message.text,
+                text: formattedText,
                 editMode: false,
                 editedOn: editedOn,
+                mentions: mentions.length > 0 ? mentions : message.mentions,
               },
             },
           },
@@ -547,7 +577,7 @@ function ChatContainer({
         }
       }
     },
-    [currentOpenThreadRef],
+    [currentOpenThreadRef, activeChannelMembers],
   );
 
   const selectThread = (message: CurbMessage) => {
@@ -698,6 +728,7 @@ function ChatContainer({
               isEmojiSelectorVisible={isEmojiSelectorVisible}
               setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
               messageWithEmojiSelector={messageWithEmojiSelector}
+              activeChannelMembers={activeChannelMembers}
             />
             {openThread && (
               <ThreadWrapper>
@@ -731,7 +762,16 @@ function ChatContainer({
                     );
                     return incomingThreadMessages;
                   })()}
-                  loadPrevMessages={(id: string) => loadPrevThreadMessages(id)}
+                  loadPrevMessages={(_id: string) => {
+                    // Use parent message ID from openThread, not the oldest child message ID
+                    const parentMessageId = openThread.key || openThread.id;
+                    log.debug(
+                      "ChatContainer",
+                      `Thread loadPrevMessages called, using parent ID: ${parentMessageId}`
+                    );
+                    return loadPrevThreadMessages(parentMessageId);
+                  }}
+                  activeChannelMembers={activeChannelMembers}
                   currentOpenThreadRef={currentOpenThreadRef}
                   isEmojiSelectorVisible={isEmojiSelectorVisible}
                   setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
@@ -825,6 +865,7 @@ function ChatContainer({
                 isEmojiSelectorVisible={isEmojiSelectorVisible}
                 setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}
                 messageWithEmojiSelector={messageWithEmojiSelector}
+                activeChannelMembers={activeChannelMembers}
               />
               {openThread && (
                 <ThreadWrapper>
@@ -857,9 +898,16 @@ function ChatContainer({
                       return loadInitialThreadMessages(openThread.id);
                     }}
                     incomingMessages={incomingThreadMessages}
-                    loadPrevMessages={(id: string) =>
-                      loadPrevThreadMessages(id)
-                    }
+                    loadPrevMessages={(_id: string) => {
+                      // Use parent message ID from openThread, not the oldest child message ID
+                      const parentMessageId = openThread.key || openThread.id;
+                      log.debug(
+                        "ChatContainer",
+                        `Thread loadPrevMessages called, using parent ID: ${parentMessageId}`
+                      );
+                      return loadPrevThreadMessages(parentMessageId);
+                    }}
+                    activeChannelMembers={activeChannelMembers}
                     currentOpenThreadRef={currentOpenThreadRef}
                     isEmojiSelectorVisible={isEmojiSelectorVisible}
                     setIsEmojiSelectorVisible={setIsEmojiSelectorVisible}

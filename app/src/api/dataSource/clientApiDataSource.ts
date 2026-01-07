@@ -7,13 +7,15 @@ import {
 } from "@calimero-network/calimero-client";
 import {
   type AcceptInvitationProps,
+  type ChannelDataResponse,
   type ChannelInfo,
-  type Channels,
+  type AllChannelsResponse,
   type ClientApi,
   ClientMethod,
   type CreateChannelProps,
   type CreateChannelResponse,
   type CreateDmProps,
+  type DeleteChannelProps,
   type DeleteDMProps,
   type DeleteMessageProps,
   type DMChatInfo,
@@ -30,6 +32,9 @@ import {
   type JoinChatProps,
   type LeaveChannelProps,
   type Message,
+  type PromoteModeratorProps,
+  type DemoteModeratorProps,
+  type RemoveUserFromChannelProps,
   type ReadDmProps,
   type ReadMessageProps,
   type SendMessageProps,
@@ -37,7 +42,9 @@ import {
   type UpdateInvitationPayloadProps,
   type UpdateNewIdentityProps,
   type UpdateReactionProps,
-  type UserId,
+  type GetMessagesResponse,
+  type MessageWithReactions,
+  type DMrawObject,
 } from "../clientApi";
 import { getDmContextId } from "../../utils/session";
 
@@ -45,10 +52,49 @@ export function getJsonRpcClient() {
   const appEndpointKey = getAppEndpointKey();
   if (!appEndpointKey) {
     throw new Error(
-      "Application endpoint key is missing. Please check your configuration.",
+      "Application endpoint key is missing. Please check your configuration."
     );
   }
   return rpcClient;
+}
+
+/**
+ * Transforms reactions from backend array format to frontend HashMap format
+ * Backend format: [{ emoji: "👍", users: [null, "testuser"] }]
+ * Frontend format: { "👍": ["testuser"] }
+ */
+function transformReactions(
+  reactions:
+    | Array<{ emoji: string; users: (string | null)[] }>
+    | Record<string, string[]>
+    | undefined
+    | null
+): Record<string, string[]> {
+  const reactionsHashMap: Record<string, string[]> = {};
+
+  if (!reactions) {
+    return reactionsHashMap;
+  }
+
+  if (Array.isArray(reactions)) {
+    // New format: array of { emoji, users }
+    reactions.forEach((reaction) => {
+      if (reaction?.emoji && Array.isArray(reaction.users)) {
+        // Filter out null values and convert to string array
+        const validUsers = reaction.users.filter(
+          (user): user is string => user !== null && user !== undefined
+        );
+        if (validUsers.length > 0) {
+          reactionsHashMap[reaction.emoji] = validUsers;
+        }
+      }
+    });
+  } else if (typeof reactions === "object" && !Array.isArray(reactions)) {
+    // Old format: already a HashMap/object
+    return reactions as Record<string, string[]>;
+  }
+
+  return reactionsHashMap;
 }
 
 export class ClientApiDataSource implements ClientApi {
@@ -57,21 +103,26 @@ export class ClientApiDataSource implements ClientApi {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
-          contextId: (props.isDM ? getDmContextId() : props.contextId || getContextId()) || "",
+          contextId:
+            (props.isDM
+              ? getDmContextId()
+              : props.contextId || getContextId()) || "",
           method: ClientMethod.JOIN_CHAT,
           argsJson: {
             username: props.username,
             is_dm: props.isDM || false,
           },
           executorPublicKey:
-            (props.isDM ? props.executor : (props.executorPublicKey || getExecutorPublicKey())) || "",
+            (props.isDM
+              ? props.executor
+              : props.executorPublicKey || getExecutorPublicKey()) || "",
         },
         {
           headers: {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -105,7 +156,7 @@ export class ClientApiDataSource implements ClientApi {
   }
 
   async createChannel(
-    props: CreateChannelProps,
+    props: CreateChannelProps
   ): ApiResponse<CreateChannelResponse> {
     try {
       const response = await getJsonRpcClient().execute<
@@ -117,21 +168,18 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.CREATE_CHANNEL,
           argsJson: {
-            channel: props.channel,
-            channel_type: props.channel_type,
-            read_only: props.read_only,
-            moderators: props.moderators,
-            links_allowed: props.links_allowed,
-            created_at: props.created_at,
+            name: props.channel.name,
           },
           executorPublicKey: getExecutorPublicKey() || "",
+          // @ts-expect-error - substitute is not used in the createChannel method
+          substitute: [],
         },
         {
           headers: {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
 
       if (response?.error) {
@@ -166,10 +214,13 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getChannels(): ApiResponse<Channels> {
+  async getChannels(): ApiResponse<ChannelDataResponse[]> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Channels>(
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        { result: ChannelDataResponse[] }
+      >(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_CHANNELS,
@@ -181,7 +232,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -195,7 +246,8 @@ export class ClientApiDataSource implements ClientApi {
       }
 
       return {
-        data: response?.result.output as Channels,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: response?.result?.output?.result as any,
         error: null,
       };
     } catch (error) {
@@ -215,10 +267,13 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getAllChannelsSearch(): ApiResponse<Channels> {
+  async getAllChannelsSearch(): ApiResponse<AllChannelsResponse> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, Channels>(
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        { result: AllChannelsResponse }
+      >(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_ALL_CHANNELS_SEARCH,
@@ -230,7 +285,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -243,7 +298,7 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
       return {
-        data: response?.result.output as Channels,
+        data: response?.result.output?.result as AllChannelsResponse,
         error: null,
       };
     } catch (error) {
@@ -281,7 +336,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -315,11 +370,11 @@ export class ClientApiDataSource implements ClientApi {
   }
 
   async getChannelMembers(
-    props: GetChannelMembersProps,
+    props: GetChannelMembersProps
   ): ApiResponse<Map<string, string>> {
     try {
       const response = await getJsonRpcClient().execute<
-       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         Map<string, string>
       >(
@@ -336,7 +391,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -379,8 +434,9 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.INVITE_TO_CHANNEL,
           argsJson: {
-            channel: props.channel,
-            user: props.user,
+            channelId: props.channel.name,
+            userId: props.user,
+            username: props.username,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -389,7 +445,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -423,16 +479,16 @@ export class ClientApiDataSource implements ClientApi {
   }
 
   async getNonMemberUsers(
-    props: GetNonMemberUsersProps,
-  ): ApiResponse<UserId[]> {
+    props: GetNonMemberUsersProps
+  ): ApiResponse<Record<string, string>> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, UserId[]>(
+      const response = await getJsonRpcClient().execute<any, unknown>(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_INVITE_USERS,
           argsJson: {
-            channel: props.channel,
+            channelId: props.channel.name,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -441,7 +497,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -453,8 +509,78 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
+
+      const normalizeInvitees = (payload: unknown): Record<string, string> => {
+        if (!payload) return {};
+
+        let parsedData: unknown = payload;
+
+        if (typeof parsedData === "string") {
+          try {
+            parsedData = JSON.parse(parsedData);
+          } catch {
+            const key = parsedData as string;
+            return { [key]: key };
+          }
+        }
+
+        if (
+          typeof parsedData === "object" &&
+          parsedData !== null &&
+          Object.prototype.hasOwnProperty.call(parsedData, "result")
+        ) {
+          parsedData = (parsedData as { result: unknown }).result;
+        }
+
+        const map: Record<string, string> = {};
+
+        if (Array.isArray(parsedData)) {
+          parsedData.forEach((entry) => {
+            if (!entry) return;
+
+            if (typeof entry === "string") {
+              map[entry] = entry;
+              return;
+            }
+
+            if (typeof entry === "object") {
+              const userId =
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).userId ??
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).user_id ??
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).id;
+
+              if (!userId) return;
+
+              const username =
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).username ??
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).userName ??
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (entry as any).name ??
+                userId;
+
+              map[userId] = username;
+            }
+          });
+        } else if (typeof parsedData === "object" && parsedData !== null) {
+          Object.entries(parsedData as Record<string, unknown>).forEach(
+            ([key, value]) => {
+              map[key] = typeof value === "string" ? value : key;
+            }
+          );
+        }
+
+        return map;
+      };
+
+      const invitees = normalizeInvitees(response?.result?.output);
+
       return {
-        data: response?.result.output as UserId[],
+        data: invitees,
         error: null,
       };
     } catch (error) {
@@ -467,6 +593,7 @@ export class ClientApiDataSource implements ClientApi {
         errorMessage = error;
       }
       return {
+        data: null,
         error: {
           code: 500,
           message: errorMessage,
@@ -483,7 +610,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.JOIN_CHANNEL,
           argsJson: {
-            channel: props.channel,
+            channelId: props.channel.name,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -492,7 +619,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -532,9 +659,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: getContextId() || "",
           method: ClientMethod.LEAVE_CHANNEL,
-          argsJson: {
-            channel: props.channel,
-          },
+          argsJson: { channelId: props.channel.name },
           executorPublicKey: getExecutorPublicKey() || "",
         },
         {
@@ -542,7 +667,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -575,35 +700,22 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse> {
+  async deleteChannel(props: DeleteChannelProps): ApiResponse<string> {
     try {
-      const useContext = props.refetch_context_id ? props.refetch_context_id : (props.is_dm ? getDmContextId() : getContextId()) || "";
-      const useIdentity = props.refetch_identity ? props.refetch_identity : (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "";
-      const response = await getJsonRpcClient().execute<
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        any,
-        FullMessageResponse
-      >(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
         {
-          contextId: useContext,
-          method: ClientMethod.GET_MESSAGES,
-          argsJson: {
-            group: props.group,
-            parent_message: props.parent_message,
-            limit: props.limit,
-            offset: props.offset,
-            ...(props.search_term
-              ? { search_term: props.search_term }
-              : {}),
-          },
-          executorPublicKey: useIdentity,
+          contextId: getContextId() || "",
+          method: ClientMethod.DELETE_CHANNEL,
+          argsJson: { channelId: props.channel.name },
+          executorPublicKey: getExecutorPublicKey() || "",
         },
         {
           headers: {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -615,9 +727,323 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
+      return {
+        data: response?.result.output as string,
+        error: null,
+      };
+    } catch (error) {
+      console.error("deleteChannel failed:", error);
+      let errorMessage = "An unexpected error occurred during deleteChannel";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: {
+          code: 500,
+          message: errorMessage,
+        },
+      };
+    }
+  }
+
+  async promoteModerator(props: PromoteModeratorProps): ApiResponse<string> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
+        {
+          contextId: getContextId() || "",
+          method: ClientMethod.PROMOTE_MODERATOR,
+          argsJson: {
+            channelId: props.channel.name,
+            userId: props.user,
+          },
+          executorPublicKey: getExecutorPublicKey() || "",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        }
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return {
+        data: response?.result.output as string,
+        error: null,
+      };
+    } catch (error) {
+      console.error("promoteModerator failed:", error);
+      let errorMessage = "An unexpected error occurred during promoteModerator";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: {
+          code: 500,
+          message: errorMessage,
+        },
+      };
+    }
+  }
+
+  async demoteModerator(props: DemoteModeratorProps): ApiResponse<string> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
+        {
+          contextId: getContextId() || "",
+          method: ClientMethod.DEMOTE_MODERATOR,
+          argsJson: {
+            channelId: props.channel.name,
+            userId: props.user,
+          },
+          executorPublicKey: getExecutorPublicKey() || "",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        }
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return {
+        data: response?.result.output as string,
+        error: null,
+      };
+    } catch (error) {
+      console.error("demoteModerator failed:", error);
+      let errorMessage = "An unexpected error occurred during demoteModerator";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: {
+          code: 500,
+          message: errorMessage,
+        },
+      };
+    }
+  }
+
+  async removeUserFromChannel(
+    props: RemoveUserFromChannelProps
+  ): ApiResponse<string> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
+        {
+          contextId: getContextId() || "",
+          method: ClientMethod.REMOVE_USER_FROM_CHANNEL,
+          argsJson: {
+            channelId: props.channel.name,
+            userId: props.user,
+          },
+          executorPublicKey: getExecutorPublicKey() || "",
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        }
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return {
+        data: response?.result.output as string,
+        error: null,
+      };
+    } catch (error) {
+      console.error("removeUserFromChannel failed:", error);
+      let errorMessage =
+        "An unexpected error occurred during removeUserFromChannel";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: {
+          code: 500,
+          message: errorMessage,
+        },
+      };
+    }
+  }
+
+  async getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse> {
+    try {
+      const useContext = props.refetch_context_id
+        ? props.refetch_context_id
+        : (props.is_dm ? getDmContextId() : getContextId()) || "";
+      const useIdentity = props.refetch_identity
+        ? props.refetch_identity
+        : (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "";
+
+      // Convert old props format to new GetMessagesArgs format
+      const getMessagesArgs = {
+        channelId: props.group.name,
+        parentId: props.parent_message || null,
+        limit: props.limit,
+        offset: props.offset,
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const argsJson: any = getMessagesArgs;
+
+      // Add search_term if present (legacy support - might need to be handled differently)
+      if (props.searchTerm) {
+        // Note: search_term might need to be part of GetMessagesArgs in the future
+        // For now, keeping it separate for backward compatibility
+        argsJson.searchTerm = props.searchTerm;
+      }
+
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        GetMessagesResponse
+      >(
+        {
+          contextId: useContext,
+          method: ClientMethod.GET_MESSAGES,
+          argsJson,
+          executorPublicKey: useIdentity,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        }
+      );
+
+      if (response?.error) {
+        console.error("getMessages API error:", response.error);
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+
+      // Backend returns: { result: { output: { result: [...] } } }
+      // We need to transform it to FullMessageResponse format
+      const getMessagesObject = response?.result?.output?.result as
+        | FullMessageResponse
+        | undefined;
+      if (!getMessagesObject) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "An unexpected error occurred during getMessages",
+          },
+        };
+      }
+
+      // Transform messages from backend format to frontend format
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transformedMessages = getMessagesObject.messages.map((msg: any) => {
+        // Convert timestamp from nanoseconds (string) to milliseconds (number)
+        const timestampNs =
+          typeof msg.timestamp === "string"
+            ? BigInt(msg.timestamp)
+            : BigInt(msg.timestamp || 0);
+        const timestampMs = Number(timestampNs / BigInt(1_000_000));
+
+        // Convert editedAt from nanoseconds to milliseconds if present
+        let editedAt: number | undefined = undefined;
+        if (msg.editedAt !== null && msg.editedAt !== undefined) {
+          const editedAtNs =
+            typeof msg.editedAt === "string"
+              ? BigInt(msg.editedAt)
+              : BigInt(msg.editedAt || 0);
+          editedAt = Number(editedAtNs / BigInt(1_000_000));
+        }
+
+        // Transform reactions from array format to HashMap format
+        const reactionsHashMap = transformReactions(msg.reactions);
+
+        // Transform attachments: map blob_id_str to blob_id and ensure uploaded_at exists
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const transformAttachment = (attachment: any) => {
+          if (!attachment) return null;
+          return {
+            name: attachment.name,
+            blob_id: attachment.blob_id || attachment.blob_id_str || "",
+            mime_type: attachment.mime_type,
+            size: attachment.size,
+            uploaded_at: attachment.uploaded_at || 0,
+          };
+        };
+
+        return {
+          id: msg.id,
+          sender: msg.senderId,
+          senderUsername: msg.senderUsername,
+          text: msg.text,
+          timestamp: timestampMs,
+          deleted: msg.deleted || false,
+          editedAt,
+          reactions: reactionsHashMap,
+          threadCount: msg.threadCount || 0,
+          threadLastTimestamp: msg.threadLastTimestamp
+            ? typeof msg.threadLastTimestamp === "string"
+              ? Number(BigInt(msg.threadLastTimestamp) / BigInt(1_000_000))
+              : msg.threadLastTimestamp
+            : 0,
+          group: props.group.name,
+          mentions: msg.mentions,
+          mentionUsernames: msg.mentionUsernames,
+          files: (msg.files || []).map(transformAttachment).filter(Boolean),
+          images: (msg.images || []).map(transformAttachment).filter(Boolean),
+        };
+      });
+
+      const fullMessageResponse: FullMessageResponse = {
+        messages: transformedMessages,
+        total_count: getMessagesObject.total_count,
+        start_position: getMessagesObject.start_position,
+      };
 
       return {
-        data: response?.result.output as FullMessageResponse,
+        data: fullMessageResponse,
         error: null,
       };
     } catch (error) {
@@ -637,7 +1063,9 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async sendMessage(props: SendMessageProps): ApiResponse<Message> {
+  async sendMessage(
+    props: SendMessageProps
+  ): ApiResponse<MessageWithReactions> {
     try {
       if (!props.message) {
         return {
@@ -647,29 +1075,25 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
+      const sendMessageArgs = {
+        channelId: props.group.name,
+        text: props.message,
+        parentId: props.parent_message || null,
+        files: props.files,
+        images: props.images,
+        mentionUsernames: props.usernames,
+        mentions: props.mentions,
+      };
+
       const response = await getJsonRpcClient().execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
-        Message
+        { result: { output: { result: MessageWithReactions } } }
       >(
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.SEND_MESSAGE,
-          argsJson: {
-            group: props.group,
-            message: props.message,
-            mentions: props.mentions,
-            mentions_usernames: props.usernames,
-            parent_message: props.parent_message,
-            timestamp: props.timestamp,
-            sender_username: "",
-            ...(props.files && props.files.length > 0
-              ? { files: props.files }
-              : {}),
-            ...(props.images && props.images.length > 0
-              ? { images: props.images }
-              : {}),
-          },
+          argsJson: sendMessageArgs,
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
         },
@@ -678,7 +1102,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
 
       if (response?.error) {
@@ -692,8 +1116,46 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawMessage = response?.result?.output?.result as any;
+
+      if (!rawMessage) {
+        return {
+          data: null,
+          error: {
+            code: 500,
+            message: "An unexpected error occurred during sendMessage",
+          },
+        };
+      }
+
+      // Transform attachments: map blob_id_str to blob_id and ensure uploaded_at exists
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const transformAttachment = (attachment: any) => {
+        if (!attachment) return null;
+        return {
+          name: attachment.name,
+          blob_id: attachment.blob_id || attachment.blob_id_str || "",
+          mime_type: attachment.mime_type,
+          size: attachment.size,
+          uploaded_at: attachment.uploaded_at || 0,
+        };
+      };
+
+      // Transform reactions from array format to HashMap format
+      const transformedMessage: MessageWithReactions = {
+        ...rawMessage,
+        reactions: transformReactions(rawMessage.reactions || []),
+        files: (rawMessage.files || [])
+          .map(transformAttachment)
+          .filter(Boolean),
+        images: (rawMessage.images || [])
+          .map(transformAttachment)
+          .filter(Boolean),
+      };
+
       return {
-        data: response?.result.output as Message,
+        data: transformedMessage,
         error: null,
       };
     } catch (error) {
@@ -713,7 +1175,9 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getDmIdentityByContext(props: { context_id: string }): ApiResponse<string> {
+  async getDmIdentityByContext(props: {
+    context_id: string;
+  }): ApiResponse<string> {
     try {
       const response = await getJsonRpcClient().execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -733,7 +1197,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
 
       if (response?.error) {
@@ -753,7 +1217,8 @@ export class ClientApiDataSource implements ClientApi {
       };
     } catch (error) {
       console.error("getDmIdentityByContext failed:", error);
-      let errorMessage = "An unexpected error occurred during getDmIdentityByContext";
+      let errorMessage =
+        "An unexpected error occurred during getDmIdentityByContext";
       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === "string") {
@@ -770,8 +1235,11 @@ export class ClientApiDataSource implements ClientApi {
 
   async getDms(): ApiResponse<DMChatInfo[]> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, DMChatInfo[]>(
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        { result: { output: { result: DMrawObject[] } } }
+      >(
         {
           contextId: getContextId() || "",
           method: ClientMethod.GET_DMS,
@@ -783,7 +1251,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -795,8 +1263,32 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
+
+      const dmRawObjects = response?.result.output?.result as
+        | DMrawObject[]
+        | undefined;
+
+      const transformedDms = dmRawObjects?.map((dm: DMrawObject) => ({
+        channel_type: dm.channelType,
+        created_at: dm.createdAt,
+        created_by: dm.createdBy,
+        channel_user: dm.channelUser,
+        context_id: dm.contextId,
+        other_identity_new: dm.otherIdentityNew,
+        other_identity_old: dm.otherIdentityOld,
+        other_username: dm.otherUsername,
+        own_identity: dm.ownIdentity,
+        own_identity_old: dm.ownIdentityOld,
+        own_username: dm.ownUsername,
+        did_join: dm.didJoin,
+        invitation_payload: dm.invitationPayload,
+        old_hash: dm.oldHash,
+        new_hash: dm.newHash,
+        unread_messages: dm.unreadMessages,
+      }));
+
       return {
-        data: response?.result.output as DMChatInfo[],
+        data: transformedDms as DMChatInfo[],
         error: null,
       };
     } catch (error) {
@@ -817,11 +1309,11 @@ export class ClientApiDataSource implements ClientApi {
   }
 
   async getChatMembers(
-    props: GetChatMembersProps,
+    props: GetChatMembersProps
   ): ApiResponse<Map<string, string>> {
     try {
       const response = await getJsonRpcClient().execute<
-       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         any,
         Map<string, string>
       >(
@@ -837,7 +1329,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -878,13 +1370,13 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.CREATE_DM,
           argsJson: {
-            context_id: props.context_id,
-            context_hash: props.context_hash,
+            contextId: props.context_id,
+            contextHash: props.context_hash,
             creator: props.creator,
-            creator_new_identity: props.creator_new_identity,
+            creatorNewIdentity: props.creator_new_identity,
             invitee: props.invitee,
             timestamp: props.timestamp,
-            invitation_payload: props.payload,
+            invitationPayload: props.payload,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -893,7 +1385,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -928,17 +1420,20 @@ export class ClientApiDataSource implements ClientApi {
 
   async updateReaction(props: UpdateReactionProps): ApiResponse<string> {
     try {
+      // Convert old props format to new UpdateReactionArgs format
+      const updateReactionArgs = {
+        messageId: props.messageId,
+        emoji: props.emoji,
+        add: props.add,
+        username: props.userId,
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.UPDATE_REACTION,
-          argsJson: {
-            message_id: props.messageId,
-            emoji: props.emoji,
-            user: props.userId,
-            add: props.add,
-          },
+          argsJson: updateReactionArgs,
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
         },
@@ -947,7 +1442,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -982,16 +1477,19 @@ export class ClientApiDataSource implements ClientApi {
 
   async deleteMessage(props: DeleteMessageProps): ApiResponse<string> {
     try {
+      // Convert old props format to new DeleteMessageArgs format
+      const deleteMessageArgs = {
+        channelId: props.is_dm ? "private_dm" : props.group.name,
+        messageId: props.messageId,
+        parentId: props.parent_id || null,
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.DELETE_MESSAGE,
-          argsJson: {
-            group: props.is_dm ? { name: "private_dm" } : props.group,
-            message_id: props.messageId,
-            parent_id: props.parent_id,
-          },
+          argsJson: deleteMessageArgs,
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
         },
@@ -1000,7 +1498,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1035,18 +1533,20 @@ export class ClientApiDataSource implements ClientApi {
 
   async editMessage(props: EditMessageProps): ApiResponse<Message> {
     try {
+      // Convert old props format to new EditMessageArgs format
+      const editMessageArgs = {
+        channelId: props.is_dm ? "private_dm" : props.group.name,
+        messageId: props.messageId,
+        text: props.newMessage,
+        parentId: props.parent_id || null,
+      };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, Message>(
         {
           contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
           method: ClientMethod.EDIT_MESSAGE,
-          argsJson: {
-            group: props.is_dm ? { name: "private_dm" } : props.group,
-            message_id: props.messageId,
-            new_message: props.newMessage,
-            timestamp: props.timestamp,
-            parent_id: props.parent_id,
-          },
+          argsJson: editMessageArgs,
           executorPublicKey:
             (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "",
         },
@@ -1055,7 +1555,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1096,8 +1596,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.UPDATE_NEW_IDENTITY,
           argsJson: {
-            other_user: props.other_user,
-            new_identity: props.new_identity,
+            otherUser: props.other_user,
+            newIdentity: props.new_identity,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1106,7 +1606,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1141,7 +1641,7 @@ export class ClientApiDataSource implements ClientApi {
   }
 
   async updateInvitationPayload(
-    props: UpdateInvitationPayloadProps,
+    props: UpdateInvitationPayloadProps
   ): ApiResponse<string> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1160,7 +1660,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1211,7 +1711,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1251,9 +1751,7 @@ export class ClientApiDataSource implements ClientApi {
         {
           contextId: getContextId() || "",
           method: ClientMethod.DELETE_DM,
-          argsJson: {
-            other_user: props.other_user,
-          },
+          argsJson: { otherUser: props.other_user },
           executorPublicKey: getExecutorPublicKey() || "",
         },
         {
@@ -1261,7 +1759,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1302,8 +1800,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.READ_MESSAGE,
           argsJson: {
-            channel: props.channel,
-            timestamp: props.timestamp,
+            channelId: props.channelId,
+            messageId: props.messageId,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1312,7 +1810,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1353,9 +1851,8 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.UPDATE_DM_HASH,
           argsJson: {
-            sender_id: props.sender_id,
-            other_user_id: props.other_user_id,
-            new_hash: props.new_hash,
+            contextId: props.dmContextId,
+            newHash: props.newHash,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1364,7 +1861,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1405,7 +1902,7 @@ export class ClientApiDataSource implements ClientApi {
           contextId: getContextId() || "",
           method: ClientMethod.READ_DM,
           argsJson: {
-            other_user_id: props.other_user_id,
+            contextId: props.dmContextId,
           },
           executorPublicKey: getExecutorPublicKey() || "",
         },
@@ -1414,7 +1911,7 @@ export class ClientApiDataSource implements ClientApi {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1449,22 +1946,24 @@ export class ClientApiDataSource implements ClientApi {
 
   async getUsername(props: GetUsernameProps): ApiResponse<string> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        { result: string }
+      >(
         {
           contextId: props.contextId || getContextId() || "",
           method: ClientMethod.GET_USERNAME,
-          argsJson: {
-            user_id: props.userId,
-          },
-          executorPublicKey: props.executorPublicKey || getExecutorPublicKey() || "",
+          argsJson: {},
+          executorPublicKey:
+            props.executorPublicKey || getExecutorPublicKey() || "",
         },
         {
           headers: {
             "Content-Type": "application/json",
           },
           timeout: 10000,
-        },
+        }
       );
       if (response?.error) {
         return {
@@ -1477,7 +1976,7 @@ export class ClientApiDataSource implements ClientApi {
         };
       }
       return {
-        data: response?.result.output as string,
+        data: response?.result.output?.result as string,
         error: null,
       };
     } catch (error) {

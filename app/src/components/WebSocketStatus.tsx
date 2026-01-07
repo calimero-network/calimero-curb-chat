@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import styled from "styled-components";
 import { log } from "../utils/logger";
+import { useWebSocketEvents } from "../contexts/WebSocketContext";
+import type { WebSocketEvent } from "../types/WebSocketTypes";
 
 /**
  * WebSocket Status Indicator for Navbar
@@ -135,58 +137,63 @@ export function WebSocketStatus({ isSubscribed, contextId, subscriptionCount = 0
   const [showTooltip, setShowTooltip] = useState(false);
   const lastEventRef = useRef<number>(Date.now());
 
-  // Track WebSocket events globally (in dev mode)
+  // Track actual WebSocket events from the context
+  useWebSocketEvents((event: WebSocketEvent) => {
+    if (!import.meta.env.DEV) return;
+    
+    const now = Date.now();
+    lastEventRef.current = now;
+    setLastEventTime(now);
+    
+    // Extract event type from the actual WebSocket event
+    let eventType = "Unknown";
+    if (event.type) {
+      eventType = event.type;
+      
+      // For StateMutation events, count the execution events
+      if (event.type === "StateMutation" && event.data?.events) {
+        const execEventTypes = event.data.events.map((e: { kind?: string }) => e.kind || "Unknown");
+        execEventTypes.forEach((kind: string) => {
+          setEventCounts((prev) => ({
+            ...prev,
+            [kind]: (prev[kind] || 0) + 1,
+          }));
+        });
+        // Also count the StateMutation itself
+        eventType = `StateMutation (${execEventTypes.length} events)`;
+      }
+    }
+    
+    setEventCounts((prev) => ({
+      ...prev,
+      [eventType]: (prev[eventType] || 0) + 1,
+    }));
+  });
+
+  // Also track console.log for subscription events (in dev mode)
   useEffect(() => {
     if (!import.meta.env.DEV) return;
 
-    // Intercept console.log to track WebSocket events
     const originalLog = console.log;
     const interceptor = (...args: unknown[]) => {
       const message = String(args[0] || "");
-      if (message.includes("[WebSocket]") || message.includes("[DEBUG]")) {
+      if (message.includes("[WebSocket]") || message.includes("[MultiWebSocket]")) {
         const now = Date.now();
         lastEventRef.current = now;
         setLastEventTime(now);
         
-        // Extract event type from log message with detailed parsing
         let eventType = "Other";
         
-        // Check for WebSocket-specific events
-        if (message.includes("Event: ")) {
-          const match = message.match(/Event: (\w+)/);
-          if (match) eventType = match[1];
-        } else if (message.includes("Subscribing to context")) {
+        if (message.includes("Subscribing to context")) {
           eventType = "Subscribe";
         } else if (message.includes("Unsubscribing from")) {
           eventType = "Unsubscribe";
         } else if (message.includes("Already subscribed")) {
           eventType = "Dup-Subscribe-Skip";
-        } else if (message.includes("Processing batch")) {
-          const batchMatch = message.match(/batch of (\d+)/);
-          if (batchMatch) {
-            eventType = `Batch(${batchMatch[1]})`;
-          } else {
-            eventType = "Batch";
-          }
-        } else if (message.includes("Switching WebSocket subscription")) {
-          eventType = "Switch-Context";
-        } else if (message.includes("Coalesced")) {
-          eventType = "Coalesced-Events";
         } else if (message.includes("Failed to subscribe")) {
           eventType = "Error-Subscribe";
         } else if (message.includes("Failed to unsubscribe")) {
           eventType = "Error-Unsubscribe";
-        } else if (message.includes("No events received")) {
-          eventType = "Heartbeat-Warning";
-        } else if (message.includes("[DEBUG]") && message.includes("[WebSocket]")) {
-          // For generic debug messages, try to extract a meaningful label
-          const parts = message.split("]");
-          if (parts.length > 2) {
-            const msgPart = parts[2].trim().substring(0, 30);
-            eventType = `Debug: ${msgPart}`;
-          } else {
-            eventType = "Debug-Other";
-          }
         }
         
         setEventCounts((prev) => ({
@@ -210,7 +217,9 @@ export function WebSocketStatus({ isSubscribed, contextId, subscriptionCount = 0
   }
 
   const timeSinceLastEvent = Date.now() - lastEventTime;
-  const isStale = timeSinceLastEvent > 30000; // 30 seconds
+  // Only show idle if subscribed but no events for 60 seconds (longer threshold)
+  // This accounts for normal periods of inactivity
+  const isStale = timeSinceLastEvent > 60000; // 60 seconds
 
   let status: "connected" | "idle" | "disconnected" = "connected";
   let statusText = "Connected";
@@ -218,9 +227,11 @@ export function WebSocketStatus({ isSubscribed, contextId, subscriptionCount = 0
   if (!isSubscribed) {
     status = "disconnected";
     statusText = "Disconnected";
-  } else if (isStale) {
+  } else if (isStale && subscriptionCount > 0) {
+    // Only show idle if we have subscriptions but haven't received events
+    // This might indicate a connection issue
     status = "idle";
-    statusText = "Idle";
+    statusText = "Idle (no events)";
   }
 
   return (
