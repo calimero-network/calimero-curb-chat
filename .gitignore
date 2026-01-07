@@ -5,3 +5,7 @@
 data/
 **/target/
 **/res/
+
+logic-js/node_modules
+
+logic-js/build
