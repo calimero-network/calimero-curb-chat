@@ -149,6 +149,11 @@ export class CurbChatLogic extends CurbChat {
       return this.wrapResult('Invalid DM input');
     }
 
+    // Convert timestamp to number if it's a bigint (from env.timeNow())
+    if (args.timestamp && typeof args.timestamp === 'bigint') {
+      args.timestamp = Number(args.timestamp);
+    }
+
     const executorId = this.getExecutorId();
     const usernames = this.members.entries().reduce<Record<UserId, string>>((acc, [id, name]) => {
       acc[id] = name;
@@ -498,9 +503,30 @@ export class CurbChatLogic extends CurbChat {
   }
 
   private wrapResult(value: unknown): string {
-    return JSON.stringify({ result: value }, (_key, val) =>
-      typeof val === 'bigint' ? val.toString() : val
-    );
+    // Recursively convert bigints to strings before stringifying
+    // The new Wasmer runtime doesn't allow bigints in JSON.stringify even with a replacer
+    const convertBigInts = (obj: unknown): unknown => {
+      if (obj === null || obj === undefined) {
+        return obj;
+      }
+      if (typeof obj === 'bigint') {
+        return obj.toString();
+      }
+      if (Array.isArray(obj)) {
+        return obj.map(convertBigInts);
+      }
+      if (typeof obj === 'object') {
+        const converted: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(obj)) {
+          converted[key] = convertBigInts(val);
+        }
+        return converted;
+      }
+      return obj;
+    };
+
+    const convertedValue = convertBigInts(value);
+    return JSON.stringify({ result: convertedValue });
   }
 
   private extractInput<T>(raw: T | { input?: T } | { input: T } | undefined): T | null {

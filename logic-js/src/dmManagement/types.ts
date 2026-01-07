@@ -2,7 +2,7 @@ import type { ChannelType } from '../channelManagement/types';
 import type { UserId } from '../types';
 
 export type DMChatInfo = {
-  createdAt: bigint;
+  createdAt: number;
   contextId: string;
   channelType: ChannelType;
   createdBy: UserId;
@@ -24,7 +24,7 @@ export type CreateDMChatArgs = {
   creator: UserId;
   creatorNewIdentity: UserId;
   invitee: UserId;
-  timestamp: bigint;
+  timestamp: number | bigint | string; // Accept number, bigint, or string and convert to number
   contextHash: string;
   invitationPayload: string;
 };

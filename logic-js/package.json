@@ -9,12 +9,12 @@
     "postinstall": "cd node_modules/@calimero-network/calimero-cli-js && pnpm install-deps"
   },
   "dependencies": {
-    "@calimero-network/calimero-sdk-js": "0.1.1",
+    "@calimero-network/calimero-sdk-js": "0.2.0",
     "bs58": "^5.0.0",
     "tslib": "^2.8.1"
   },
   "devDependencies": {
-    "@calimero-network/calimero-cli-js": "0.1.2",
+    "@calimero-network/calimero-cli-js": "0.2.0",
     "typescript": "^5.3.3"
   }
 }

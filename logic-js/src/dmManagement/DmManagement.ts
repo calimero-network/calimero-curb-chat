@@ -27,10 +27,17 @@ export class DmManagement {
       creator,
       creatorNewIdentity,
       invitee,
-      timestamp,
+      timestamp: rawTimestamp,
       contextHash,
       invitationPayload,
     } = args;
+    
+    // Convert timestamp to number (handle bigint, string, or number input)
+    const timestamp = typeof rawTimestamp === 'bigint' 
+      ? Number(rawTimestamp)
+      : typeof rawTimestamp === 'string'
+      ? Number(rawTimestamp)
+      : rawTimestamp;
 
     if (executorId !== creator) {
       return 'You are not the inviter';
