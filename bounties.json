@@ -1,0 +1,484 @@
+{
+  "bounties": [
+    {
+      "title": "Fix double unwrap() panic risk in get_username and get_channel_info",
+      "description": "In logic/src/lib.rs, functions like get_username (line 1363-1368) and get_all_channels (lines 1441-1445) use chained .unwrap().unwrap() which can panic if member_usernames lookup fails. Replace with proper error handling using ? operator or returning Result error.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "critical"
+    },
+    {
+      "title": "Add message text length validation to prevent DoS via unbounded messages",
+      "description": "The send_message function in logic/src/lib.rs (line 1720) accepts messages of any length. An attacker could send extremely large messages to exhaust storage/memory. Add validation to limit message text to a reasonable size (e.g., 4KB) in both Rust and TypeScript logic implementations.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 60,
+      "category": "security",
+      "severity": "high"
+    },
+    {
+      "title": "Add rate limiting for message sending to prevent spam/DoS",
+      "description": "There is no rate limiting on send_message in either Rust or JS logic. A malicious user could flood channels with messages. Implement per-user rate limiting (e.g., max 10 messages per minute) in the chat logic to prevent abuse.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 90,
+      "category": "security",
+      "severity": "high"
+    },
+    {
+      "title": "Add comprehensive test suite for Rust chat logic",
+      "description": "The logic/src/lib.rs file has ~2900 lines of critical chat logic with zero tests. Add unit tests for core functionality: join_chat, create_channel, send_message, edit_message, delete_message, channel permissions, DM creation/deletion. Focus on edge cases and authorization checks.",
+      "pathHint": "logic/src",
+      "estimatedMinutes": 90,
+      "category": "tests",
+      "severity": "high"
+    },
+    {
+      "title": "Add tests for TypeScript logic (logic-js)",
+      "description": "The logic-js/ folder contains the JavaScript SDK implementation with no tests. Add unit tests for channelManagement.ts, MessageManagement.ts, and DmManagement.ts covering authorization, CRDT operations, and edge cases like empty inputs and boundary conditions.",
+      "pathHint": "logic-js/src",
+      "estimatedMinutes": 90,
+      "category": "tests",
+      "severity": "high"
+    },
+    {
+      "title": "Refactor lib.rs into modular structure",
+      "description": "The logic/src/lib.rs file is ~2887 lines, making it hard to maintain and navigate. Split into modules: channel.rs (channel management), message.rs (message operations), dm.rs (DM handling), types.rs (extend existing), permissions.rs (auth logic). This improves maintainability and testability.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 90,
+      "category": "design-flaw",
+      "severity": "high"
+    },
+    {
+      "title": "Introduce typed error enum instead of String errors in Rust logic",
+      "description": "All functions in logic/src/lib.rs return app::Result<T, String> with string error messages. Create a CurbError enum with variants like ChannelNotFound, NotAuthorized, InvalidInput, etc. This enables proper error handling by callers and improves API consistency.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 75,
+      "category": "design-flaw",
+      "severity": "high"
+    },
+    {
+      "title": "Add attachment file size and count limits",
+      "description": "The attachment_inputs_to_vector function (line 331) and sendMessage in MessageManagement.ts accept attachments without size or count limits. Add validation: max file size (e.g., 25MB), max files per message (e.g., 10), max total attachment size per message. Enforce in both Rust and JS implementations.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 60,
+      "category": "security",
+      "severity": "high"
+    },
+    {
+      "title": "Synchronize Rust and JS logic implementations with shared types",
+      "description": "The Rust (logic/) and TypeScript (logic-js/) implementations must stay in sync but have no shared schema or validation. Create a shared types definition (e.g., JSON Schema or proto) that both implementations can validate against. Document which implementation is canonical.",
+      "pathHint": "logic-js/src/types",
+      "estimatedMinutes": 90,
+      "category": "design-flaw",
+      "severity": "high"
+    },
+    {
+      "title": "Fix validation inconsistency between frontend and backend channel names",
+      "description": "Frontend isValidChannelName (app/src/utils/validation.ts) uses regex /^[^#!\\s]{3,19}$/ but backend normalizeChannelId just does trim().toLowerCase(). Backend should enforce the same validation rules as frontend to prevent invalid channel names from being created via API.",
+      "pathHint": "app/src/utils/validation.ts",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Add XSS protection verification for message rendering",
+      "description": "Messages use markdownParser and DOMPurify for sanitization, but verify: 1) All user-generated content paths go through sanitization, 2) DOMPurify config is strict enough, 3) Attachment names/types are sanitized before display. Audit RenderHtml.tsx and messageTransformers.ts.",
+      "pathHint": "app/src/components/virtualized-chat/Message/RenderHtml.tsx",
+      "estimatedMinutes": 60,
+      "category": "security",
+      "severity": "medium"
+    },
+    {
+      "title": "Add session storage security hardening",
+      "description": "Session data in app/src/utils/session.ts is stored in localStorage which is vulnerable to XSS. Consider: 1) Adding integrity checks (HMAC), 2) Using sessionStorage for sensitive data, 3) Encrypting stored tokens. Also add session validation on each API call, not just on app init.",
+      "pathHint": "app/src/utils/session.ts",
+      "estimatedMinutes": 60,
+      "category": "security",
+      "severity": "medium"
+    },
+    {
+      "title": "Optimize get_messages with index-based lookup instead of full scan",
+      "description": "In get_messages (lib.rs line 1812), message retrieval iterates all messages even when pagination is used. The same issue exists in MessageManagement.ts getMessages. Add proper indexing or use slice operations on the Vector to avoid full scans for large channels.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 75,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Add message search indexing for better performance",
+      "description": "Message search in message_matches_search (lib.rs line 1707) does case-insensitive string contains on every message. For large channels, this is O(n*m). Consider maintaining a search index or using more efficient text search, especially when search_term is provided.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 75,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Reduce Vector cloning overhead in message operations",
+      "description": "Many operations like edit_message, delete_message, and send_message clone entire Vectors for CRDT updates. In MessageManagement.ts appendToVectorToRegister (line 472) clones the whole vector. Investigate if CRDT library supports in-place mutations or batch operations to reduce allocations.",
+      "pathHint": "logic-js/src/messageManagement/MessageManagement.ts",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Add .cursorrules file for AI-assisted development",
+      "description": "The repository has no .cursorrules or .cursor/rules files. Create a .cursorrules file documenting: project structure (app/, logic/, logic-js/), tech stack (React, Rust WASM, Calimero SDK), testing commands, code style conventions, and key entry points. This helps AI tools provide better assistance.",
+      "pathHint": ".cursorrules",
+      "estimatedMinutes": 45,
+      "category": "docs",
+      "severity": "medium"
+    },
+    {
+      "title": "Add CONTRIBUTING.md with development workflow",
+      "description": "The repository lacks contributor documentation. Create CONTRIBUTING.md covering: setup requirements (Rust toolchain, Node.js, pnpm), build commands for each project folder, testing instructions, code style (cargo fmt, prettier), PR process, and architecture overview of the three sub-projects.",
+      "pathHint": "CONTRIBUTING.md",
+      "estimatedMinutes": 45,
+      "category": "docs",
+      "severity": "medium"
+    },
+    {
+      "title": "Extract duplicate DM iteration pattern into helper function",
+      "description": "Multiple functions (update_new_identity, update_dm_hashes, mark_dm_as_read, delete_dm, etc.) repeat the same pattern: get DMs, iterate to find by other_user, clone, update, save. Extract a find_and_update_dm helper that takes a closure for the update logic to reduce code duplication.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 60,
+      "category": "design-flaw",
+      "severity": "medium"
+    },
+    {
+      "title": "Add timeout handling for RPC calls in clientApiDataSource",
+      "description": "All RPC calls in clientApiDataSource.ts have a 10000ms timeout but no retry logic for transient failures. Add exponential backoff retry (2-3 attempts) for network errors and distinguish between retryable errors (network) vs non-retryable (auth, validation).",
+      "pathHint": "app/src/api/dataSource/clientApiDataSource.ts",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Add WebSocket reconnection with backoff in multi-subscription hook",
+      "description": "The useMultiWebSocketSubscription hook should implement automatic reconnection with exponential backoff when connections drop. Currently disconnections may leave users without real-time updates. Add connection state tracking and user-visible connection status indicator.",
+      "pathHint": "app/src/hooks/useMultiWebSocketSubscription.ts",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Add blob upload validation for allowed file types",
+      "description": "UploadComponent.tsx accepts 'type' prop for allowed file types but the actual upload in blobClient.uploadBlob doesn't validate. Server-side validation of MIME types should be verified. Also, the '*/*' type for files is too permissive - consider a whitelist of safe types.",
+      "pathHint": "app/src/chat/UploadComponent.tsx",
+      "estimatedMinutes": 45,
+      "category": "security",
+      "severity": "medium"
+    },
+    {
+      "title": "Fix error swallowing in Clone implementation for Message",
+      "description": "The Clone impl for Message (lib.rs line 208) silently ignores iteration errors with 'if let Ok(iter)' and creates empty collections on failure. This could lead to data loss. Either propagate errors or log warnings when cloning fails.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Add username uniqueness check for case-insensitive collisions",
+      "description": "Username validation in join_chat checks exact match, but 'Alice' and 'alice' would both be allowed. Normalize usernames to lowercase for uniqueness checks to prevent impersonation. Apply to both Rust and JS implementations.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 45,
+      "category": "security",
+      "severity": "medium"
+    },
+    {
+      "title": "Add channel moderator authorization for invite_to_channel",
+      "description": "The invite_to_channel function (lib.rs line 1516) allows any channel member to invite others. This should be restricted to moderators for private channels. Check channel_info.meta.moderators before allowing invites.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Add logging at critical decision points in chat logic",
+      "description": "The Rust chat logic uses app::log! sparingly. Add structured logging for: user joins/leaves, channel creation/deletion, permission denials, DM operations. This aids debugging and auditing. Use consistent log levels (info for actions, warn for denials, error for failures).",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Implement graceful degradation for CRDT sync failures",
+      "description": "Multiple places in ChannelManager.ts catch CRDT errors with empty catch blocks (e.g., lines 68-70, 93-96). When sets/vectors aren't hydrated, operations silently fail. Add logging and consider returning partial results with a 'syncing' indicator to users.",
+      "pathHint": "logic-js/src/channelManagement/channelManagement.ts",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "medium"
+    },
+    {
+      "title": "Add input sanitization for channel names to prevent injection",
+      "description": "Channel names are used as keys in UnorderedMap but only trimmed/lowercased. Validate that channel names don't contain control characters, null bytes, or excessively long Unicode sequences that could cause issues with storage or display.",
+      "pathHint": "logic-js/src/channelManagement/channelManagement.ts",
+      "estimatedMinutes": 45,
+      "category": "security",
+      "severity": "medium"
+    },
+    {
+      "title": "Fix potential integer overflow in unread count calculations",
+      "description": "In increment_unread_count_for_channel (lib.rs line 1080), unread_count is incremented without overflow check: *channel_unread.unread_count + 1. While unlikely, this could overflow u32. Use checked_add or saturating_add for safety.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 30,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add thread-safe message ID generation",
+      "description": "Message ID generation in get_message_id (lib.rs line 1677) and generateMessageId (MessageManagement.ts line 572) use timestamp + counter/random. While unlikely, concurrent messages could collide. Add a cryptographically random component or use UUIDs for guaranteed uniqueness.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add database/storage size limits and cleanup strategy",
+      "description": "There's no mechanism to limit channel message count or implement message retention. Large channels could grow unbounded. Add: max messages per channel, message expiry/archival, and storage usage tracking. Document expected limits.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 90,
+      "category": "design-flaw",
+      "severity": "medium"
+    },
+    {
+      "title": "Consolidate error handling patterns in API data source",
+      "description": "Each method in clientApiDataSource.ts has identical error handling boilerplate (~20 lines). Extract into a wrapper function that handles the try/catch, error extraction from response.error.error.cause.info, and consistent error object creation.",
+      "pathHint": "app/src/api/dataSource/clientApiDataSource.ts",
+      "estimatedMinutes": 45,
+      "category": "design-flaw",
+      "severity": "low"
+    },
+    {
+      "title": "Add PropTypes or runtime validation for React components",
+      "description": "Components like MessageInput.tsx accept complex props but have no runtime validation. While TypeScript helps at compile time, add PropTypes or use zod/yup for runtime validation of critical props from external sources.",
+      "pathHint": "app/src/chat/MessageInput.tsx",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Document CRDT conflict resolution behavior",
+      "description": "The codebase uses LwwRegister, UnorderedSet, UnorderedMap, and Vector CRDTs but their merge semantics aren't documented. Add doc comments explaining: how conflicts resolve for each type, what happens on concurrent edits, and any edge cases developers should be aware of.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 60,
+      "category": "docs",
+      "severity": "low"
+    },
+    {
+      "title": "Add API versioning strategy documentation",
+      "description": "The RPC API methods in ClientMethod enum have no versioning. Document how API changes should be handled: backwards compatibility requirements, deprecation process, and how to add new methods without breaking existing clients.",
+      "pathHint": "app/src/api/clientApi.ts",
+      "estimatedMinutes": 45,
+      "category": "docs",
+      "severity": "low"
+    },
+    {
+      "title": "Fix isValidChannelName returning error even when valid",
+      "description": "In validation.ts, isValidChannelName always sets an error message even when isValid is true. The else branch at line 14 sets 'Invalid channel name' even for valid names. Fix logic to only set error when !isValid.",
+      "pathHint": "app/src/utils/validation.ts",
+      "estimatedMinutes": 30,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add E2E test infrastructure for chat flows",
+      "description": "No integration or E2E tests exist. Set up a test framework (e.g., Playwright or Cypress) with tests for: user registration, channel creation, message sending, DM flow, and real-time updates. Include CI integration.",
+      "pathHint": "app/",
+      "estimatedMinutes": 90,
+      "category": "tests",
+      "severity": "medium"
+    },
+    {
+      "title": "Add architecture documentation with diagrams",
+      "description": "Create docs/ARCHITECTURE.md explaining: relationship between app/, logic/, logic-js/, how WASM modules are built and loaded, data flow from UI to storage, CRDT synchronization, and the DM invitation flow. Include diagrams for key flows.",
+      "pathHint": "docs/ARCHITECTURE.md",
+      "estimatedMinutes": 90,
+      "category": "docs",
+      "severity": "medium"
+    },
+    {
+      "title": "Add CI workflow for linting and type checking",
+      "description": "The repository has no CI configuration. Add GitHub Actions workflow that runs: cargo fmt --check, cargo clippy, pnpm lint (for app/), TypeScript type checking for logic-js/. Fail on any warnings to maintain code quality.",
+      "pathHint": ".github/workflows/ci.yml",
+      "estimatedMinutes": 45,
+      "category": "ci",
+      "severity": "medium"
+    },
+    {
+      "title": "Add cargo clippy lints and fix existing warnings",
+      "description": "The Rust code likely has clippy warnings that aren't being checked. Add clippy to build process, fix existing warnings (especially around error handling, unnecessary clones, and match ergonomics), and enable #![deny(clippy::all)] in lib.rs.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add blob ID cryptographic validation",
+      "description": "parse_blob_id_base58 (lib.rs line 26) validates length but not content. If blob IDs should be hashes, add validation that they're valid cryptographic hashes. Document the expected format and what security properties blob IDs provide.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 45,
+      "category": "security",
+      "severity": "low"
+    },
+    {
+      "title": "Add request correlation IDs for debugging",
+      "description": "API calls in clientApiDataSource.ts have no correlation IDs making it hard to trace requests through logs. Add a request ID header and log it with all related operations for debugging production issues.",
+      "pathHint": "app/src/api/dataSource/clientApiDataSource.ts",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Improve error messages for user-facing failures",
+      "description": "Many error messages are generic like 'Failed to retrieve DMs' or 'An unexpected error occurred'. Map internal errors to user-friendly messages that suggest actions (e.g., 'Unable to load messages. Please check your connection and try again.').",
+      "pathHint": "app/src/api/dataSource/clientApiDataSource.ts",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add memory leak protection for URL.createObjectURL",
+      "description": "UploadComponent.tsx and MessageInput.tsx create object URLs with URL.createObjectURL but cleanup on unmount may be incomplete. Audit all usages to ensure URL.revokeObjectURL is called in all code paths including error cases.",
+      "pathHint": "app/src/chat/UploadComponent.tsx",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add pagination limit validation",
+      "description": "get_messages accepts limit parameter without validation. A malicious client could request limit=1000000 causing resource exhaustion. Add max limit (e.g., 100) in both Rust and JS implementations and document the default/max values.",
+      "pathHint": "logic/src/lib.rs",
+      "estimatedMinutes": 45,
+      "category": "security",
+      "severity": "medium"
+    },
+    {
+      "title": "Extract common CRDT set update pattern",
+      "description": "Code like addUserToChannel, removeUserFromChannel, promoteModerator repeats: get register, get set, create new set, copy items, add/remove, set back. Create helper functions for set mutations to reduce duplication and bugs.",
+      "pathHint": "logic-js/src/channelManagement/channelManagement.ts",
+      "estimatedMinutes": 45,
+      "category": "design-flaw",
+      "severity": "low"
+    },
+    {
+      "title": "Add health check endpoint documentation",
+      "description": "Document how to verify the chat service is healthy: which methods to call, expected responses, and how to interpret different failure modes. This helps operators monitor the service and diagnose issues.",
+      "pathHint": "README.md",
+      "estimatedMinutes": 30,
+      "category": "docs",
+      "severity": "low"
+    },
+    {
+      "title": "Fix unused parameter warning in _inviteeUsername",
+      "description": "In channelManagement.ts addDefaultChannelToState (line 545), _inviteeUsername parameter is prefixed with underscore indicating unused. Either use it for logging/audit or remove it from the signature.",
+      "pathHint": "logic-js/src/channelManagement/channelManagement.ts",
+      "estimatedMinutes": 30,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add build reproducibility documentation",
+      "description": "Document exact versions needed for reproducible builds: Rust version (from rust-toolchain.toml), Node.js version, pnpm version. Add a docker/nix configuration for guaranteed reproducible development environment.",
+      "pathHint": "logic/rust-toolchain.toml",
+      "estimatedMinutes": 45,
+      "category": "docs",
+      "severity": "low"
+    },
+    {
+      "title": "Add defensive checks for undefined in extractInput",
+      "description": "The extractInput function in index.ts (line 506) handles various input shapes but doesn't validate that extracted values are the expected types. Add type guards to prevent runtime errors when API contracts change.",
+      "pathHint": "logic-js/src/index.ts",
+      "estimatedMinutes": 45,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Document security model and trust boundaries",
+      "description": "Create docs/SECURITY.md documenting: what the executor_id represents, trust boundaries (who can do what), how authentication works with Calimero SDK, what attacks the system protects against, and known limitations.",
+      "pathHint": "docs/SECURITY.md",
+      "estimatedMinutes": 60,
+      "category": "docs",
+      "severity": "medium"
+    },
+    {
+      "title": "Add concurrent modification handling documentation",
+      "description": "Document what happens when: two users edit same message simultaneously, channel deleted while user sending message, DM created during sync. Explain CRDT resolution behavior and any edge cases users might encounter.",
+      "pathHint": "docs/ARCHITECTURE.md",
+      "estimatedMinutes": 45,
+      "category": "docs",
+      "severity": "low"
+    },
+    {
+      "title": "Add TypeScript strict mode and fix resulting errors",
+      "description": "The app/ tsconfig.json should enable strict: true. Fix any resulting type errors, especially around null checks, implicit any, and strictNullChecks. This prevents a class of runtime errors.",
+      "pathHint": "app/tsconfig.json",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add dependency audit to CI workflow",
+      "description": "Add npm audit / cargo audit to CI to catch vulnerable dependencies. Currently no automated security scanning for dependencies. Also consider adding Dependabot configuration for automated updates.",
+      "pathHint": ".github/workflows/ci.yml",
+      "estimatedMinutes": 45,
+      "category": "ci",
+      "severity": "medium"
+    },
+    {
+      "title": "Add mobile responsiveness tests",
+      "description": "The app has mobile-specific CSS (max-width: 1024px) but no automated tests. Add visual regression tests or at minimum manual test checklist for key flows on mobile viewports.",
+      "pathHint": "app/src/chat/MessageInput.tsx",
+      "estimatedMinutes": 60,
+      "category": "tests",
+      "severity": "low"
+    },
+    {
+      "title": "Fix eslint-disable comments with proper type handling",
+      "description": "clientApiDataSource.ts has many // eslint-disable-next-line @typescript-eslint/no-explicit-any comments. Replace 'any' types with proper generics or interface definitions for RPC responses to get full type safety.",
+      "pathHint": "app/src/api/dataSource/clientApiDataSource.ts",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add offline support documentation and handling",
+      "description": "The PWA has offline capabilities but behavior isn't documented. Document: what works offline, how sync happens when coming online, how to handle conflicts, and user-visible indicators of offline state.",
+      "pathHint": "app/vite.config.ts",
+      "estimatedMinutes": 45,
+      "category": "docs",
+      "severity": "low"
+    },
+    {
+      "title": "Add unit tests for validation.ts",
+      "description": "The validation.ts file has a single function but no tests. Add tests covering: valid channel names, names that are too short/long, names with special characters, edge cases (empty string, null, undefined if applicable).",
+      "pathHint": "app/src/utils/validation.ts",
+      "estimatedMinutes": 30,
+      "category": "tests",
+      "severity": "low"
+    },
+    {
+      "title": "Fix typo 'charters' in validation error message",
+      "description": "In validation.ts line 7, error message says 'special charters' instead of 'special characters'. Fix the typo and add consistent error message formatting.",
+      "pathHint": "app/src/utils/validation.ts",
+      "estimatedMinutes": 15,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add keyboard accessibility for emoji selector",
+      "description": "The EmojiSelector component should be keyboard navigable. Add keyboard support: arrow keys for navigation, Enter to select, Escape to close. Also add ARIA labels for screen reader accessibility.",
+      "pathHint": "app/src/emojiSelector/EmojiSelector.tsx",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "low"
+    },
+    {
+      "title": "Add performance monitoring for critical paths",
+      "description": "Add timing metrics for: message send latency, message load time, channel list fetch time. Export metrics in a format compatible with monitoring tools. This helps identify performance regressions.",
+      "pathHint": "app/src/api/dataSource/clientApiDataSource.ts",
+      "estimatedMinutes": 60,
+      "category": "bug",
+      "severity": "low"
+    }
+  ]
+}
