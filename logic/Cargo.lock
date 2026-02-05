@@ -218,7 +218,7 @@ version = "0.0.1"
 dependencies = [
  "base64",
  "borsh 0.10.4",
- "borsh-derive 0.10.4",
+ "borsh-derive 1.5.7",
  "bs58",
  "calimero-sdk",
  "calimero-storage",
