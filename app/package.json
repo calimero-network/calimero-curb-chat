@@ -44,7 +44,7 @@
     "react-bootstrap": "^2.10.10",
     "react-bootstrap-typeahead": "^6.4.1",
     "react-dom": "^19.1.0",
-    "react-hook-form": "^7.58.1",
+    "react-hook-form": "^7.71.1",
     "react-photo-view": "^1.2.7",
     "react-router-dom": "^7.6.2",
     "react-singleton-hook": "^4.0.1",
