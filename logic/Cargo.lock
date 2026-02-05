@@ -3,18 +3,6 @@
 version = 4
 
 [[package]]
-name = "ahash"
-version = "0.8.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
-dependencies = [
- "cfg-if",
- "once_cell",
- "version_check",
- "zerocopy",
-]
-
-[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -27,16 +15,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "borsh"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "115e54d64eb62cdebad391c19efc9dce4981c690c85a33a12199d99bb9546fee"
-dependencies = [
- "borsh-derive 0.10.4",
- "hashbrown 0.13.2",
 ]
 
 [[package]]
@@ -111,7 +89,7 @@ name = "calimero-sdk"
 version = "0.0.0"
 source = "git+https://github.com/calimero-network/core?branch=master#17fe3f92bb3a4dd06ea6ec351c07af88dd418786"
 dependencies = [
- "borsh 1.5.7",
+ "borsh",
  "bs58",
  "calimero-sdk-macros",
  "calimero-sys",
@@ -138,7 +116,7 @@ name = "calimero-storage"
 version = "0.0.0"
 source = "git+https://github.com/calimero-network/core?branch=master#17fe3f92bb3a4dd06ea6ec351c07af88dd418786"
 dependencies = [
- "borsh 1.5.7",
+ "borsh",
  "calimero-sdk",
  "calimero-storage-macros",
  "eyre",
@@ -217,7 +195,7 @@ name = "curb"
 version = "0.0.1"
 dependencies = [
  "base64",
- "borsh 0.10.4",
+ "borsh",
  "borsh-derive 0.10.4",
  "bs58",
  "calimero-sdk",
@@ -284,15 +262,6 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
-dependencies = [
- "ahash",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5419bdc4f6a9207fbeba6d11b604d481addf78ecd10c11ad51e76c2f6482748d"
@@ -316,7 +285,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6717a8d2a5a929a1a2eb43a12812498ed141a0bcfb7e8f7844fbdbe4303bba9f"
 dependencies = [
  "equivalent",
- "hashbrown 0.16.0",
+ "hashbrown",
 ]
 
 [[package]]
