@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@calimero-network/calimero-sdk-js':
-        specifier: 0.1.1
-        version: 0.1.1
+        specifier: 0.2.4
+        version: 0.2.4
       bs58:
         specifier: ^5.0.0
         version: 5.0.0
@@ -522,8 +522,8 @@ packages:
     resolution: {integrity: sha512-OynKJRvnCMOZsBNI29X32eA64+A91d+qwWazxZEFeKRTvFPvcTMUR+8y1F6DU6hiMdEi0pD6HbmexUSXqVJR2Q==}
     hasBin: true
 
-  '@calimero-network/calimero-sdk-js@0.1.1':
-    resolution: {integrity: sha512-/4jUTMNWp4alEH86MceW560+ENXE0k8jKZd3o1Wh879F1UkzEaKLkymHF93RdKLY2Q1iw0smo/pO6m4L4GSTHw==}
+  '@calimero-network/calimero-sdk-js@0.2.4':
+    resolution: {integrity: sha512-XpmPN9aFC4jMuhXKjAp03D4d6yYLhHKeL4SJ6rT0G7nBDQsc0fuvdUAvG2x1OEYTTK15/tenR8neGjN8gHmO2A==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -540,6 +540,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@rollup/plugin-babel@6.1.0':
     resolution: {integrity: sha512-dFZNuFD2YRcoomP4oYf+DvQNSUA9ih+A3vUqopQx5EdtPGo3WBnQcI/S8pwpz91UsGfL0HsMSOlaMld8HrbubA==}
@@ -839,7 +843,7 @@ packages:
   glob@8.1.0:
     resolution: {integrity: sha512-r8hpEjiQEYlF2QU0df3dS+nxxSIreXQS1qRhMJM0Q5NDdR386C7jb7Hwwod8Fgiuex+k0GFjgft18yvxm5XoCQ==}
     engines: {node: '>=12'}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
@@ -1713,8 +1717,9 @@ snapshots:
       - tslib
       - typescript
 
-  '@calimero-network/calimero-sdk-js@0.1.1':
+  '@calimero-network/calimero-sdk-js@0.2.4':
     dependencies:
+      '@noble/hashes': 1.8.0
       borsh: 1.0.0
 
   '@jridgewell/gen-mapping@0.3.13':
@@ -1735,6 +1740,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@noble/hashes@1.8.0': {}
 
   '@rollup/plugin-babel@6.1.0(@babel/core@7.28.5)(rollup@4.53.3)':
     dependencies:
