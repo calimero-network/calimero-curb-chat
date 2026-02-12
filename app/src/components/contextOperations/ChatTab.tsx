@@ -19,6 +19,10 @@ import type { ActiveChat } from "../../types/Common";
 import type { ContextInfo } from "../../api/nodeApi";
 import { Button, Input } from "@calimero-network/mero-ui";
 import { StorageHelper } from "../../utils/storage";
+import {
+  saveInvitationToStorage,
+  parseInvitationInput,
+} from "../../utils/invitation";
 
 const TabContent = styled.div`
   display: flex;
@@ -120,11 +124,13 @@ const Message = styled.div<{ type?: "success" | "error" | "info" }>`
 interface ChatTabProps {
   isAuthenticated: boolean;
   isConfigSet: boolean;
+  onInvitationSaved?: () => void;
 }
 
 export default function ChatTab({
   isAuthenticated,
   isConfigSet,
+  onInvitationSaved,
 }: ChatTabProps) {
   const [nodeUrl, setNodeUrl] = useState("");
   const [availableContexts, setAvailableContexts] = useState<ContextInfo[]>([]);
@@ -140,6 +146,9 @@ export default function ChatTab({
   const [isLoading, setIsLoading] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
   const lastCheckedIdentityRef = useRef<string | null>(null);
+  const [invitationInput, setInvitationInput] = useState("");
+  const [invitationError, setInvitationError] = useState("");
+  const [submittingInvitation, setSubmittingInvitation] = useState(false);
 
   // Fetch contexts from node API when authenticated (no hardcoded contextId)
   const fetchContexts = useCallback(async () => {
@@ -284,6 +293,22 @@ export default function ChatTab({
     setError("");
   };
 
+  const handleUseInvitation = (e: React.FormEvent) => {
+    e.preventDefault();
+    setInvitationError("");
+    setSubmittingInvitation(true);
+    const payload = parseInvitationInput(invitationInput);
+    if (!payload) {
+      setInvitationError("Invalid invitation. Paste a full invite URL or the encoded invitation.");
+      setSubmittingInvitation(false);
+      return;
+    }
+    saveInvitationToStorage(payload);
+    setInvitationInput("");
+    setSubmittingInvitation(false);
+    onInvitationSaved?.();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedContextId || !selectedIdentityId || !username.trim()) return;
@@ -360,7 +385,6 @@ export default function ChatTab({
             type="text"
             value={nodeUrl || "Loading..."}
             disabled
-            readOnly
           />
         </InputGroup>
 
@@ -391,6 +415,42 @@ export default function ChatTab({
               : "Connect to a node to see contexts"}
           </Note>
         </InputGroup>
+
+        {!fetchingContexts && availableContexts.length === 0 && (
+          <div style={{ marginTop: "0.75rem" }}>
+            <InputGroup>
+              <Label>No contexts yet — join with an invitation</Label>
+              <Note>
+                Paste an invitation link (web or desktop) or the encoded payload.
+              </Note>
+              <Input
+                id="invitationInput"
+                type="text"
+                placeholder="https://...?invitation=... or calimero://curb/join?invitation=... or paste encoded"
+                value={invitationInput}
+                onChange={(e) => {
+                  setInvitationInput(e.target.value);
+                  setInvitationError("");
+                }}
+                disabled={submittingInvitation}
+              />
+              <Button
+                type="button"
+                variant="primary"
+                style={{ width: "100%", marginTop: "0.5rem" }}
+                onClick={handleUseInvitation}
+                disabled={submittingInvitation || !invitationInput.trim()}
+              >
+                {submittingInvitation ? "Using invitation..." : "Use invitation"}
+              </Button>
+              {invitationError && (
+                <Message type="error" style={{ marginTop: "0.5rem" }}>
+                  {invitationError}
+                </Message>
+              )}
+            </InputGroup>
+          </div>
+        )}
 
         {selectedContextId && (
           <InputGroup>

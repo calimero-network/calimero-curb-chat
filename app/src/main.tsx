@@ -40,7 +40,7 @@ createRoot(document.getElementById("root")!).render(
         <CalimeroProvider
           packageName={import.meta.env.VITE_APPLICATION_PACKAGE}
           registryUrl="https://apps.calimero.network"
-          mode={AppMode.SingleContext}
+          mode={AppMode.MultiContext}
         >
           <WebSocketProvider>
             <ToastProvider>
