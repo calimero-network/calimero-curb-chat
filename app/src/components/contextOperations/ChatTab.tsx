@@ -6,6 +6,8 @@ import {
   setContextId,
   setExecutorPublicKey,
   getAppEndpointKey,
+  getContextId,
+  getExecutorPublicKey,
   apiClient,
 } from "@calimero-network/calimero-client";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
@@ -149,6 +151,10 @@ export default function ChatTab({
   const [invitationInput, setInvitationInput] = useState("");
   const [invitationError, setInvitationError] = useState("");
   const [submittingInvitation, setSubmittingInvitation] = useState(false);
+  const [completeJoinUsername, setCompleteJoinUsername] = useState("");
+  const [completeJoinLoading, setCompleteJoinLoading] = useState(false);
+  const [completeJoinError, setCompleteJoinError] = useState("");
+  const [completeJoinSuccess, setCompleteJoinSuccess] = useState("");
 
   // Fetch contexts from node API when authenticated (no hardcoded contextId)
   const fetchContexts = useCallback(async () => {
@@ -368,12 +374,88 @@ export default function ChatTab({
     );
   }
 
-  const needUsernameStep =
-    selectedContextId &&
-    selectedIdentityId &&
-    !checkingUsername &&
-    !success &&
-    !username;
+  // Config set but no chat username yet — show join form. Only hide when they have chat-username (nothing else).
+  const hasChatUsername = !!StorageHelper.getItem("chat-username");
+  if (isConfigSet && !hasChatUsername) {
+    return (
+      <TabContent>
+        <Form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!completeJoinUsername.trim()) return;
+            const ctxId = getContextId();
+            const execKey = getExecutorPublicKey();
+            if (!ctxId || !execKey) {
+              setCompleteJoinError("Context or identity missing. Please log out and select context and identity again.");
+              return;
+            }
+            setCompleteJoinLoading(true);
+            setCompleteJoinError("");
+            setCompleteJoinSuccess("");
+            try {
+              StorageHelper.setItem("chat-username", completeJoinUsername.trim());
+              const response = await new ClientApiDataSource().joinChat({
+                isDM: false,
+                username: completeJoinUsername.trim(),
+                contextId: ctxId,
+                executorPublicKey: execKey,
+              });
+              if (response.error) {
+                const msg = extractErrorMessage(response.error);
+                if (msg.includes("Already a member")) {
+                  setCompleteJoinSuccess("Already connected! Taking you to chat...");
+                  const storedSession = getStoredSession();
+                  const chatToUse = storedSession || defaultActiveChat;
+                  updateSessionChat(chatToUse);
+                } else {
+                  setCompleteJoinError(msg);
+                  setCompleteJoinLoading(false);
+                  return;
+                }
+              } else {
+                setCompleteJoinSuccess("Joined! Taking you to chat...");
+                const storedSession = getStoredSession();
+                const chatToUse = storedSession || defaultActiveChat;
+                updateSessionChat(chatToUse);
+              }
+              setTimeout(() => {
+                window.location.href = "/" + (window.location.search || "");
+              }, 1000);
+            } catch {
+              setCompleteJoinError("Failed to join chat");
+            } finally {
+              setCompleteJoinLoading(false);
+            }
+          }}
+        >
+          <InputGroup>
+            <Label>Context and identity are set</Label>
+            <Note>Enter your username to join the chat (this may help set up the connection).</Note>
+          </InputGroup>
+          <InputGroup>
+            <Label>Username</Label>
+            <Input
+              type="text"
+              placeholder="e.g. John"
+              value={completeJoinUsername}
+              onChange={(e) => setCompleteJoinUsername(e.target.value)}
+              disabled={completeJoinLoading}
+            />
+          </InputGroup>
+          <Button
+            type="submit"
+            disabled={completeJoinLoading || !completeJoinUsername.trim()}
+          >
+            {completeJoinLoading ? "Joining..." : "Join chat"}
+          </Button>
+          {completeJoinError && <Message type="error">{completeJoinError}</Message>}
+          {completeJoinSuccess && <Message type="success">{completeJoinSuccess}</Message>}
+        </Form>
+      </TabContent>
+    );
+  }
+
+  const needUsernameStep = true
 
   return (
     <TabContent>
