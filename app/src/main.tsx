@@ -38,7 +38,7 @@ createRoot(document.getElementById("root")!).render(
     >
       <BrowserRouter>
         <CalimeroProvider
-          packageName="com.yourname.myapp"
+          packageName={import.meta.env.VITE_APPLICATION_PACKAGE}
           registryUrl="https://apps.calimero.network"
           mode={AppMode.SingleContext}
         >
