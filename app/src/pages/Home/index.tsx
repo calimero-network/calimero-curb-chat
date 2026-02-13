@@ -592,14 +592,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   );
 
   const createDM = async (value: string): Promise<CreateContextResult> => {
-    console.log("TU SAM");
     // @ts-expect-error - chatMembers is a Map<string, string>
     const creatorUsername = chatMembers[getExecutorPublicKey() || ""];
     // @ts-expect-error - chatMembers is a Map<string, string>
     const inviteeUsername = chatMembers[value];
-    console.log("1")
     const dmParams = generateDMParams(value, creatorUsername, inviteeUsername);
-    console.log("2")
     try {
       const response = await apiClient
       .node()
@@ -609,18 +606,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         dmParams.protocol,
       );
       console.log("response", response)
-      console.log("3")
 
     const verifyContextResponse = await apiClient
       .node()
       .getContext(response?.data?.contextId || "");
-    console.log("4")
     const hash =
       verifyContextResponse.data?.rootHash ??
       "11111111111111111111111111111111";
 
     if (response.data) {
-      console.log("5")
       const invitationPayloadResponse: ResponseData<ContextInviteByOpenInvitationResponse> =
         await apiClient
           .node()
@@ -636,7 +630,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           error: "Failed to create DM - failed to generate invitation payload",
         };
       }
-      console.log("6")
       const createDMResponse = await new ClientApiDataSource().createDm({
         context_id: response.data.contextId,
         creator: getExecutorPublicKey() || "",
@@ -646,9 +639,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         timestamp: Date.now(),
         payload: JSON.stringify(invitationPayloadResponse.data),
       });
-      console.log("7")
       if (createDMResponse.data) {
-        console.log("8")
         await fetchDms();
         return {
           data: "DM created successfully",
