@@ -1,0 +1,52 @@
+# Run merobox workflow tests when logic changes.
+# Only triggers on pushes/PRs that modify files under logic/
+
+name: Workflow Tests
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'logic/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'logic/**'
+
+jobs:
+  workflow-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build curb WASM
+        run: |
+          cd logic
+          cargo build --target wasm32-unknown-unknown --profile app-release
+          mkdir -p res
+          cp target/wasm32-unknown-unknown/app-release/curb.wasm res/
+
+      - name: Install merobox
+        run: pip install merobox
+
+      - name: Run simple-invitation workflow
+        run: merobox bootstrap run workflows/simple-invitation.yml
+
+      - name: Run simple-open-invitation workflow
+        run: merobox bootstrap run workflows/simple-open-invitation.yml
+
+      - name: Run complex-invitations workflow
+        run: merobox bootstrap run workflows/complex-invitations.yml
+
+      - name: Run full-logic-test workflow
+        run: merobox bootstrap run workflows/full-logic-test.yml
