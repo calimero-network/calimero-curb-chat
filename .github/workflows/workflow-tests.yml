@@ -41,7 +41,7 @@ jobs:
           cp target/wasm32-unknown-unknown/app-release/curb.wasm res/
 
       - name: Install merobox
-        run: pip install merobox
+        run: pip install "merobox>=0.3.7"
 
       - name: Run simple-invitation workflow
         run: |
