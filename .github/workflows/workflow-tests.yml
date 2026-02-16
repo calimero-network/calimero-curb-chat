@@ -29,6 +29,9 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
+
       - name: Build curb WASM
         run: |
           cd logic
