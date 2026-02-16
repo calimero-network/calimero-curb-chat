@@ -51,6 +51,7 @@ jobs:
         run: merobox --version
 
       - name: Run simple-invitation workflow
+        working-directory: workflows
         run: |
           max_attempts=2
           attempt=1
@@ -61,7 +62,7 @@ jobs:
               merobox nuke --force || true
               sleep 2
             fi
-            if merobox bootstrap run workflows/simple-invitation.yml; then
+            if merobox bootstrap run simple-invitation.yml; then
               success=true
               break
             fi
@@ -72,6 +73,7 @@ jobs:
           if [ "$success" = false ]; then exit 1; fi
 
       - name: Run simple-open-invitation workflow
+        working-directory: workflows
         run: |
           max_attempts=2
           attempt=1
@@ -82,7 +84,7 @@ jobs:
               merobox nuke --force || true
               sleep 2
             fi
-            if merobox bootstrap run workflows/simple-open-invitation.yml; then
+            if merobox bootstrap run simple-open-invitation.yml; then
               success=true
               break
             fi
@@ -93,6 +95,7 @@ jobs:
           if [ "$success" = false ]; then exit 1; fi
 
       - name: Run complex-invitations workflow
+        working-directory: workflows
         run: |
           max_attempts=2
           attempt=1
@@ -103,7 +106,7 @@ jobs:
               merobox nuke --force || true
               sleep 2
             fi
-            if merobox bootstrap run workflows/complex-invitations.yml; then
+            if merobox bootstrap run complex-invitations.yml; then
               success=true
               break
             fi
@@ -114,6 +117,7 @@ jobs:
           if [ "$success" = false ]; then exit 1; fi
 
       - name: Run full-logic-test workflow
+        working-directory: workflows
         run: |
           max_attempts=2
           attempt=1
@@ -124,7 +128,7 @@ jobs:
               merobox nuke --force || true
               sleep 2
             fi
-            if merobox bootstrap run workflows/full-logic-test.yml; then
+            if merobox bootstrap run full-logic-test.yml; then
               success=true
               break
             fi
