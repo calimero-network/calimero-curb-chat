@@ -26,11 +26,11 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
 
       - name: Add wasm target
-        run: rustup target add wasm32-unknown-unknown
+        run: |
+          rustup target add wasm32-unknown-unknown
+          rustc --print target-libdir --target wasm32-unknown-unknown
 
       - name: Build curb WASM
         run: |
