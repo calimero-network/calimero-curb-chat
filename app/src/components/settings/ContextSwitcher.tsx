@@ -215,6 +215,7 @@ export default function ContextSwitcher() {
 
       if (
         !contextIdentityResponse.data ||
+        // @ts-expect-error: FetchContextIdentitiesResponse type is not correct
         contextIdentityResponse.data.identities.length === 0
       ) {
         setError(
@@ -224,6 +225,7 @@ export default function ContextSwitcher() {
         return;
       }
 
+      // @ts-expect-error: FetchContextIdentitiesResponse type is not correct
       const contextIdentity = contextIdentityResponse.data.identities[0];
 
       // Now update both context and identity
