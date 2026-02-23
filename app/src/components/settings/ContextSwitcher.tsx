@@ -213,11 +213,8 @@ export default function ContextSwitcher() {
       const contextIdentityResponse: ResponseData<FetchContextIdentitiesResponse> =
         await apiClient.node().fetchContextIdentities(selectedContextId);
 
-      if (
-        !contextIdentityResponse.data ||
-        // @ts-expect-error: FetchContextIdentitiesResponse type is not correct
-        contextIdentityResponse.data.identities.length === 0
-      ) {
+      const identities = contextIdentityResponse.data?.data?.identities;
+      if (!identities || identities.length === 0) {
         setError(
           "You are not a member of this context. Please join the context first.",
         );
@@ -225,8 +222,7 @@ export default function ContextSwitcher() {
         return;
       }
 
-      // @ts-expect-error: FetchContextIdentitiesResponse type is not correct
-      const contextIdentity = contextIdentityResponse.data.identities[0];
+      const contextIdentity = identities[0];
 
       // Now update both context and identity
       setContextId(selectedContextId);

@@ -217,14 +217,11 @@ export default function ChatTab({
           setContextIdentities([]);
           return;
         }
-        // @ts-expect-error: FetchContextIdentitiesResponse type is not correct
-        if (res.data?.identities && res.data.identities.length > 0) {
-          // @ts-expect-error: FetchContextIdentitiesResponse type is not correct
-          setContextIdentities(res.data.identities);
-          // @ts-expect-error: FetchContextIdentitiesResponse type is not correct
-          if (res.data.identities.length === 1) {
-            // @ts-expect-error: FetchContextIdentitiesResponse type is not correct
-            setSelectedIdentityId(res.data.identities[0]);
+        const identities = res.data?.data?.identities;
+        if (identities && identities.length > 0) {
+          setContextIdentities(identities);
+          if (identities.length === 1) {
+            setSelectedIdentityId(identities[0]);
           }
         } else {
           setContextIdentities([]);
