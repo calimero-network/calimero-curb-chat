@@ -21,6 +21,7 @@ import type {
   JoinGroupResponse,
   ManageAllowlistRequest,
   MemberCapabilities,
+  RemoveMemberRequest,
   SetContextVisibilityRequest,
   SetDefaultCapabilitiesRequest,
   SetDefaultVisibilityRequest,
@@ -175,6 +176,25 @@ export class GroupApiDataSource implements GroupApi {
         : httpFail(response.status, response.statusText);
     } catch (error) {
       return catchError("listMembers", error);
+    }
+  }
+
+  async removeMember(
+    groupId: string,
+    memberIdentity: string,
+  ): ApiResponse<void> {
+    try {
+      const body: RemoveMemberRequest = { members: [memberIdentity] };
+      const response = await axios.post(
+        `${this.base()}/groups/${groupId}/members/remove`,
+        body,
+        { headers: getAuthHeaders() },
+      );
+      return response.status === 200
+        ? ok(undefined as void)
+        : httpFail(response.status, response.statusText);
+    } catch (error) {
+      return catchError("removeMember", error);
     }
   }
 

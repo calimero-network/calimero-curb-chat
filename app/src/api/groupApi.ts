@@ -94,6 +94,10 @@ export interface ContextVisibility {
   creator: string;
 }
 
+export interface RemoveMemberRequest {
+  members: string[];
+}
+
 export interface ManageAllowlistRequest {
   add?: string[];
   remove?: string[];
@@ -148,6 +152,10 @@ export interface GroupApi {
     request: JoinGroupRequest,
   ): ApiResponse<JoinGroupResponse>;
   listMembers(groupId: string): ApiResponse<GroupMember[]>;
+  removeMember(
+    groupId: string,
+    memberIdentity: string,
+  ): ApiResponse<void>;
   listGroupContexts(groupId: string): ApiResponse<string[]>;
   joinGroupContext(
     groupId: string,
