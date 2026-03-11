@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
-  MessageStatus,
   type ActiveChat,
-  type ChannelMeta,
+  type GroupContextChannel,
   type ChatMessagesData,
   type ChatMessagesDataWithOlder,
   type ChatType,
@@ -20,24 +19,19 @@ import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import {
   type ResponseData,
   apiClient,
-  getContextId,
   getExecutorPublicKey,
+  setContextId,
+  setExecutorPublicKey,
   useCalimero,
 } from "@calimero-network/calimero-client";
-import {
-  type Channels,
-  type DMChatInfo,
-  type FullMessageResponse,
-  type UserId,
-} from "../../api/clientApi";
-import type { MessageWithReactions } from "../../api/clientApi";
+import type { DMChatInfo } from "../../api/clientApi";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
 import { generateDMParams } from "../../utils/dmSetupState";
 import { useAppNotifications } from "../../hooks/useAppNotifications";
 import { SUBSCRIPTION_INIT_DELAY_MS } from "../../constants/app";
 import { log } from "../../utils/logger";
 import type { WebSocketEvent } from "../../types/WebSocketTypes";
-import { useChannels } from "../../hooks/useChannels";
+import { useGroupContexts } from "../../hooks/useGroupContexts";
 import { useDMs } from "../../hooks/useDMs";
 import { useChatMembers } from "../../hooks/useChatMembers";
 import { useChannelMembers } from "../../hooks/useChannelMembers";
@@ -45,6 +39,7 @@ import { useMessages } from "../../hooks/useMessages";
 import { useThreadMessages } from "../../hooks/useThreadMessages";
 import { useWebSocket, useWebSocketEvents } from "../../contexts/WebSocketContext";
 import { useChatHandlers } from "../../hooks/useChatHandlers";
+import { getGroupId } from "../../constants/config";
 import type { ContextInviteByOpenInvitationResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
@@ -61,10 +56,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     undefined,
   );
 
-  // Get WebSocket subscription from context
   const webSocket = useWebSocket();
 
-  // Use message hooks for cleaner message management
   const mainMessages = useMessages();
   const threadMessages = useThreadMessages();
   const {
@@ -79,7 +72,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   } = mainMessages;
   const searchHasMore = searchOffset < searchTotalCount;
 
-  // App notifications with toast and notification center
   const {
     notifyMessage,
     notifyDM,
@@ -88,22 +80,20 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     playSound,
   } = useAppNotifications(activeChat?.id);
 
-  // Use custom hooks for data management - simplified, no props needed
-  const channelsHook = useChannels();
+  // Group-based channel list (replaces old useChannels)
+  const groupContextsHook = useGroupContexts();
   const dmsHook = useDMs();
   const chatMembersHook = useChatMembers();
   const channelMembersHook = useChannelMembers();
 
-  // Expose for compatibility with existing code
   const messagesRef = mainMessages.messagesRef;
   const incomingMessages = mainMessages.incomingMessages;
   const addOptimisticMessage = mainMessages.addOptimistic;
   const addOptimisticThreadMessage = threadMessages.addOptimistic;
 
-  // Initialize audio context on first user interaction
   useEffect(() => {
     const handleFirstInteraction = () => {
-      playSound("message"); // This will initialize the audio context
+      playSound("message");
       document.removeEventListener("click", handleFirstInteraction);
       document.removeEventListener("keydown", handleFirstInteraction);
     };
@@ -127,7 +117,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     currentOpenThreadRef.current = currentOpenThread;
   }, [currentOpenThread]);
 
-  // Use channel members hook - store in refs to prevent re-renders
   const getChannelUsersRef = useRef(channelMembersHook.fetchChannelMembers);
   const getNonInvitedUsersRef = useRef(channelMembersHook.fetchNonInvitedUsers);
 
@@ -149,53 +138,58 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     );
   }, []);
 
-  // Track last chat to prevent duplicate fetches
   const lastSelectedChatIdRef = useRef<string>("");
 
+  /**
+   * Switch the active chat. For channels (group contexts), this also switches
+   * the calimero-client contextId and executorPublicKey so that subsequent
+   * RPC calls (messages, reactions, etc.) target the correct context.
+   */
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
-    // Find the channel metadata to get channelType
-    const channelMeta = channels.find(
-      (ch: ChannelMeta) => ch.name === selectedChat.name,
-    );
-    if (channelMeta && selectedChat.type === "channel") {
-      selectedChat.channelType = channelMeta.channelType;
-    }
-
-    // Clear message state using hooks
     mainMessages.clear();
     threadMessages.clear();
     setOpenThread(undefined);
     setCurrentOpenThread(undefined);
 
-    // Then update the active chat
+    // For group-based channels, switch context identity
+    if (selectedChat.type === "channel" && selectedChat.contextId) {
+      const identity =
+        selectedChat.contextIdentity ||
+        groupContextsHook.getIdentity(selectedChat.contextId);
+
+      if (identity) {
+        setContextId(selectedChat.contextId);
+        setExecutorPublicKey(identity);
+        log.info(
+          "Home",
+          `Switched context to ${selectedChat.contextId.substring(0, 8)}... with identity ${identity.substring(0, 8)}...`,
+        );
+      } else {
+        log.warn(
+          "Home",
+          `No identity found for context ${selectedChat.contextId} — RPC calls may fail`,
+        );
+        setContextId(selectedChat.contextId);
+      }
+    }
+
     setIsOpenSearchChannel(false);
     setActiveChat(selectedChat);
     activeChatRef.current = selectedChat;
     setIsSidebarOpen(false);
     updateSessionChat(selectedChat);
 
-    // Only fetch channel users/non-invited if this is a new chat
-    // Prevents excessive API calls when re-selecting the same chat
     const chatId = selectedChat.id || selectedChat.name;
     if (lastSelectedChatIdRef.current !== chatId) {
       lastSelectedChatIdRef.current = chatId;
 
-      // Only fetch for channels, not for DMs
       if (selectedChat.type === "channel") {
         getChannelUsers(selectedChat.id);
         getNonInvitedUsers(selectedChat.id);
       }
     }
 
-    // Refresh channels list after a delay to show updated unread counts
-    // Use longer delay to reduce API calls during rapid channel switching
-    setTimeout(() => {
-      channelsHook.fetchChannels();
-    }, 1000);
-
-    // Note: With multi-context subscription, we're already subscribed to all channels
-    // No need to switch subscriptions when changing active chat
-    log.debug("Home", `Active chat changed to: ${selectedChat.name} (multi-context subscription active)`);
+    log.debug("Home", `Active chat changed to: ${selectedChat.name} (context: ${selectedChat.contextId || "n/a"})`);
   };
 
   const openSearchPage = useCallback(() => {
@@ -229,7 +223,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     setActiveChat(storedSession);
     activeChatRef.current = storedSession;
 
-    // Only fetch channel members for actual channels, not DMs
     if (storedSession.type === "channel") {
       getChannelUsers(storedSession.name);
       getNonInvitedUsers(storedSession.name);
@@ -238,20 +231,17 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     mainMessages.clear();
     threadMessages.clear();
 
-    // Delay to ensure app is ready before subscribing
     setTimeout(() => {
       updateSelectedActiveChat(storedSession);
     }, SUBSCRIPTION_INIT_DELAY_MS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, []);
 
-  // Track last DM selection to prevent rapid re-selections
   const lastDMSelectionRef = useRef<{
     contextId: string;
     timestamp: number;
   } | null>(null);
 
-  // Simple debounce timers - no complex closures
   const channelsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -262,17 +252,19 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     undefined,
   );
 
-  // Store latest fetch functions in refs
-  const fetchChannelsRef = useRef(channelsHook.fetchChannels);
+  const fetchGroupChannels = useCallback(() => {
+    const gid = getGroupId();
+    if (gid) groupContextsHook.fetchGroupContexts(gid);
+  }, [groupContextsHook]);
+
+  const fetchChannelsRef = useRef(fetchGroupChannels);
   const fetchDmsRef = useRef(dmsHook.fetchDms);
   const fetchMembersRef = useRef(chatMembersHook.fetchMembers);
 
-  // Update fetch refs every render (no useEffect needed)
-  fetchChannelsRef.current = channelsHook.fetchChannels;
+  fetchChannelsRef.current = fetchGroupChannels;
   fetchDmsRef.current = dmsHook.fetchDms;
   fetchMembersRef.current = chatMembersHook.fetchMembers;
 
-  // Create stable debounced wrappers
   const debouncedFetchChannels = useCallback(async () => {
     clearTimeout(channelsDebounceRef.current);
     channelsDebounceRef.current = setTimeout(
@@ -294,7 +286,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     );
   }, []);
 
-  // Create refs for handlers
   const mainMessagesRef = useRef(mainMessages);
   const threadMessagesRef = useRef(threadMessages);
   const playSoundForMessageRef = useRef(playSoundForMessage);
@@ -305,7 +296,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void
   >(() => {});
 
-  // Update refs every render (no useEffect to avoid triggering extra renders)
   mainMessagesRef.current = mainMessages;
   threadMessagesRef.current = threadMessages;
   playSoundForMessageRef.current = playSoundForMessage;
@@ -327,7 +317,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     fetchMembers: { current: debouncedFetchMembers },
   }).current;
 
-  // Store updateSelectedActiveChat in ref to avoid dependency
   const updateSelectedActiveChatRef = useRef(updateSelectedActiveChat);
   updateSelectedActiveChatRef.current = updateSelectedActiveChat;
 
@@ -335,7 +324,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     async (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => {
       const contextId = sc?.contextId || dm?.context_id || "";
 
-      // Prevent rapid re-selection of the same DM (within 1 second)
       const now = Date.now();
       if (
         lastDMSelectionRef.current &&
@@ -360,7 +348,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         "11111111111111111111111111111111" : false;
 
       if ((sc?.account || dm?.own_identity) && isSynced) {
-        // Use session identity information if available, fallback to DM data
         const executor = sc?.ownIdentity || sc?.account || dm?.own_identity || "";
         const username = sc?.ownUsername || sc?.username || dm?.own_username || "";
         if (executor && username) {
@@ -420,10 +407,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         }
       }
     },
-    [], // NO DEPENDENCIES - everything through refs
+    [],
   );
 
-  // Update onDMSelected ref (no useEffect - direct assignment)
   onDMSelectedRef.current = onDMSelected;
 
   const loadInitialChatMessages =
@@ -446,11 +432,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       }
 
       return result;
-    }, []); // NO DEPENDENCIES - everything through refs
+    }, []);
 
-  // Use custom hooks instead of local state + fetch functions
-  const channels = channelsHook.channels;
-  const fetchChannels = channelsHook.fetchChannels;
+  // Group-based channels (each context = one channel)
+  const channels: GroupContextChannel[] = groupContextsHook.channels.filter(
+    (ch) => !ch.info || ch.info.type === "channel",
+  );
 
   const privateDMs = dmsHook.dms;
   const fetchDms = dmsHook.fetchDms;
@@ -458,7 +445,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const chatMembers = chatMembersHook.members;
   const fetchChatMembers = chatMembersHook.fetchMembers;
 
-  // Use chat handlers hook - simplified with refs
   const {
     handleMessageUpdates,
     handleThreadMessageUpdates,
@@ -467,12 +453,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     handleExecutionEvents,
   } = useChatHandlers(activeChatRef, activeChat, chatHandlersRefs);
 
-  // Listen to WebSocket events via context
   useWebSocketEvents(useCallback(async (event: WebSocketEvent) => {
     try {
       await handleStateMutation(event);
 
-      // Also handle thread messages if a thread is open
       if (openThread) {
         const sessionChat = getStoredSession();
         const useDM = (sessionChat?.type === "direct_message" &&
@@ -487,22 +471,24 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
   }, [handleStateMutation, handleThreadMessageUpdates, openThread]));
 
-  // Track if initial fetch has been done - using useState to ensure it persists
   const initialFetchDone = useRef(false);
   const isFetchingInitial = useRef(false);
 
   useEffect(() => {
-    // Only fetch once on mount to avoid 429 errors from rapid refetches
-    // Use both flags to prevent concurrent fetches
     if (!initialFetchDone.current && !isFetchingInitial.current) {
       isFetchingInitial.current = true;
 
-      // Batch initial data fetches for faster load using custom hooks
-      Promise.all([
-        channelsHook.fetchChannels(),
+      const groupId = getGroupId();
+      const fetchPromises: Promise<unknown>[] = [
         dmsHook.fetchDms(),
         chatMembersHook.fetchMembers(),
-      ])
+      ];
+
+      if (groupId) {
+        fetchPromises.push(groupContextsHook.fetchGroupContexts(groupId));
+      }
+
+      Promise.all(fetchPromises)
         .then(() => {
           initialFetchDone.current = true;
           isFetchingInitial.current = false;
@@ -512,47 +498,45 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           isFetchingInitial.current = false;
         });
     }
+  }, [dmsHook, chatMembersHook, groupContextsHook]);
 
-    // Cleanup is handled by useMultiWebSocketSubscription hook
-  }, [channelsHook, dmsHook, chatMembersHook]);
-
-  // Subscribe to all channels and DMs for real-time updates
+  // Subscribe to ALL group contexts + DM contexts for real-time updates
   useEffect(() => {
     if (!app) return;
 
-    const mainContextId = getContextId();
-    
-    // Collect all context IDs to subscribe to
-    const contextIds: string[] = [];
-    
-    // Add main context (for ALL channels - they share one context)
-    if (mainContextId) {
-      contextIds.push(mainContextId);
-      log.debug("Home", `Adding main context for channels: ${mainContextId}`);
+    const contextIdsToSubscribe: string[] = [];
+
+    // Add all group context IDs (each channel is its own context now)
+    if (groupContextsHook.contextIds.length > 0) {
+      groupContextsHook.contextIds.forEach((id) => {
+        if (id && !contextIdsToSubscribe.includes(id)) {
+          contextIdsToSubscribe.push(id);
+        }
+      });
+      log.debug("Home", `Adding ${groupContextsHook.contextIds.length} group contexts for subscription`);
     }
-    
-    // Add ALL DM contexts (each DM has its own context_id)
+
+    // Add DM contexts
     if (privateDMs && privateDMs.length > 0) {
       privateDMs.forEach((dm) => {
-        if (dm.context_id && !contextIds.includes(dm.context_id)) {
-          contextIds.push(dm.context_id);
+        if (dm.context_id && !contextIdsToSubscribe.includes(dm.context_id)) {
+          contextIdsToSubscribe.push(dm.context_id);
         }
       });
       log.debug("Home", `Added ${privateDMs.length} DM contexts`);
     }
 
-    // Subscribe to all collected contexts via context
-    if (contextIds.length > 0) {
+    if (contextIdsToSubscribe.length > 0) {
       log.info(
-        "Home", 
-        `Subscribing to ${contextIds.length} contexts (1 main + ${contextIds.length - 1} DMs)`,
-        { totalContexts: contextIds.length, mainContext: mainContextId, dmCount: privateDMs.length }
+        "Home",
+        `Subscribing to ${contextIdsToSubscribe.length} contexts (${groupContextsHook.contextIds.length} channels + ${privateDMs.length} DMs)`,
+        { totalContexts: contextIdsToSubscribe.length },
       );
-      webSocket.subscribeToContexts(contextIds);
+      webSocket.subscribeToContexts(contextIdsToSubscribe);
     } else {
       log.warn("Home", "No contexts to subscribe to");
     }
-  }, [app, privateDMs, webSocket]); // Trigger when privateDMs changes
+  }, [app, groupContextsHook.contextIds, privateDMs, webSocket]);
 
   const onJoinedChat = async () => {
     let canJoin = false;
@@ -562,14 +546,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         .joinContext(activeChatRef.current?.invitationPayload || "");
       if (joinContextResponse.data) {
         await fetchDms();
-        // Note: Multi-context subscription will automatically pick up the new DM context
-        // when DMs are refetched above
         log.info("Home", "Joined chat successfully, multi-context subscription will update");
       } else {
         canJoin = true;
       }
     } else {
-      await fetchChannels();
+      fetchGroupChannels();
     }
     const activeChatCopy = { ...activeChat };
     if (activeChatCopy && activeChat) {
@@ -591,7 +573,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         chatId,
       );
     },
-    [], // NO DEPENDENCIES
+    [],
   );
 
   const createDM = async (value: string): Promise<CreateContextResult> => {
@@ -683,7 +665,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       log.debug("Home", `loadInitialThreadMessages result:`, result);
       return result;
     },
-    [], // NO DEPENDENCIES
+    [],
   );
 
   const updateCurrentOpenThread = useCallback(
@@ -700,7 +682,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         parentMessageId,
       );
     },
-    [], // NO DEPENDENCIES
+    [],
   );
 
   return (
@@ -719,7 +701,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       loadInitialChatMessages={loadInitialChatMessages}
       incomingMessages={mainMessages.incomingMessages}
       channels={channels}
-      fetchChannels={fetchChannels}
+      fetchChannels={fetchGroupChannels}
+      onChannelCreated={fetchGroupChannels}
       onJoinedChat={onJoinedChat}
       loadPrevMessages={loadPrevMessages}
       chatMembers={chatMembers}

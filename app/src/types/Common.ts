@@ -54,7 +54,24 @@ export type ActiveChat = {
   channelType?: string;
   ownIdentity?: string;
   ownUsername?: string;
+  /** Identity (public key) for this context, stored after joining via group API */
+  contextIdentity?: string;
 };
+
+/** Metadata returned by the per-context `get_info()` RPC */
+export interface ContextInfo {
+  name: string;
+  type: "channel" | "dm";
+  description?: string;
+  created_at?: number;
+}
+
+/** A group context enriched with metadata from `get_info()` */
+export interface GroupContextChannel {
+  contextId: string;
+  info: ContextInfo | null;
+  visibility?: "open" | "restricted";
+}
 
 export interface User {
   id: string;

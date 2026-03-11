@@ -2,7 +2,7 @@ import { styled } from "styled-components";
 import { memo, useEffect, useState } from "react";
 import type {
   ActiveChat,
-  ChannelMeta,
+  GroupContextChannel,
   ChatMessagesData,
   ChatMessagesDataWithOlder,
   CurbMessage,
@@ -41,9 +41,10 @@ interface AppContainerProps {
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
   loadInitialChatMessages: () => Promise<ChatMessagesData>;
   incomingMessages: CurbMessage[];
-  channels: ChannelMeta[];
+  channels: GroupContextChannel[];
   reFetchChannelMembers: () => void;
   fetchChannels: () => void;
+  onChannelCreated?: () => void;
   onJoinedChat: () => void;
   loadPrevMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
   chatMembers: Map<string, string>;
@@ -90,6 +91,7 @@ function AppContainer({
   channels,
   reFetchChannelMembers,
   fetchChannels,
+  onChannelCreated,
   onJoinedChat,
   loadPrevMessages,
   chatMembers,
@@ -164,6 +166,7 @@ function AppContainer({
           chatMembers={chatMembers}
           createDM={createDM}
           privateDMs={privateDMs}
+          onChannelCreated={onChannelCreated}
         />
         {!isSidebarOpen && (
           <Wrapper>

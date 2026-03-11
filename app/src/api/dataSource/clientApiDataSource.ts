@@ -1496,4 +1496,60 @@ export class ClientApiDataSource implements ClientApi {
       };
     }
   }
+
+  /**
+   * Call `get_info()` on a specific context to retrieve its metadata.
+   * Used by the group-based channel list to get name/type/description per context.
+   */
+  async getContextInfo(
+    contextId: string,
+    executorPublicKey: string,
+  ): ApiResponse<import("../../types/Common").ContextInfo> {
+    try {
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        import("../../types/Common").ContextInfo
+      >(
+        {
+          contextId,
+          method: "get_info",
+          argsJson: {},
+          executorPublicKey,
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: 10000,
+        },
+      );
+
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response.error.code,
+            message:
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (response.error.error?.cause?.info as any)?.message ??
+              "get_info RPC failed",
+          },
+        };
+      }
+
+      return {
+        data: response?.result.output as import("../../types/Common").ContextInfo,
+        error: null,
+      };
+    } catch (error) {
+      console.error("getContextInfo failed:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "An unexpected error occurred during getContextInfo";
+      return {
+        data: null,
+        error: { code: 500, message: errorMessage },
+      };
+    }
+  }
 }

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import styled from "styled-components";
-import type { ActiveChat, ChannelMeta } from "../../types/Common";
+import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import ChannelHeader from "./ChannelHeader";
 import ChannelList from "./ChannelList";
 import { CurbLogo } from "../navbar/CurbNavbar";
@@ -10,7 +10,7 @@ import type { CreateContextResult } from "../popups/StartDMPopup";
 import { scrollbarStyles } from "../../styles/scrollbar";
 
 interface SideSelectorProps {
-  channels: ChannelMeta[];
+  channels: GroupContextChannel[];
   activeChat: ActiveChat;
   onChatSelected: (chat: ActiveChat) => void;
   onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
@@ -21,6 +21,7 @@ interface SideSelectorProps {
   chatMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
   privateDMs: DMChatInfo[];
+  onChannelCreated?: () => void;
 }
 
 const HorizontalSeparatorLine = styled.div<{ $isMobile: boolean }>`
@@ -220,14 +221,15 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
           key="channels-header"
           title="Channels"
           isCollapsed={isCollapsed}
+          onChannelCreated={props.onChannelCreated}
         />
         <ChannelList
           channels={channels}
           selectChannel={props.onChatSelected}
           selectedChannelId={
             props.activeChat.type === "channel"
-              ? props.activeChat.name
-              : props.activeChat.id
+              ? props.activeChat.id
+              : ""
           }
           isCollapsed={isCollapsed}
         />

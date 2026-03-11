@@ -1,10 +1,12 @@
 import { styled } from "styled-components";
 import CreateChannelPopup from "../popups/CreateChannelPopup";
 import { isValidChannelName } from "../../utils/validation";
-import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
-import { ChannelType } from "../../api/clientApi";
+import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
+import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
+import { getApplicationId, getGroupId } from "../../constants/config";
 import { memo } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
+import { log } from "../../utils/logger";
 
 const Container = styled.div<{ $isCollapsed?: boolean }>`
   display: flex;
@@ -50,6 +52,7 @@ const PlusButton = styled.div`
 interface ChannelHeaderProps {
   title: string;
   isCollapsed?: boolean;
+  onChannelCreated?: () => void;
 }
 
 const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
@@ -59,18 +62,44 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const createChannel = async (
     channelName: string,
     isPublic: boolean,
-    isReadyOnly: boolean,
+    _isReadOnly: boolean,
   ) => {
-    await new ClientApiDataSource().createChannel({
-      channel: { name: channelName },
-      channel_type: isPublic ? ChannelType.PUBLIC : ChannelType.PRIVATE,
-      read_only: isReadyOnly,
-      moderators: [],
-      links_allowed: true,
+    const groupId = getGroupId();
+    if (!groupId) {
+      log.error("ChannelHeader", "No groupId configured — cannot create channel");
+      return;
+    }
+
+    const nodeApi = new ContextApiDataSource();
+    const initParams = {
+      name: channelName,
+      type: "channel",
+      description: "",
       created_at: Math.floor(Date.now() / 1000),
+    };
+
+    const createResp = await nodeApi.createGroupContext({
+      applicationId: getApplicationId(),
+      protocol: "near",
+      groupId,
+      initializationParams: initParams,
     });
+
+    if (createResp.error || !createResp.data) {
+      log.error("ChannelHeader", "Failed to create channel context", createResp.error);
+      return;
+    }
+
+    const contextId = createResp.data.contextId;
+
+    if (!isPublic) {
+      const groupApi = new GroupApiDataSource();
+      await groupApi.setContextVisibility(groupId, contextId, { mode: "restricted" });
+    }
+
     setInputValue("");
     setIsOpen(false);
+    props.onChannelCreated?.();
   };
 
   return (
