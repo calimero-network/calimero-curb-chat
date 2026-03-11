@@ -11,6 +11,7 @@ import {
 import { useState, useEffect, useCallback } from "react";
 import { getInvitationFromStorage } from "../../utils/invitation";
 import InvitationHandlerPopup from "../../components/popups/InvitationHandlerPopup";
+import CreateWorkspacePopup from "../../components/popups/CreateWorkspacePopup";
 import LandingPage from "./LandingPage";
 
 declare global {
@@ -107,6 +108,14 @@ export const LogoutWrapper = styled.div`
   margin-top: 1rem;
 `;
 
+const CreateWorkspaceButton = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+`;
+
 interface LoginProps {
   isAuthenticated: boolean;
   isConfigSet: boolean;
@@ -117,6 +126,7 @@ export default function Login({ isAuthenticated, isConfigSet }: LoginProps) {
   const [hasInvitation, setHasInvitation] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loggedOut, setLoggedOut] = useState(false);
+  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
 
   const tabs = [{ id: "chat", label: "Chat" }];
 
@@ -133,15 +143,12 @@ export default function Login({ isAuthenticated, isConfigSet }: LoginProps) {
     clearDmContextId();
     clearSessionActivity();
     logout();
-    // Preserve the persistent DM context IDs across the clear so the
-    // context dropdown can still filter them on next login.
     const dmContextIds = getAllDmContextIds();
     localStorage.clear();
     if (dmContextIds.length > 0) {
       localStorage.setItem("allDmContextIds", JSON.stringify(dmContextIds));
     }
     setLoggedOut(true);
-    // Close the Tauri window via IPC (same mechanism as proxy_script.js)
     try {
       if (window.__TAURI_INVOKE__) {
         await window.__TAURI_INVOKE__("close_current_window");
@@ -154,32 +161,39 @@ export default function Login({ isAuthenticated, isConfigSet }: LoginProps) {
   };
 
   const handleInvitationSuccess = () => {
-    // Close popup and force TabbedInterface to refetch by changing key
     setHasInvitation(false);
     setRefreshKey((prev) => prev + 1);
   };
 
   const handleInvitationError = () => {
-    // Close popup on error/cancel
     setHasInvitation(false);
+  };
+
+  const handleWorkspaceCreated = (_groupId: string) => {
+    setShowCreateWorkspace(false);
+    setRefreshKey((prev) => prev + 1);
   };
 
   if (loggedOut) {
     return <LandingPage />;
   }
 
-  // Nothing configured — no node URL, not authenticated. Show landing page.
   if (!isAuthenticated && !isConfigSet) {
     return <LandingPage />;
   }
 
   return (
     <Wrapper>
-      {/* Show invitation popup on top of everything when user has authenticated */}
       {hasInvitation && isAuthenticated && (
         <InvitationHandlerPopup
           onSuccess={handleInvitationSuccess}
           onError={handleInvitationError}
+        />
+      )}
+      {showCreateWorkspace && isAuthenticated && (
+        <CreateWorkspacePopup
+          onSuccess={handleWorkspaceCreated}
+          onCancel={() => setShowCreateWorkspace(false)}
         />
       )}
       <Card>
@@ -191,6 +205,16 @@ export default function Login({ isAuthenticated, isConfigSet }: LoginProps) {
           isConfigSet={isConfigSet}
           onInvitationSaved={refreshInvitation}
         />
+        {isAuthenticated && !hasInvitation && (
+          <CreateWorkspaceButton>
+            <Button
+              onClick={() => setShowCreateWorkspace(true)}
+              variant="secondary"
+            >
+              Create new workspace
+            </Button>
+          </CreateWorkspaceButton>
+        )}
         {(isAuthenticated || isConfigSet) && (
           <LogoutWrapper>
             <Button onClick={handleLogout} variant="secondary">

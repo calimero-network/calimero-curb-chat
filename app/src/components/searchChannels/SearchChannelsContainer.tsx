@@ -1,14 +1,15 @@
 import { styled } from "styled-components";
 import Loader from "../loader/Loader";
-import type { ActiveChat, ChannelMeta } from "../../types/Common";
+import type { ActiveChat, GroupContextChannel, ChatType } from "../../types/Common";
 import { useCallback, useEffect, useState } from "react";
+import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
-import {
-  getExecutorPublicKey,
-  type ResponseData,
-} from "@calimero-network/calimero-client";
-import type { Channels } from "../../api/clientApi";
+import { apiClient } from "@calimero-network/calimero-client";
+import type { ResponseData } from "@calimero-network/calimero-client";
+import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
+import { getGroupId } from "../../constants/config";
 import { Button, SearchInput } from "@calimero-network/mero-ui";
+import { log } from "../../utils/logger";
 
 const SearchContainer = styled.div`
   padding: 24px;
@@ -32,34 +33,6 @@ const SearchContainer = styled.div`
       padding-right: 16px;
     }
   }
-  .searchInput {
-    width: 100%;
-    background-color: #070707;
-    border: none;
-    outline: 0;
-    color: #fff;
-    font-family: Helvetica Neue;
-    font-size: 14px;
-    font-style: normal;
-    font-weight: 400;
-    line-height: 150%;
-    padding: 8px 16px;
-    border-radius: 4px;
-  }
-  .searchIcon {
-    fill: #777583;
-    position: absolute;
-    z-index: 10;
-    right: 16px;
-    top: 10px;
-    cursor: pointer;
-    :hover {
-      fill: #fff;
-    }
-    @media (max-width: 1024px) {
-      right: 32px;
-    }
-  }
   .channelListWrapper {
     padding-top: 24px;
     padding-left: 16px;
@@ -68,26 +41,6 @@ const SearchContainer = styled.div`
     scrollbar-color: black transparent;
     ::-webkit-scrollbar {
       width: 0px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background-color: black;
-      border-radius: 6px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background-color: black;
-    }
-    * {
-      scrollbar-color: black transparent;
-    }
-    html::-webkit-scrollbar {
-      width: 12px;
-    }
-    html::-webkit-scrollbar-thumb {
-      background-color: black;
-      border-radius: 6px;
-    }
-    html::-webkit-scrollbar-thumb:hover {
-      background-color: black;
     }
     @media (max-width: 1024px) {
       padding-top: 16px;
@@ -156,31 +109,14 @@ const SearchContainer = styled.div`
     font-weight: 400;
     line-height: 150%;
   }
-  .viewChannelButton,
-  .joinChannelButton {
-    padding: 4px 13px;
-    border-radius: 4px;
-    width: 64px;
-    cursor: pointer;
-    text-align: center;
-  }
-  .viewChannelButton {
-    color: #777583;
-    border: 1px solid #141418;
-    :hover {
-      color: #fff;
-      background-color: #070707;
-      border: 1px solid #070707;
-    }
-  }
-  .joinChannelButton {
-    color: #fff;
-    border: 1px solid #1e1f28;
-  }
   .spinnerWrapper {
     margin-top: 4px;
   }
 `;
+
+interface BrowsableChannel extends GroupContextChannel {
+  isJoined: boolean;
+}
 
 interface SearchChannelsContainerProps {
   onChatSelected: (chat: ActiveChat) => void;
@@ -191,100 +127,96 @@ export default function SearchChannelsContainer({
   onChatSelected,
   fetchChannels,
 }: SearchChannelsContainerProps) {
-  const [allChannels, setAllChannels] = useState<ChannelMeta[]>([]);
+  const [allChannels, setAllChannels] = useState<BrowsableChannel[]>([]);
   const [inputValue, setInputValue] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [allChannelsCreators, setAllChannelsCreators] = useState<{
-    [key: string]: string;
-  }>({});
-  const [isLoadingNameId, setIsLoadingNameId] = useState("");
+  const [isLoadingId, setIsLoadingId] = useState("");
 
-  const channelsStartingWithPrefix = inputValue
-    ? allChannels.filter((channel) => channel.name.startsWith(inputValue)) || []
-    : allChannels || [];
+  const filteredChannels = inputValue
+    ? allChannels.filter((ch) => {
+        const name = ch.info?.name ?? ch.contextId;
+        return name.toLowerCase().includes(inputValue.toLowerCase());
+      })
+    : allChannels;
 
   useEffect(() => {
-    const fetchChannels = async () => {
-      const channels: ResponseData<Channels> =
-        await new ClientApiDataSource().getAllChannelsSearch();
-      if (channels.data) {
-        const channelsArray: ChannelMeta[] = await Promise.all(
-          Object.entries(channels.data).map(async ([name, channelInfo]) => {
-            const channelMembers: ResponseData<Map<string, string>> =
-              await new ClientApiDataSource().getChannelMembers({
-                channel: { name: name },
-              });
-            let isMember = false;
-            if (channelMembers.data) {
-              isMember = Object.keys(channelMembers.data).includes(
-                getExecutorPublicKey() || "",
-              );
-            } else {
-              isMember = false;
+    const loadChannels = async () => {
+      const groupId = getGroupId();
+      if (!groupId) return;
+
+      const groupApi = new GroupApiDataSource();
+      const clientApi = new ClientApiDataSource();
+
+      const listResp = await groupApi.listGroupContexts(groupId);
+      if (!listResp.data) return;
+
+      const enriched: BrowsableChannel[] = await Promise.all(
+        listResp.data.map(async (ctxId: string) => {
+          let isJoined = false;
+          let info = null;
+
+          try {
+            const idResp: ResponseData<FetchContextIdentitiesResponse> =
+              await apiClient.node().fetchContextIdentities(ctxId);
+            const identities = idResp.data?.data?.identities;
+            if (identities && identities.length > 0) {
+              isJoined = true;
+              const infoResp = await clientApi.getContextInfo(ctxId, identities[0]);
+              if (infoResp.data) info = infoResp.data;
             }
-            return {
-              name,
-              type: "channel" as const,
-              channelType: channelInfo.channel_type,
-              description: "",
-              owner: channelInfo.created_by,
-              members: [],
-              createdBy: channelInfo.created_by,
-              createdByUsername: channelInfo.created_by_username,
-              inviteOnly: false,
-              unreadMessages: {
-                count: 0,
-                mentions: 0,
-              },
-              isMember: isMember,
-              readOnly: channelInfo.read_only,
-              createdAt: new Date(channelInfo.created_at * 1000).toISOString(),
-            };
-          }),
-        );
-        setAllChannels(channelsArray);
-      }
+          } catch {
+            log.debug("SearchChannels", `Could not fetch info for ${ctxId}`);
+          }
+
+          return { contextId: ctxId, info, isJoined };
+        }),
+      );
+
+      setAllChannels(enriched.filter((ch) => !ch.info || ch.info.type === "channel"));
     };
-    fetchChannels();
+
+    loadChannels();
   }, []);
 
-  const clickChannelOption = useCallback(
-    async (isMember: boolean, channelName: string) => {
-      setIsLoadingNameId(channelName);
-      if (isMember) {
-        await new ClientApiDataSource().leaveChannel({
-          channel: { name: channelName },
-        });
-      } else {
-        await new ClientApiDataSource().joinChannel({
-          channel: { name: channelName },
-        });
+  const handleJoinChannel = useCallback(
+    async (contextId: string) => {
+      const groupId = getGroupId();
+      if (!groupId) return;
+
+      setIsLoadingId(contextId);
+      try {
+        const groupApi = new GroupApiDataSource();
+        await groupApi.joinGroupContext(groupId, { contextId });
+
+        setAllChannels((prev) =>
+          prev.map((ch) =>
+            ch.contextId === contextId ? { ...ch, isJoined: true } : ch,
+          ),
+        );
+        fetchChannels();
+      } catch (err) {
+        log.error("SearchChannels", "Failed to join channel", err);
+      } finally {
+        setIsLoadingId("");
       }
-      const updatedChannel = allChannels.map((c) => {
-        if (c.name === channelName) {
-          return { ...c, isMember: !isMember };
-        } else {
-          return { ...c };
-        }
-      });
-      setAllChannels(updatedChannel);
-      setIsLoadingNameId("");
-      fetchChannels();
     },
-    [setAllChannels, allChannels],
+    [fetchChannels],
   );
 
-  const onViewChannel = useCallback((chatSelected: ChannelMeta) => {
-    const chat: ActiveChat = {
-      type: chatSelected.type,
-      id: chatSelected.name,
-      name: chatSelected.name,
-      readOnly: chatSelected.readOnly,
-      account: chatSelected.owner,
-      canJoin: chatSelected.isMember === false,
-    };
-    onChatSelected(chat);
-  }, []);
+  const onViewChannel = useCallback(
+    (channel: BrowsableChannel) => {
+      const displayName = channel.info?.name ?? channel.contextId.substring(0, 8);
+      const chat: ActiveChat = {
+        type: "channel" as ChatType,
+        id: channel.contextId,
+        contextId: channel.contextId,
+        name: displayName,
+        readOnly: false,
+        canJoin: !channel.isJoined,
+      };
+      onChatSelected(chat);
+    },
+    [onChatSelected],
+  );
 
   return (
     <SearchContainer>
@@ -303,10 +235,11 @@ export default function SearchChannelsContainer({
       <div className="channelListWrapper">
         <div className="listHeader">Channel List</div>
         <div className="list">
-          {channelsStartingWithPrefix
-            .filter((channel) => channel.name !== "")
-            .map((channel: ChannelMeta, id: number) => (
-              <div key={id} className="listItem">
+          {filteredChannels.map((channel) => {
+            const displayName =
+              channel.info?.name ?? channel.contextId.substring(0, 12) + "...";
+            return (
+              <div key={channel.contextId} className="listItem">
                 <div>
                   <div className="channelNameText">
                     <svg
@@ -321,43 +254,39 @@ export default function SearchChannelsContainer({
                         fill="#3B3B40"
                       />
                     </svg>
-                    {channel.name}
+                    {displayName}
                   </div>
-                  <div className="creatorText">
-                    Created by: {channel.createdByUsername}
-                  </div>
+                  {channel.info?.description && (
+                    <div className="creatorText">{channel.info.description}</div>
+                  )}
                 </div>
                 <div className="listItemOptions">
-                  {channel.name === isLoadingNameId && (
+                  {channel.contextId === isLoadingId && (
                     <div className="spinnerWrapper">
                       <Loader size={20} />
                     </div>
                   )}
                   <Button
-                    className="viewChannelButton"
                     onClick={() => onViewChannel(channel)}
                     variant="secondary"
                     style={{ border: "none", backgroundColor: "transparent" }}
                   >
                     View
                   </Button>
-                  <Button
-                    disabled={
-                      channel.name === isLoadingNameId ||
-                      channel.createdBy === localStorage.getItem("accountId") ||
-                      channel.channelType === "Default"
-                    }
-                    variant={channel.isMember ? "secondary" : "primary"}
-                    onClick={() =>
-                      clickChannelOption(channel.isMember, channel.name)
-                    }
-                    style={{ width: "74px" }}
-                  >
-                    {channel.isMember ? "Leave" : "Join"}
-                  </Button>
+                  {!channel.isJoined && (
+                    <Button
+                      disabled={channel.contextId === isLoadingId}
+                      variant="primary"
+                      onClick={() => handleJoinChannel(channel.contextId)}
+                      style={{ width: "74px" }}
+                    >
+                      Join
+                    </Button>
+                  )}
                 </div>
               </div>
-            ))}
+            );
+          })}
         </div>
       </div>
     </SearchContainer>
