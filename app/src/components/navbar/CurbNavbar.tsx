@@ -6,6 +6,7 @@ import UsersButtonGroup from "./UsersButtonGroup";
 import { useState } from "react";
 import type { UserId } from "../../api/clientApi";
 import SettingsIcon from "./SettingsIcon";
+import AdminIcon from "./AdminIcon";
 import NotificationCenterWidget from "./NotificationCenterWidget";
 import { WebSocketStatus } from "../WebSocketStatus";
 import CurbLogoIcon from "/logo.svg";
@@ -298,6 +299,7 @@ export default function CurbNavbar({
           <SearchIcon />
         </SearchButton>
         <NotificationCenterWidget />
+        <AdminIcon />
         <SettingsIcon />
       </FlexContainer>
     </NavigationBar>
