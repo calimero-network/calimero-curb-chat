@@ -3,10 +3,8 @@ import { styled } from "styled-components";
 import TabbedInterface from "../../components/contextOperations/TabbedInterface";
 import { Button } from "@calimero-network/mero-ui";
 import {
-  clearDmContextId,
   clearStoredSession,
   clearSessionActivity,
-  getAllDmContextIds,
 } from "../../utils/session";
 import { useState, useEffect, useCallback } from "react";
 import { getInvitationFromStorage } from "../../utils/invitation";
@@ -140,14 +138,9 @@ export default function Login({ isAuthenticated, isConfigSet }: LoginProps) {
 
   const handleLogout = async () => {
     clearStoredSession();
-    clearDmContextId();
     clearSessionActivity();
     logout();
-    const dmContextIds = getAllDmContextIds();
     localStorage.clear();
-    if (dmContextIds.length > 0) {
-      localStorage.setItem("allDmContextIds", JSON.stringify(dmContextIds));
-    }
     setLoggedOut(true);
     try {
       if (window.__TAURI_INVOKE__) {

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useCallback, memo } from "react";
 import { useCalimero } from "@calimero-network/calimero-client";
 import {
   clearStoredSession,
-  clearDmContextId,
   updateSessionActivity,
   clearSessionActivity,
 } from "../utils/session";
@@ -30,7 +29,6 @@ const IdleTimeoutWrapper = memo(function IdleTimeoutWrapper({
 
   const handleLogout = useCallback(() => {
     clearStoredSession();
-    clearDmContextId();
     clearSessionActivity();
     logout();
   }, [logout]);

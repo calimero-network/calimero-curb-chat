@@ -171,7 +171,7 @@ export default function SearchChannelsContainer({
         }),
       );
 
-      setAllChannels(enriched.filter((ch) => !ch.info || ch.info.type === "channel"));
+      setAllChannels(enriched.filter((ch) => !ch.info || ch.info.context_type === "Channel"));
     };
 
     loadChannels();

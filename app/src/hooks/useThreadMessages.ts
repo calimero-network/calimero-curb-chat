@@ -74,7 +74,7 @@ export function useThreadMessages() {
         group: groupName,
         parent_message: parentMessageId,
         is_dm: isDM,
-        dm_identity: activeChat.account,
+        dm_identity: activeChat.contextIdentity,
       });
 
       const response: ResponseData<FullMessageResponse> =
@@ -84,7 +84,7 @@ export function useThreadMessages() {
           offset: 0,
           parent_message: parentMessageId,
           is_dm: isDM,
-          dm_identity: activeChat.account,
+          dm_identity: activeChat.contextIdentity,
         });
 
       log.debug("useThreadMessages", `API response:`, response);
@@ -149,7 +149,7 @@ export function useThreadMessages() {
           offset,
           parent_message: parentMessageId,
           is_dm: isDM,
-          dm_identity: activeChat.account,
+          dm_identity: activeChat.contextIdentity,
         });
 
       if (response.data) {
@@ -224,7 +224,7 @@ export function useThreadMessages() {
           offset: 0,
           parent_message: parentMessageId,
           is_dm: isDM,
-          dm_identity: activeChat.account,
+          dm_identity: activeChat.contextIdentity,
         });
 
       if (!response.data) {

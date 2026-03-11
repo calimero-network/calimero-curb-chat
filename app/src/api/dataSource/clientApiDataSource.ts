@@ -39,7 +39,6 @@ import {
   type UpdateReactionProps,
   type UserId,
 } from "../clientApi";
-import { getDmContextId } from "../../utils/session";
 
 export function getJsonRpcClient() {
   const appEndpointKey = getAppEndpointKey();
@@ -57,7 +56,7 @@ export class ClientApiDataSource implements ClientApi {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
-          contextId: (props.isDM ? getDmContextId() : props.contextId || getContextId()) || "",
+          contextId: props.contextId || getContextId() || "",
           method: ClientMethod.JOIN_CHAT,
           argsJson: {
             username: props.username,
@@ -577,7 +576,7 @@ export class ClientApiDataSource implements ClientApi {
 
   async getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse> {
     try {
-      const useContext = props.refetch_context_id ? props.refetch_context_id : (props.is_dm ? getDmContextId() : getContextId()) || "";
+      const useContext = props.refetch_context_id ? props.refetch_context_id : getContextId() || "";
       const useIdentity = props.refetch_identity ? props.refetch_identity : (props.is_dm ? props.dm_identity : getExecutorPublicKey()) || "";
       const response = await getJsonRpcClient().execute<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -653,7 +652,7 @@ export class ClientApiDataSource implements ClientApi {
         Message
       >(
         {
-          contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
+          contextId: getContextId() || "",
           method: ClientMethod.SEND_MESSAGE,
           argsJson: {
             group: props.group,
@@ -826,7 +825,7 @@ export class ClientApiDataSource implements ClientApi {
         Map<string, string>
       >(
         {
-          contextId: (props.isDM ? getDmContextId() : getContextId()) || "",
+          contextId: getContextId() || "",
           method: ClientMethod.GET_CHAT_USERNAMES,
           argsJson: {},
           executorPublicKey:
@@ -931,7 +930,7 @@ export class ClientApiDataSource implements ClientApi {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
-          contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
+          contextId: getContextId() || "",
           method: ClientMethod.UPDATE_REACTION,
           argsJson: {
             message_id: props.messageId,
@@ -985,7 +984,7 @@ export class ClientApiDataSource implements ClientApi {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
-          contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
+          contextId: getContextId() || "",
           method: ClientMethod.DELETE_MESSAGE,
           argsJson: {
             group: props.is_dm ? { name: "private_dm" } : props.group,
@@ -1038,7 +1037,7 @@ export class ClientApiDataSource implements ClientApi {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, Message>(
         {
-          contextId: (props.is_dm ? getDmContextId() : getContextId()) || "",
+          contextId: getContextId() || "",
           method: ClientMethod.EDIT_MESSAGE,
           argsJson: {
             group: props.is_dm ? { name: "private_dm" } : props.group,
@@ -1546,6 +1545,58 @@ export class ClientApiDataSource implements ClientApi {
         error instanceof Error
           ? error.message
           : "An unexpected error occurred during getContextInfo";
+      return {
+        data: null,
+        error: { code: 500, message: errorMessage },
+      };
+    }
+  }
+
+  async getProfiles(
+    contextId: string,
+    executorPublicKey: string,
+  ): ApiResponse<{ identity: string; username: string; avatar?: string }[]> {
+    try {
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        { identity: string; username: string; avatar?: string }[]
+      >(
+        {
+          contextId,
+          method: "get_profiles",
+          argsJson: {},
+          executorPublicKey,
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: 10000,
+        },
+      );
+
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response.error.code,
+            message:
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (response.error.error?.cause?.info as any)?.message ??
+              "get_profiles RPC failed",
+          },
+        };
+      }
+
+      return {
+        data: response?.result.output as { identity: string; username: string; avatar?: string }[],
+        error: null,
+      };
+    } catch (error) {
+      console.error("getProfiles failed:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "An unexpected error occurred during getProfiles";
       return {
         data: null,
         error: { code: 500, message: errorMessage },

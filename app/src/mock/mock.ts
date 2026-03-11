@@ -4,7 +4,7 @@ export const mockDMActiveChat: ActiveChat = {
   type: "direct_message",
   id: "1",
   name: "John Doe",
-  account: "0x1234567890",
+  contextIdentity: "0x1234567890",
 };
 
 export const mockChannelActiveChat: ActiveChat = {

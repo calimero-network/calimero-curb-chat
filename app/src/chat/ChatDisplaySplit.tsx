@@ -19,7 +19,6 @@ import {
   getContextId as getGlobalContextId,
   getExecutorPublicKey,
 } from "@calimero-network/calimero-client";
-import { getDmContextId } from "../utils/session";
 import EmojiSelectorPopup from "../emojiSelector/EmojiSelectorPopup";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { scrollbarStyles } from "../styles/scrollbar";
@@ -205,7 +204,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
     // Update accountId whenever activeChat changes (DM vs Channel have different IDs)
     const isDM = activeChat?.type === "direct_message";
     const currentAccountId = isDM
-      ? activeChat?.account || getExecutorPublicKey() || ""
+      ? activeChat?.contextIdentity || getExecutorPublicKey() || ""
       : getExecutorPublicKey() || "";
     setAccountId(currentAccountId);
 
@@ -298,9 +297,6 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
     if (activeChat.contextId && activeChat.contextId.length > 0) {
       return activeChat.contextId;
     }
-    if (activeChat.type === "direct_message") {
-      return getDmContextId() ?? "";
-    }
     return getGlobalContextId() ?? "";
   }, [activeChat.contextId, activeChat.type]);
 
@@ -318,12 +314,12 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
       editable: (message: CurbMessage) =>
         message.sender ===
         (activeChat.type === "direct_message"
-          ? activeChat.account
+          ? activeChat.contextIdentity || getExecutorPublicKey()
           : getExecutorPublicKey()),
       deleteable: (message: CurbMessage) =>
         message.sender ===
         (activeChat.type === "direct_message"
-          ? activeChat.account
+          ? activeChat.contextIdentity || getExecutorPublicKey()
           : getExecutorPublicKey()),
       onEditModeRequested: (message: CurbMessage) =>
         onEditModeRequested(message, isThread),

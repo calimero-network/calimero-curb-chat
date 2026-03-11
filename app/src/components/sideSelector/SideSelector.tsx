@@ -5,7 +5,7 @@ import ChannelHeader from "./ChannelHeader";
 import ChannelList from "./ChannelList";
 import { CurbLogo } from "../navbar/CurbNavbar";
 import DMSideSelector from "./DMSideSelector";
-import type { DMChatInfo } from "../../api/clientApi";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 import { scrollbarStyles } from "../../styles/scrollbar";
 
@@ -13,14 +13,14 @@ interface SideSelectorProps {
   channels: GroupContextChannel[];
   activeChat: ActiveChat;
   onChatSelected: (chat: ActiveChat) => void;
-  onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
+  onDMSelected: (dm: DMContextInfo) => void;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
   setIsOpenSearchChannel: (open: boolean) => void;
   isOpenSearchChannel: boolean;
   chatMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
-  privateDMs: DMChatInfo[];
+  privateDMs: DMContextInfo[];
   onChannelCreated?: () => void;
 }
 
@@ -241,7 +241,7 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
           selectChannel={props.onChatSelected}
           selectedDM={
             props.activeChat.type === "direct_message"
-              ? props.activeChat.id
+              ? props.activeChat.contextId || props.activeChat.id
               : ""
           }
           createDM={props.createDM}
