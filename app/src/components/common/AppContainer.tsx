@@ -11,7 +11,8 @@ import ChannelsContainer from "./ChannelsContainer";
 import CurbNavbar from "../navbar/CurbNavbar";
 import SearchChannelsContainer from "../searchChannels/SearchChannelsContainer";
 import ChatContainer from "../../chat/ChatContainer";
-import type { DMChatInfo, UserId } from "../../api/clientApi";
+import type { UserId } from "../../api/clientApi";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 
 const ContentDivContainer = styled.div`
@@ -38,7 +39,7 @@ interface AppContainerProps {
   openSearchPage: () => void;
   channelUsers: Map<string, string>;
   nonInvitedUserList: UserId[];
-  onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
+  onDMSelected: (dm: DMContextInfo) => void;
   loadInitialChatMessages: () => Promise<ChatMessagesData>;
   incomingMessages: CurbMessage[];
   channels: GroupContextChannel[];
@@ -49,7 +50,7 @@ interface AppContainerProps {
   loadPrevMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
   chatMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
-  privateDMs: DMChatInfo[];
+  privateDMs: DMContextInfo[];
   loadInitialThreadMessages: (
     parentMessageId: string,
   ) => Promise<ChatMessagesData>;
@@ -185,7 +186,6 @@ function AppContainer({
                 openThread={openThread}
                 setOpenThread={setOpenThread}
                 currentOpenThreadRef={currentOpenThreadRef}
-                onDMSelected={onDMSelected}
                 membersList={chatMembers}
                 addOptimisticMessage={addOptimisticMessage}
                 addOptimisticThreadMessage={addOptimisticThreadMessage}

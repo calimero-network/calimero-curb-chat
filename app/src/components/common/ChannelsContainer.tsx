@@ -2,7 +2,7 @@ import React, { memo } from "react";
 import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import SideSelector from "../sideSelector/SideSelector";
 import { defaultActiveChat } from "../../mock/mock";
-import type { DMChatInfo } from "../../api/clientApi";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 
 interface ChannelsContainerProps {
@@ -12,11 +12,11 @@ interface ChannelsContainerProps {
   setIsSidebarOpen: (open: boolean) => void;
   setIsOpenSearchChannel: (open: boolean) => void;
   isOpenSearchChannel: boolean;
-  onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
+  onDMSelected: (dm: DMContextInfo) => void;
   channels: GroupContextChannel[];
   chatMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
-  privateDMs: DMChatInfo[];
+  privateDMs: DMContextInfo[];
   onChannelCreated?: () => void;
 }
 

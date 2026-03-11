@@ -13,7 +13,7 @@ import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { extractErrorMessage } from "../../utils/errorParser";
 import { defaultActiveChat } from "../../mock/mock";
-import { getAllDmContextIds, getStoredSession, updateSessionChat } from "../../utils/session";
+import { getStoredSession, updateSessionChat } from "../../utils/session";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
 import type { ActiveChat } from "../../types/Common";
@@ -156,11 +156,7 @@ export default function ChatTab({
       const nodeApi = new ContextApiDataSource();
       const response = await nodeApi.listContexts();
       if (response.data && response.data.length > 0) {
-        const dmContextIds = new Set(getAllDmContextIds());
-        const nonDmContexts = response.data.filter(
-          (ctx) => !dmContextIds.has(ctx.contextId)
-        );
-        const contextsToShow = nonDmContexts.length > 0 ? nonDmContexts : response.data;
+        const contextsToShow = response.data;
         setAvailableContexts(contextsToShow);
         if (contextsToShow.length === 1) {
           setSelectedContextId(contextsToShow[0].contextId);

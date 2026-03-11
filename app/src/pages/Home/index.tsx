@@ -5,28 +5,22 @@ import {
   type GroupContextChannel,
   type ChatMessagesData,
   type ChatMessagesDataWithOlder,
-  type ChatType,
   type CurbMessage,
 } from "../../types/Common";
 import {
-  addDmContextId,
-  getDmContextId,
   getStoredSession,
-  setDmContextId,
   updateSessionChat,
 } from "../../utils/session";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
+import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
+import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import {
-  type ResponseData,
-  apiClient,
-  getExecutorPublicKey,
   setContextId,
   setExecutorPublicKey,
   useCalimero,
 } from "@calimero-network/calimero-client";
-import type { DMChatInfo } from "../../api/clientApi";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
-import { generateDMParams } from "../../utils/dmSetupState";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import { useAppNotifications } from "../../hooks/useAppNotifications";
 import { SUBSCRIPTION_INIT_DELAY_MS } from "../../constants/app";
 import { log } from "../../utils/logger";
@@ -39,8 +33,7 @@ import { useMessages } from "../../hooks/useMessages";
 import { useThreadMessages } from "../../hooks/useThreadMessages";
 import { useWebSocket, useWebSocketEvents } from "../../contexts/WebSocketContext";
 import { useChatHandlers } from "../../hooks/useChatHandlers";
-import { getGroupId } from "../../constants/config";
-import type { ContextInviteByOpenInvitationResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
+import { getGroupId, getApplicationId } from "../../constants/config";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
@@ -151,8 +144,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     setOpenThread(undefined);
     setCurrentOpenThread(undefined);
 
-    // For group-based channels, switch context identity
-    if (selectedChat.type === "channel" && selectedChat.contextId) {
+    // For group-based channels and DMs, switch context identity
+    if ((selectedChat.type === "channel" || selectedChat.type === "direct_message") && selectedChat.contextId) {
       const identity =
         selectedChat.contextIdentity ||
         groupContextsHook.getIdentity(selectedChat.contextId);
@@ -242,6 +235,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     timestamp: number;
   } | null>(null);
 
+  // Stable ref for fetchDms that includes groupId
+  const fetchDmsWithGroup = useCallback(() => {
+    const gid = getGroupId();
+    if (gid) return dmsHook.fetchDms(gid);
+    return Promise.resolve([]);
+  }, [dmsHook]);
+
   const channelsDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -258,11 +258,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   }, [groupContextsHook]);
 
   const fetchChannelsRef = useRef(fetchGroupChannels);
-  const fetchDmsRef = useRef(dmsHook.fetchDms);
+  const fetchDmsRef = useRef(fetchDmsWithGroup);
   const fetchMembersRef = useRef(chatMembersHook.fetchMembers);
 
   fetchChannelsRef.current = fetchGroupChannels;
-  fetchDmsRef.current = dmsHook.fetchDms;
+  fetchDmsRef.current = fetchDmsWithGroup;
   fetchMembersRef.current = chatMembersHook.fetchMembers;
 
   const debouncedFetchChannels = useCallback(async () => {
@@ -293,7 +293,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const notifyDMRef = useRef(notifyDM);
   const notifyChannelRef = useRef(notifyChannel);
   const onDMSelectedRef = useRef<
-    (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void
+    (dm: DMContextInfo) => void
   >(() => {});
 
   mainMessagesRef.current = mainMessages;
@@ -321,8 +321,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   updateSelectedActiveChatRef.current = updateSelectedActiveChat;
 
   const onDMSelected = useCallback(
-    async (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => {
-      const contextId = sc?.contextId || dm?.context_id || "";
+    async (dm: DMContextInfo) => {
+      const contextId = dm.contextId;
 
       const now = Date.now();
       if (
@@ -336,76 +336,26 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       lastDMSelectionRef.current = { contextId, timestamp: now };
 
-      let canJoin = true;
-      const verifyContextResponse = await apiClient
-        .node()
-        .getContext(contextId);
-      if (verifyContextResponse.data) {
-        canJoin = !(verifyContextResponse.data.rootHash ? true : false);
-      }
-      const isSynced = verifyContextResponse.data ? 
-        verifyContextResponse.data?.rootHash !==
-        "11111111111111111111111111111111" : false;
+      const selectedChat: ActiveChat = {
+        type: "direct_message",
+        contextId,
+        id: contextId,
+        name: dm.otherUsername || contextId,
+        username: dm.otherUsername,
+        readOnly: false,
+        isSynced: true,
+        contextIdentity: dm.myIdentity,
+      };
 
-      if ((sc?.account || dm?.own_identity) && isSynced) {
-        const executor = sc?.ownIdentity || sc?.account || dm?.own_identity || "";
-        const username = sc?.ownUsername || sc?.username || dm?.own_username || "";
-        if (executor && username) {
-          await new ClientApiDataSource().joinChat({
-            contextId: dm?.context_id || "",
-            isDM: true,
-            executor: executor,
-            username: username,
-          });
-        } else {
-          console.warn("Missing executor or username for DM join:", { executor, username });
-        }
+      if (dm.myIdentity) {
+        setContextId(contextId);
+        setExecutorPublicKey(dm.myIdentity);
       }
 
-      let selectedChat = {} as ActiveChat;
-      if (sc?.contextId) {
-        selectedChat = {
-          ...sc,
-          canJoin: canJoin,
-          isSynced: isSynced,
-        };
-      } else {
-        selectedChat = {
-          type: "direct_message" as ChatType,
-          contextId: dm?.context_id || "",
-          readOnly: false,
-          canJoin: canJoin,
-          invitationPayload: dm?.invitation_payload || "",
-          id: dm?.other_identity_old || "",
-          name: dm?.other_identity_old || "",
-          username: dm?.other_username || "",
-          account: dm?.own_identity || "",
-          otherIdentityNew: dm?.other_identity_new || "",
-          creator: dm?.created_by || "",
-          isSynced: isSynced,
-          ownIdentity: dm?.own_identity || "",
-          ownUsername: dm?.own_username || "",
-        };
-      }
-
-      const dmCtxId = sc?.contextId || dm?.context_id || "";
-      setDmContextId(dmCtxId);
-      if (dmCtxId) addDmContextId(dmCtxId);
       mainMessagesRef.current.clear();
       threadMessagesRef.current.clear();
 
       await updateSelectedActiveChatRef.current(selectedChat);
-
-      if (refetch) {
-        try {
-          await new ClientApiDataSource().readDm({
-            other_user_id: dm?.other_identity_old || "",
-          });
-          await fetchDmsRef.current();
-        } catch (error) {
-          log.error("onDMSelected", "Error in DM selection", error);
-        }
-      }
     },
     [],
   );
@@ -436,11 +386,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   // Group-based channels (each context = one channel)
   const channels: GroupContextChannel[] = groupContextsHook.channels.filter(
-    (ch) => !ch.info || ch.info.type === "channel",
+    (ch) => !ch.info || ch.info.context_type === "Channel",
   );
 
   const privateDMs = dmsHook.dms;
-  const fetchDms = dmsHook.fetchDms;
 
   const chatMembers = chatMembersHook.members;
   const fetchChatMembers = chatMembersHook.fetchMembers;
@@ -459,10 +408,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       if (openThread) {
         const sessionChat = getStoredSession();
-        const useDM = (sessionChat?.type === "direct_message" &&
-          sessionChat?.account &&
-          !sessionChat?.canJoin &&
-          sessionChat?.otherIdentityNew) as boolean;
+        const useDM = sessionChat?.type === "direct_message";
 
         await handleThreadMessageUpdates(useDM, openThread.id);
       }
@@ -480,12 +426,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       const groupId = getGroupId();
       const fetchPromises: Promise<unknown>[] = [
-        dmsHook.fetchDms(),
         chatMembersHook.fetchMembers(),
       ];
 
       if (groupId) {
         fetchPromises.push(groupContextsHook.fetchGroupContexts(groupId));
+        fetchPromises.push(dmsHook.fetchDms(groupId));
       }
 
       Promise.all(fetchPromises)
@@ -516,11 +462,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       log.debug("Home", `Adding ${groupContextsHook.contextIds.length} group contexts for subscription`);
     }
 
-    // Add DM contexts
+    // Add DM contexts (group-based DMs are also group contexts)
     if (privateDMs && privateDMs.length > 0) {
       privateDMs.forEach((dm) => {
-        if (dm.context_id && !contextIdsToSubscribe.includes(dm.context_id)) {
-          contextIdsToSubscribe.push(dm.context_id);
+        if (dm.contextId && !contextIdsToSubscribe.includes(dm.contextId)) {
+          contextIdsToSubscribe.push(dm.contextId);
         }
       });
       log.debug("Home", `Added ${privateDMs.length} DM contexts`);
@@ -539,28 +485,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   }, [app, groupContextsHook.contextIds, privateDMs, webSocket]);
 
   const onJoinedChat = async () => {
-    let canJoin = false;
-    if (activeChatRef.current?.type === "direct_message") {
-      const joinContextResponse = await apiClient
-        .node()
-        .joinContext(activeChatRef.current?.invitationPayload || "");
-      if (joinContextResponse.data) {
-        await fetchDms();
-        log.info("Home", "Joined chat successfully, multi-context subscription will update");
-      } else {
-        canJoin = true;
-      }
-    } else {
-      fetchGroupChannels();
-    }
+    fetchGroupChannels();
+    await fetchDmsWithGroup();
     const activeChatCopy = { ...activeChat };
     if (activeChatCopy && activeChat) {
-      activeChatCopy.canJoin = canJoin;
+      activeChatCopy.canJoin = false;
       activeChatCopy.type = activeChat.type;
       activeChatCopy.id = activeChat.id;
       activeChatCopy.name = activeChat.name;
       activeChatCopy.readOnly = activeChat.readOnly;
-      activeChatCopy.account = activeChat.account;
     }
     setActiveChat(activeChatCopy as ActiveChat);
     activeChatRef.current = activeChatCopy as ActiveChat;
@@ -576,78 +509,75 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     [],
   );
 
-  const createDM = async (value: string): Promise<CreateContextResult> => {
-    // @ts-expect-error - chatMembers is a Map<string, string>
-    const creatorUsername = chatMembers[getExecutorPublicKey() || ""];
-    // @ts-expect-error - chatMembers is a Map<string, string>
-    const inviteeUsername = chatMembers[value];
-    const dmParams = generateDMParams(value, creatorUsername, inviteeUsername);
-    try {
-      const response = await apiClient
-      .node()
-      .createContext(
-        dmParams.applicationId,
-        dmParams.params,
-        dmParams.protocol,
-      );
-      console.log("response", response)
-
-    const verifyContextResponse = await apiClient
-      .node()
-      .getContext(response?.data?.contextId || "");
-    const hash =
-      verifyContextResponse.data?.rootHash ??
-      "11111111111111111111111111111111";
-
-    if (response.data) {
-      const invitationPayloadResponse: ResponseData<ContextInviteByOpenInvitationResponse> =
-        await apiClient
-          .node()
-          .contextInviteByOpenInvitation(
-            response.data.contextId,
-            response.data.memberPublicKey as string,
-            86400
-          );
-      if (invitationPayloadResponse.error) {
-        await apiClient.node().deleteContext(response.data.contextId);
-        return {
-          data: "",
-          error: "Failed to create DM - failed to generate invitation payload",
-        };
-      }
-      const createDMResponse = await new ClientApiDataSource().createDm({
-        context_id: response.data.contextId,
-        creator: getExecutorPublicKey() || "",
-        creator_new_identity: response.data.memberPublicKey,
-        context_hash: hash as string,
-        invitee: value,
-        timestamp: Date.now(),
-        payload: JSON.stringify(invitationPayloadResponse.data),
-      });
-      if (createDMResponse.data) {
-        await fetchDms();
-        return {
-          data: "DM created successfully",
-          error: "",
-        };
-      } else {
-        await apiClient.node().deleteContext(response.data.contextId);
-        return {
-          data: "",
-          error: "Failed to create DM - DM already exists",
-        };
-      }
-    } else {
-      return {
-        data: "",
-        error: "Failed to create DM",
-      };
+  /**
+   * Create a DM using the group-based flow:
+   * 1. Create a context in the group with type "Dm"
+   * 2. Set visibility to restricted
+   * 3. Add both participants to the allowlist
+   * The other user discovers the DM via the group context list and joins.
+   */
+  const createDM = async (otherIdentity: string): Promise<CreateContextResult> => {
+    const groupId = getGroupId();
+    if (!groupId) {
+      return { data: "", error: "No group ID configured" };
     }
+
+    try {
+      const nodeApi = new ContextApiDataSource();
+      const groupApi = new GroupApiDataSource();
+
+      // @ts-expect-error - chatMembers is a Map<string, string>
+      const otherUsername = chatMembers[otherIdentity] || "";
+
+      const createResponse = await nodeApi.createGroupContext({
+        applicationId: getApplicationId(),
+        protocol: "near",
+        groupId,
+        initializationParams: {
+          name: otherUsername ? `DM: ${otherUsername}` : "DM",
+          context_type: "Dm",
+          description: "",
+          created_at: Date.now(),
+        },
+      });
+
+      if (createResponse.error || !createResponse.data) {
+        return {
+          data: "",
+          error: createResponse.error?.message || "Failed to create DM context",
+        };
+      }
+
+      const contextId = createResponse.data.contextId;
+      const myIdentity = createResponse.data.memberPublicKey;
+
+      const visibilityResponse = await groupApi.setContextVisibility(
+        groupId,
+        contextId,
+        { mode: "restricted" },
+      );
+      if (visibilityResponse.error) {
+        log.warn("createDM", `Failed to set restricted visibility: ${visibilityResponse.error.message}`);
+      }
+
+      const allowlistResponse = await groupApi.manageContextAllowlist(
+        groupId,
+        contextId,
+        { add: [myIdentity, otherIdentity] },
+      );
+      if (allowlistResponse.error) {
+        log.warn("createDM", `Failed to add to allowlist: ${allowlistResponse.error.message}`);
+      }
+
+      await fetchDmsWithGroup();
+      fetchGroupChannels();
+
+      return { data: "DM created successfully", error: "" };
     } catch (error) {
       console.error("createDM failed:", error);
       return {
         data: "",
-        error: "Failed to create DM",
+        error: error instanceof Error ? error.message : "Failed to create DM",
       };
     }
   };

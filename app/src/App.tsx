@@ -5,7 +5,6 @@ import { LoadingSpinner } from "./components/LoadingSpinner";
 import {
   isSessionExpired,
   clearStoredSession,
-  clearDmContextId,
   clearSessionActivity,
   updateSessionActivity,
 } from "./utils/session";
@@ -85,7 +84,6 @@ function App() {
       if (isSessionExpired()) {
         // Session has expired, clear everything and logout
         clearStoredSession();
-        clearDmContextId();
         clearSessionActivity();
         logout();
       } else {

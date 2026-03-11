@@ -4,7 +4,6 @@ import BaseModal from "../common/popups/BaseModal";
 import TabbedInterface from "../contextOperations/TabbedInterface";
 import { useCalimero } from "@calimero-network/calimero-client";
 import {
-  clearDmContextId,
   clearStoredSession,
   clearSessionActivity,
 } from "../../utils/session";
@@ -145,7 +144,6 @@ export default function SettingsPopup({
 
   const handleLogout = () => {
     clearStoredSession();
-    clearDmContextId();
     clearSessionActivity();
     logout();
     setIsOpen(false);

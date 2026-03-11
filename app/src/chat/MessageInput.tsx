@@ -22,7 +22,6 @@ import {
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { extractUsernames } from "../utils/mentions";
 import { RichTextEditor } from "@calimero-network/mero-ui";
-import { getDmContextId } from "../utils/session";
 import { useToast } from "../contexts/ToastContext";
 
 export const EditorWrapper = styled.div`
@@ -496,7 +495,7 @@ export default function MessageInput({
     if (contextId && contextId.length > 0) {
       return contextId;
     }
-    return getContextId() ?? getDmContextId() ?? "";
+    return getContextId() ?? "";
   }, [contextId]);
 
   const handleMessageChange = useCallback(
