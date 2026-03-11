@@ -36,6 +36,30 @@ export function getNodeUrlFromUrl(): string {
   return getUrlParam("node_url") || getUrlParam("node-url") || "";
 }
 
+const GROUP_ID_SESSION_KEY = "calimero_group_id";
+
+/** Group ID: URL param `group-id` > sessionStorage > env VITE_GROUP_ID > empty */
+export function getGroupId(): string {
+  const fromUrl = getUrlParam("group-id");
+  if (fromUrl) {
+    sessionStorage.setItem(GROUP_ID_SESSION_KEY, fromUrl);
+    return fromUrl;
+  }
+  return (
+    sessionStorage.getItem(GROUP_ID_SESSION_KEY) ||
+    import.meta.env.VITE_GROUP_ID ||
+    ""
+  );
+}
+
+export function setGroupId(groupId: string): void {
+  sessionStorage.setItem(GROUP_ID_SESSION_KEY, groupId);
+}
+
+export function clearGroupId(): void {
+  sessionStorage.removeItem(GROUP_ID_SESSION_KEY);
+}
+
 /** @deprecated Use getApplicationId() for dynamic app-id (URL/env). */
 export const APPLICATION_ID =
   import.meta.env.VITE_APPLICATION_ID ||
