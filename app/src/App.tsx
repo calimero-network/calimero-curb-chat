@@ -50,9 +50,15 @@ function App() {
       // If node_url query param is present, redirect to auth (login) page
       const nodeUrlFromQuery = getNodeUrlFromUrl();
       if (nodeUrlFromQuery) {
+        // Remove node_url from both query string and hash
         const url = new URL(window.location.href);
         url.searchParams.delete("node_url");
         url.searchParams.delete("node-url");
+        const hashParams = new URLSearchParams(url.hash.slice(1));
+        hashParams.delete("node_url");
+        hashParams.delete("node-url");
+        const remaining = hashParams.toString();
+        url.hash = remaining ? `#${remaining}` : "";
         window.history.replaceState({}, "", url.toString());
         if (location.pathname !== "/login") {
           navigate("/login", { replace: true });

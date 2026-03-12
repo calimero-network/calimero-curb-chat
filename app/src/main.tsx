@@ -18,12 +18,21 @@ import 'react-photo-view/dist/react-photo-view.css';
   const hash = window.location.hash.slice(1);
   if (!hash) return;
   const p = new URLSearchParams(hash);
-  const nodeUrl    = p.get("node_url");
+  const nodeUrl     = p.get("node_url");
   const accessToken  = p.get("access_token");
   const refreshToken = p.get("refresh_token");
   if (nodeUrl)      setAppEndpointKey(nodeUrl.trim());
   if (accessToken)  setAccessToken(accessToken);
   if (refreshToken) setRefreshToken(refreshToken);
+  // Strip auth tokens from URL immediately so they don't linger in
+  // the address bar, browser history, or get picked up by other scripts.
+  if (accessToken || refreshToken) {
+    p.delete("access_token");
+    p.delete("refresh_token");
+    p.delete("expires_in");
+    const remaining = p.toString();
+    window.history.replaceState(null, "", remaining ? `#${remaining}` : window.location.pathname + window.location.search);
+  }
 })();
 
 // Register service worker for PWA
