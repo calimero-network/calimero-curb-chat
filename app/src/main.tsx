@@ -3,13 +3,37 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
 import { BrowserRouter } from "react-router-dom";
-import { AppMode, CalimeroProvider } from "@calimero-network/calimero-client";
+import { AppMode, CalimeroProvider, setAppEndpointKey, setAccessToken, setRefreshToken } from "@calimero-network/calimero-client";
 import { ToastProvider } from "@calimero-network/mero-ui";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { WebSocketProvider } from "./contexts/WebSocketContext.tsx";
 import { log } from "./utils/logger.ts";
 
 import 'react-photo-view/dist/react-photo-view.css';
+
+// Pre-process Tauri SSO hash params BEFORE React mounts.
+// CalimeroProvider reads localStorage on init, so tokens must be there
+// before the first render — not in a useEffect which is always too late.
+(function bootstrapHashParams() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return;
+  const p = new URLSearchParams(hash);
+  const nodeUrl     = p.get("node_url");
+  const accessToken  = p.get("access_token");
+  const refreshToken = p.get("refresh_token");
+  if (nodeUrl)      setAppEndpointKey(nodeUrl.trim());
+  if (accessToken)  setAccessToken(accessToken);
+  if (refreshToken) setRefreshToken(refreshToken);
+  // Strip auth tokens from URL immediately so they don't linger in
+  // the address bar, browser history, or get picked up by other scripts.
+  if (accessToken || refreshToken) {
+    p.delete("access_token");
+    p.delete("refresh_token");
+    p.delete("expires_in");
+    const remaining = p.toString();
+    window.history.replaceState(null, "", remaining ? `#${remaining}` : window.location.pathname + window.location.search);
+  }
+})();
 
 // Register service worker for PWA
 if ("serviceWorker" in navigator) {
