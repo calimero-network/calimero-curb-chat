@@ -272,9 +272,42 @@ const TerminalText = styled.div`
   }
 `;
 
+// ─── Use on Web Button ──────────────────────────────────────────────────────────
+
+const UseOnWebButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(165,255,17,0.1);
+  border: 1px solid rgba(165,255,17,0.35);
+  border-radius: 100px;
+  padding: 11px 24px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #a5ff11;
+  cursor: pointer;
+  margin-top: 1.25rem;
+  animation: ${fadeUp} 0.6s 0.5s ease both;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+
+  &:hover {
+    background: rgba(165,255,17,0.18);
+    border-color: rgba(165,255,17,0.6);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-export default function LandingPage() {
+interface LandingPageProps {
+  onUseOnWeb?: () => void;
+}
+
+export default function LandingPage({ onUseOnWeb }: LandingPageProps) {
   return (
     <Page>
       {/* Background layers */}
@@ -342,6 +375,16 @@ export default function LandingPage() {
             <span className="cursor" />
           </TerminalText>
         </TerminalBox>
+
+        {onUseOnWeb && (
+          <UseOnWebButton onClick={onUseOnWeb}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            Use on Web
+          </UseOnWebButton>
+        )}
       </Content>
     </Page>
   );
