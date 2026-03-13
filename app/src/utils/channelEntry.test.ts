@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildChannelEntryChat } from "./channelEntry";
 
 describe("buildChannelEntryChat", () => {
-  it("marks joined channels without a username as needing profile setup", () => {
+  it("opens joined channels directly even before a context profile is read", () => {
     expect(
       buildChannelEntryChat({
         contextId: "context-1",
@@ -15,11 +15,11 @@ describe("buildChannelEntryChat", () => {
       contextId: "context-1",
       contextIdentity: "pk-1",
       canJoin: false,
-      requiresProfileSetup: true,
+      requiresProfileSetup: false,
     });
   });
 
-  it("opens joined channels directly when a username already exists", () => {
+  it("keeps joined channels in the direct-open state when a username already exists", () => {
     expect(
       buildChannelEntryChat({
         contextId: "context-1",

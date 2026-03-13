@@ -16,6 +16,10 @@ import {
   setGroupId,
   setGroupMemberIdentity,
 } from "../../constants/config";
+import {
+  getMessengerDisplayName,
+  setMessengerDisplayName,
+} from "../../utils/messengerName";
 
 const TabContent = styled.div`
   display: flex;
@@ -110,6 +114,16 @@ interface ChatTabProps {
   onInvitationSaved?: () => void;
 }
 
+function buildJoinedWorkspaceFallback(groupId: string): GroupSummary {
+  return {
+    groupId,
+    appKey: "",
+    targetApplicationId: "",
+    upgradePolicy: "Automatic",
+    createdAt: Math.floor(Date.now() / 1000),
+  };
+}
+
 export default function ChatTab({
   isAuthenticated,
   isConfigSet,
@@ -118,6 +132,7 @@ export default function ChatTab({
   const navigate = useNavigate();
   const [availableGroups, setAvailableGroups] = useState<GroupSummary[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState(getGroupId());
+  const [messengerName, setMessengerName] = useState(getMessengerDisplayName());
   const [fetchingGroups, setFetchingGroups] = useState(false);
   const [openingWorkspace, setOpeningWorkspace] = useState(false);
   const [error, setError] = useState("");
@@ -125,6 +140,7 @@ export default function ChatTab({
   const [invitationInput, setInvitationInput] = useState("");
   const [invitationError, setInvitationError] = useState("");
   const [submittingInvitation, setSubmittingInvitation] = useState(false);
+  const hasWorkspaces = availableGroups.length > 0;
 
   const fetchGroups = useCallback(async () => {
     if (!getAppEndpointKey()) {
@@ -168,7 +184,9 @@ export default function ChatTab({
 
   const openWorkspace = useCallback(
     async (groupId: string) => {
-      if (!groupId) {
+      const trimmedMessengerName = messengerName.trim();
+
+      if (!groupId || !trimmedMessengerName) {
         return;
       }
 
@@ -190,6 +208,7 @@ export default function ChatTab({
         }
 
         setGroupId(groupId);
+        setMessengerDisplayName(trimmedMessengerName);
         setGroupMemberIdentity(groupId, identityResponse.data.memberIdentity);
         clearStoredSession();
         setSuccess("Workspace selected. Opening Browse Channels...");
@@ -204,7 +223,7 @@ export default function ChatTab({
         setOpeningWorkspace(false);
       }
     },
-    [navigate],
+    [messengerName, navigate],
   );
 
   const handleWorkspaceChange = async (
@@ -218,6 +237,8 @@ export default function ChatTab({
 
   const handleUseInvitation = (event: FormEvent) => {
     event.preventDefault();
+    setError("");
+    setSuccess("");
     setInvitationError("");
     setSubmittingInvitation(true);
 
@@ -253,8 +274,27 @@ export default function ChatTab({
           joinResponse.data.memberIdentity,
         );
         setInvitationInput("");
+        const previousGroups = availableGroups;
         await fetchGroups();
+        setAvailableGroups((currentGroups) => {
+          const groupsToKeep =
+            currentGroups.length > 0 ? currentGroups : previousGroups;
+
+          if (
+            groupsToKeep.some(
+              (group) => group.groupId === joinResponse.data.groupId,
+            )
+          ) {
+            return groupsToKeep;
+          }
+
+          return [
+            ...groupsToKeep,
+            buildJoinedWorkspaceFallback(joinResponse.data.groupId),
+          ];
+        });
         setSelectedGroupId(joinResponse.data.groupId);
+        setError("");
         onInvitationSaved?.();
         setSuccess("Workspace joined. Press Join chat to enter this workspace.");
       } catch {
@@ -298,13 +338,32 @@ export default function ChatTab({
           <Note>
             {openingWorkspace
               ? "Opening workspace..."
-              : availableGroups.length > 0
-                ? "Select a workspace, then press Join chat. Channel identity is resolved later when you join a channel."
+              : hasWorkspaces
+                ? "Select a workspace, create one, or paste an invitation to join another workspace. Channel identity is resolved later when you join a channel."
                 : "Create a new workspace or join one with an invitation."}
           </Note>
         </InputGroup>
 
-        {availableGroups.length > 0 && (
+        <InputGroup>
+          <Label>Your name</Label>
+          <Input
+            id="messengerNameInput"
+            type="text"
+            placeholder="Enter your name"
+            value={messengerName}
+            onChange={(event) => {
+              setMessengerName(event.target.value);
+              setError("");
+            }}
+            disabled={openingWorkspace}
+          />
+          <Note>
+            This name will be used across the app and auto-applied in every
+            channel or DM you join.
+          </Note>
+        </InputGroup>
+
+        {hasWorkspaces && (
           <Button
             type="button"
             variant="primary"
@@ -312,43 +371,48 @@ export default function ChatTab({
             onClick={() => {
               void openWorkspace(selectedGroupId);
             }}
-            disabled={!selectedGroupId || fetchingGroups || openingWorkspace}
+            disabled={
+              !selectedGroupId ||
+              !messengerName.trim() ||
+              fetchingGroups ||
+              openingWorkspace
+            }
           >
             {openingWorkspace ? "Joining..." : "Join chat"}
           </Button>
         )}
 
-        {!fetchingGroups && availableGroups.length === 0 && (
-          <InputGroup>
-            <Label>No workspace yet — join workspace with invitation</Label>
-            <Note>
-              Paste a workspace invite link or encoded invitation payload.
-            </Note>
-            <Input
-              id="invitationInput"
-              type="text"
-              placeholder="https://...?invitation=... or calimero://curb/join?invitation=... or paste encoded"
-              value={invitationInput}
-              onChange={(event) => {
-                setInvitationInput(event.target.value);
-                setInvitationError("");
-              }}
-              disabled={submittingInvitation}
-            />
-            <Button
-              type="button"
-              variant="primary"
-              style={{ width: "100%", marginTop: "0.5rem" }}
-              onClick={handleUseInvitation}
-              disabled={submittingInvitation || !invitationInput.trim()}
-            >
-              {submittingInvitation ? "Using invitation..." : "Use invitation"}
-            </Button>
-            {invitationError && (
-              <Message type="error">{invitationError}</Message>
-            )}
-          </InputGroup>
-        )}
+        <InputGroup>
+          <Label>Join workspace with invitation</Label>
+          <Note>
+            {hasWorkspaces
+              ? "Paste a workspace invite link or invitation payload to join another workspace."
+              : "Paste a workspace invite link or invitation payload."}
+          </Note>
+          <Input
+            id="invitationInput"
+            type="text"
+            placeholder="https://...?invitation=... or calimero://curb/join?invitation=... or paste encoded"
+            value={invitationInput}
+            onChange={(event) => {
+              setInvitationInput(event.target.value);
+              setInvitationError("");
+            }}
+            disabled={submittingInvitation}
+          />
+          <Button
+            type="button"
+            variant="primary"
+            style={{ width: "100%", marginTop: "0.5rem" }}
+            onClick={handleUseInvitation}
+            disabled={submittingInvitation || !invitationInput.trim()}
+          >
+            {submittingInvitation ? "Using invitation..." : "Use invitation"}
+          </Button>
+          {invitationError && (
+            <Message type="error">{invitationError}</Message>
+          )}
+        </InputGroup>
 
         {error && <Message type="error">{error}</Message>}
         {success && <Message type="success">{success}</Message>}

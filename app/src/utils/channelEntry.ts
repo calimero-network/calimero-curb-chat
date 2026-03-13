@@ -15,6 +15,7 @@ export function buildChannelEntryChat(params: {
     name,
     contextIdentity,
     canJoin: false,
-    requiresProfileSetup: !username.trim(),
+    requiresProfileSetup: false,
+    username: username || undefined,
   };
 }

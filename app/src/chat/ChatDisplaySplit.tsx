@@ -22,12 +22,11 @@ import {
 import EmojiSelectorPopup from "../emojiSelector/EmojiSelectorPopup";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { scrollbarStyles } from "../styles/scrollbar";
-import { StorageHelper } from "../utils/storage";
 import { log } from "../utils/logger";
 import {
-  getCachedUsernameForIdentity,
-  setCachedUsernameForIdentity,
-} from "../utils/chatProfileCache";
+  getMessengerDisplayName,
+  setMessengerDisplayName,
+} from "../utils/messengerName";
 
 interface ChatDisplaySplitProps {
   readMessage: (message: CurbMessage) => void;
@@ -217,11 +216,10 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
 
     const setUserInfo = async () => {
       const executorId = getExecutorPublicKey() ?? "";
-      const cachedIdentityUsername = getCachedUsernameForIdentity(executorId);
 
       // Check if we already have the username in storage
       const cachedUsername =
-        cachedIdentityUsername || StorageHelper.getItem("chat-username");
+        getMessengerDisplayName();
       if (cachedUsername) {
         const normalizedClass = cachedUsername
           .replace(/\s+/g, "")
@@ -238,8 +236,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
         userId: executorId ?? "",
       });
       if (response.data) {
-        setCachedUsernameForIdentity(executorId, response.data);
-        StorageHelper.setItem("chat-username", response.data);
+        setMessengerDisplayName(response.data);
         const normalizedClass = response.data
           .replace(/\s+/g, "")
           .toLowerCase()

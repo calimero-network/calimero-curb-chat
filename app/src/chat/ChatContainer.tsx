@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import type { FormEvent } from "react";
 import { styled } from "styled-components";
-import { StorageHelper } from "../utils/storage";
 import { log } from "../utils/logger";
 import type {
   ActiveChat,
@@ -15,7 +14,6 @@ import type {
 } from "../types/Common";
 import { MessageStatus } from "../types/Common";
 import JoinChannel from "./JoinChannel";
-import ChannelProfileSetup from "./ChannelProfileSetup";
 import ChatDisplaySplit from "./ChatDisplaySplit";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import {
@@ -27,6 +25,7 @@ import {
 import type { ChannelInfo, UserId } from "../api/clientApi";
 import { extractAndAddMentions } from "../utils/mentions";
 import ChatSearchOverlay from "./ChatSearchOverlay";
+import { getMessengerDisplayName } from "../utils/messengerName";
 
 interface ChatContainerProps {
   activeChat: ActiveChat;
@@ -200,7 +199,7 @@ function ChatContainer({
   const handleReaction = useCallback(
     async (message: CurbMessage, reaction: string, isThread: boolean) => {
       const isDM = activeChatRef.current?.type === "direct_message";
-      const username = StorageHelper.getItem("chat-username") || "";
+      const username = getMessengerDisplayName();
       const accounts = message.reactions?.[reaction] ?? [];
       const isAdding = !(
         Array.isArray(accounts) && accounts.includes(username)
@@ -299,7 +298,7 @@ function ChatContainer({
         key: tempId,
         timestamp: Date.now(),
         sender,
-        senderUsername: StorageHelper.getItem("chat-username") || undefined,
+        senderUsername: getMessengerDisplayName() || undefined,
         reactions: {},
         editedOn: undefined,
         mentions,
@@ -382,7 +381,7 @@ function ChatContainer({
         sender: isDM
           ? activeChatRef.current?.contextIdentity || getExecutorPublicKey() || ""
           : getExecutorPublicKey() || "",
-        senderUsername: StorageHelper.getItem("chat-username") || undefined,
+        senderUsername: getMessengerDisplayName() || undefined,
         reactions: {},
         editedOn: undefined,
         mentions,
@@ -661,9 +660,7 @@ function ChatContainer({
           searchContextId={searchContextId}
         />
       )}
-      {activeChat.requiresProfileSetup && activeChat.type === "channel" ? (
-        <ChannelProfileSetup activeChat={activeChat} onCompleted={onJoinedChat} />
-      ) : activeChat.canJoin && activeChat.type === "channel" ? (
+      {activeChat.canJoin && activeChat.type === "channel" ? (
         <JoinChannel
           channelMeta={channelMeta}
           activeChat={activeChat}

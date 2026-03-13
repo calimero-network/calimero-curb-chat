@@ -1,8 +1,12 @@
 import { styled } from "styled-components";
 import Loader from "../loader/Loader";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BaseModal from "../common/popups/BaseModal";
 import { Button, Input, Radio, RadioGroup } from "@calimero-network/mero-ui";
+import {
+  getChannelVisibilityOptionLabel,
+  type ChannelVisibilityOption,
+} from "../../utils/channelVisibility";
 
 const Text = styled.div`
   display: flex;
@@ -107,6 +111,7 @@ interface CreateChannelPopupProps {
   setInputValue: (value: string) => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  defaultVisibility: ChannelVisibilityOption;
 }
 
 export default function CreateChannelPopup({
@@ -120,12 +125,21 @@ export default function CreateChannelPopup({
   channelNameValidator,
   inputValue,
   setInputValue,
+  defaultVisibility,
 }: CreateChannelPopupProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [validInput, setValidInput] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [visibility, setVisibility] = useState("public");
+  const [visibility, setVisibility] = useState<ChannelVisibilityOption>(defaultVisibility);
   const [readOnly, setReadOnly] = useState("no");
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setVisibility(defaultVisibility);
+  }, [defaultVisibility, isOpen]);
 
   const runProcess = async () => {
     setIsProcessing(true);
@@ -187,12 +201,18 @@ export default function CreateChannelPopup({
         <div className="d-flex">
           <RadioGroup
             value={visibility}
-            onChange={setVisibility}
+            onChange={(value) => setVisibility(value as ChannelVisibilityOption)}
             name="visibility"
             style={{ display: "flex", flexDirection: "row", gap: "0.5rem" }}
           >
-            <Radio label="Public" value="public" />
-            <Radio label="Private" value="private" />
+            <Radio
+              label={getChannelVisibilityOptionLabel("public")}
+              value="public"
+            />
+            <Radio
+              label={getChannelVisibilityOptionLabel("private")}
+              value="private"
+            />
           </RadioGroup>
         </div>
       </div>
