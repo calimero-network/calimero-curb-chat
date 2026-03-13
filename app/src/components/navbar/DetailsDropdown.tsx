@@ -3,6 +3,7 @@ import type { ActiveChat } from "../../types/Common";
 import ChannelDetailsPopup from "../popups/ChannelDetailsPopup";
 import { useState } from "react";
 import type { UserId } from "../../api/clientApi";
+import { isRestrictedChannelType } from "../../utils/channelVisibility";
 
 const DropdownSelector = styled.div`
   display: flex;
@@ -123,7 +124,7 @@ export default function DetailsDropdown({
 
   if (activeChat.type === "channel") {
     // Use the actual channelType from the activeChat
-    const isPrivateChannel = activeChat.channelType === "Private";
+    const isPrivateChannel = isRestrictedChannelType(activeChat.channelType);
 
     const toggle = (
       <DropdownSelector>

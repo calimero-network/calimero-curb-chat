@@ -1,18 +1,14 @@
 import { useCallback, memo, useState } from "react";
-import { useEffect } from "react";
 import { styled } from "styled-components";
 import { Avatar } from "@calimero-network/mero-ui";
-import type { DMChatInfo } from "../../api/clientApi";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import type { ActiveChat } from "../../types/Common";
-import UnreadMessagesBadge from "./UnreadMessageBadge";
-import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { useToast } from "../../contexts/ToastContext";
 import ConfirmPopup from "../popups/ConfirmPopup";
 
 const UserListItem = styled.div<{
   $selected: boolean;
-  $hasNewMessages: boolean;
   $isCollapsed?: boolean;
 }>`
   display: flex;
@@ -27,12 +23,7 @@ const UserListItem = styled.div<{
   border-left: 2px solid ${(props) => (props.$selected ? "#a5ff11" : "transparent")};
 
   background: ${(props) => (props.$selected ? "rgba(165,255,17,0.07)" : "transparent")};
-  color: ${(props) =>
-    props.$selected
-      ? "#fff"
-      : props.$hasNewMessages
-      ? "#c8c7d1"
-      : "#5e5e6e"};
+  color: ${(props) => (props.$selected ? "#fff" : "#5e5e6e")};
 
   &:hover {
     background: rgba(255, 255, 255, 0.05) !important;
@@ -83,9 +74,9 @@ const TrashButton = styled.button`
 `;
 
 interface UserItemProps {
-  onDMSelected: (user?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
+  onDMSelected: (dm: DMContextInfo) => void;
   selected: boolean;
-  userDM: DMChatInfo;
+  dm: DMContextInfo;
   isCollapsed?: boolean;
   selectChannel: (channel: ActiveChat) => void;
 }
@@ -93,88 +84,62 @@ interface UserItemProps {
 function UserItem({
   onDMSelected,
   selected,
-  userDM,
+  dm,
   isCollapsed,
   selectChannel,
 }: UserItemProps) {
   const { addToast } = useToast();
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-  useEffect(() => {
-    const key = sessionStorage.getItem("dm-delete-open");
-    if (key && key === userDM.other_identity_old) {
-      setIsDeleteOpen(true);
-    }
-  }, [userDM.other_identity_old]);
+  const displayName = dm.otherUsername || dm.contextId.substring(0, 8) + "...";
 
   const handleClick = useCallback(() => {
-    onDMSelected(userDM, undefined, true);
-  }, [userDM, onDMSelected]);
+    onDMSelected(dm);
+  }, [dm, onDMSelected]);
 
   const confirmDelete = useCallback(async () => {
     try {
-      const client = new ClientApiDataSource();
       const node = new ContextApiDataSource();
-
-      const res = await client.deleteDM({ other_user: userDM.other_identity_old });
-      if (res.error) {
-        addToast({ title: "DM", message: res.error.message || "Failed to delete DM", type: "dm", duration: 3000 });
+      const del = await node.deleteContext({ contextId: dm.contextId });
+      if (del.error) {
+        addToast({ title: "DM", message: del.error.message || "Failed to delete DM context", type: "dm", duration: 3000 });
         return;
       }
-
-      if (userDM.context_id) {
-        const del = await node.deleteContext({ contextId: userDM.context_id });
-        if (del.error) {
-          addToast({ title: "DM", message: del.error.message || "Failed to delete DM context", type: "dm", duration: 3000 });
-        }
-      }
-
       addToast({ title: "DM", message: "DM deleted", type: "dm", duration: 2500 });
       selectChannel({ type: "channel", id: "general", name: "general" });
     } catch {
       addToast({ title: "DM", message: "Failed to delete DM", type: "dm", duration: 3000 });
     }
-  }, [userDM, addToast, selectChannel]);
+  }, [dm, addToast, selectChannel]);
 
   return (
     <UserListItem
       $selected={selected}
       onClick={handleClick}
-      $hasNewMessages={userDM.unread_messages > 0}
       $isCollapsed={isCollapsed}
     >
       {isCollapsed ? (
-        <Avatar size="xs" name={userDM.other_username} />
+        <Avatar size="xs" name={displayName} />
       ) : (
         <>
           <UserInfoContainer>
-            <Avatar size="xs" name={userDM.other_username} />
-            <NameContainer>{userDM.other_username}</NameContainer>
+            <Avatar size="xs" name={displayName} />
+            <NameContainer>{displayName}</NameContainer>
           </UserInfoContainer>
           <ActionsContainer>
-            {userDM.unread_messages > 0 && (
-              <UnreadMessagesBadge
-                messageCount={userDM.unread_messages.toString()}
-                backgroundColor="rgba(165,255,17,0.2)"
-                color="rgba(165,255,17,0.9)"
-              />
-            )}
             <ConfirmPopup
               title="Delete DM"
-              message="This will delete the DM and its context for you. Are you sure?"
+              message="This will delete the DM context. Are you sure?"
               confirmLabel="Delete"
               cancelLabel="Cancel"
               onConfirm={confirmDelete}
-              onCancel={() => {
-                sessionStorage.removeItem("dm-delete-open");
-              }}
+              onCancel={() => {}}
               toggle={
                 <TrashButton
                   title="Delete DM"
                   aria-label="Delete DM"
                   onClick={(e) => {
                     e.stopPropagation();
-                    sessionStorage.setItem("dm-delete-open", userDM.other_identity_old);
                     setIsDeleteOpen(true);
                   }}
                 >
@@ -187,10 +152,7 @@ function UserItem({
                 </TrashButton>
               }
               isOpen={isDeleteOpen}
-              setIsOpen={(open) => {
-                if (!open) sessionStorage.removeItem("dm-delete-open");
-                setIsDeleteOpen(open);
-              }}
+              setIsOpen={setIsDeleteOpen}
               isChild
             />
           </ActionsContainer>

@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import type { CalimeroApp } from "@calimero-network/calimero-client";
 import { log } from "../utils/logger";
 import type { WebSocketEventCallback } from "../types/WebSocketTypes";
@@ -13,6 +13,7 @@ export function useMultiWebSocketSubscription(
 ) {
   const subscribedContextsRef = useRef<Set<string>>(new Set());
   const eventCallbackRef = useRef(eventCallback);
+  const [subscriptionCount, setSubscriptionCount] = useState(0);
 
   // Keep callback ref up to date WITHOUT re-subscribing
   useEffect(() => {
@@ -59,6 +60,7 @@ export function useMultiWebSocketSubscription(
           );
           app.unsubscribeFromEvents(contextsToRemove);
           contextsToRemove.forEach((id) => currentSubscriptions.delete(id));
+          setSubscriptionCount(currentSubscriptions.size);
         } catch (error) {
           log.error(
             "MultiWebSocket",
@@ -78,6 +80,7 @@ export function useMultiWebSocketSubscription(
           );
           app.subscribeToEvents(newContexts, eventCallbackRef.current);
           newContexts.forEach((id) => currentSubscriptions.add(id));
+          setSubscriptionCount(currentSubscriptions.size);
         } catch (error) {
           log.error("MultiWebSocket", "Failed to subscribe to contexts", error);
         }
@@ -112,6 +115,7 @@ export function useMultiWebSocketSubscription(
         log.info("MultiWebSocket", `Subscribing to context: ${contextId}`);
         app.subscribeToEvents([contextId], eventCallbackRef.current);
         subscribedContextsRef.current.add(contextId);
+        setSubscriptionCount(subscribedContextsRef.current.size);
       } catch (error) {
         log.error(
           "MultiWebSocket",
@@ -141,6 +145,7 @@ export function useMultiWebSocketSubscription(
         log.info("MultiWebSocket", `Unsubscribing from context: ${contextId}`);
         app.unsubscribeFromEvents([contextId]);
         subscribedContextsRef.current.delete(contextId);
+        setSubscriptionCount(subscribedContextsRef.current.size);
       } catch (error) {
         log.error(
           "MultiWebSocket",
@@ -165,6 +170,7 @@ export function useMultiWebSocketSubscription(
       log.info("MultiWebSocket", `Unsubscribing from all ${contexts.length} contexts`);
       app.unsubscribeFromEvents(contexts);
       subscribedContextsRef.current.clear();
+      setSubscriptionCount(0);
     } catch (error) {
       log.error("MultiWebSocket", "Failed to unsubscribe from all", error);
     }
@@ -181,15 +187,15 @@ export function useMultiWebSocketSubscription(
    * Check if subscribed to any contexts
    */
   const isSubscribed = useCallback(() => {
-    return subscribedContextsRef.current.size > 0;
-  }, []);
+    return subscriptionCount > 0;
+  }, [subscriptionCount]);
 
   /**
    * Get count of subscribed contexts
    */
   const getSubscriptionCount = useCallback(() => {
-    return subscribedContextsRef.current.size;
-  }, []);
+    return subscriptionCount;
+  }, [subscriptionCount]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -203,6 +209,7 @@ export function useMultiWebSocketSubscription(
           );
           app.unsubscribeFromEvents(contexts);
           subscribedContextsRef.current.clear();
+          setSubscriptionCount(0);
         } catch (error) {
           log.error("MultiWebSocket", "Failed to unsubscribe on unmount", error);
         }

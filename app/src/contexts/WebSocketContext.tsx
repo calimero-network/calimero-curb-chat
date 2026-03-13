@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useCallback, useRef, useEffect } from "react";
-import { useCalimero, getContextId } from "@calimero-network/calimero-client";
+import { useCalimero } from "@calimero-network/calimero-client";
 import { useMultiWebSocketSubscription } from "../hooks/useMultiWebSocketSubscription";
 import type { WebSocketEvent } from "../types/WebSocketTypes";
 import { log } from "../utils/logger";
@@ -35,16 +35,10 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const { app } = useCalimero();
   const eventListenersRef = useRef<Set<WebSocketEventListener>>(new Set());
 
-  // Event callback that distributes to all registered listeners
+  // Event callback that distributes to all registered listeners.
+  // In the group-based model every channel is its own context, so we
+  // forward events from any subscribed context — not just the "main" one.
   const eventCallbackFn = useCallback(async (event: WebSocketEvent) => {
-    const mainContextId = getContextId();
-    
-    if (!mainContextId) {
-      log.debug("WebSocketContext", "No context ID available, skipping event");
-      return;
-    }
-
-    // Notify all registered listeners
     eventListenersRef.current.forEach((listener) => {
       try {
         listener(event);

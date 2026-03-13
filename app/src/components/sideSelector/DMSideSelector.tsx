@@ -2,7 +2,7 @@ import { memo } from "react";
 import { styled } from "styled-components";
 import DMHeader from "./DMHeader";
 import UserList from "./UserList";
-import type { DMChatInfo } from "../../api/clientApi";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 import type { ActiveChat } from "../../types/Common";
 
@@ -17,9 +17,9 @@ const DMContainer = styled.div`
 interface DMSideSelectorProps {
   chatMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
-  onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
+  onDMSelected: (dm: DMContextInfo) => void;
   selectedDM: string;
-  privateDMs: DMChatInfo[];
+  privateDMs: DMContextInfo[];
   isCollapsed?: boolean;
   selectChannel: (channel: ActiveChat) => void;
 }
