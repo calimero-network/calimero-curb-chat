@@ -1514,6 +1514,7 @@ export class ClientApiDataSource implements ClientApi {
         errorMessage = error;
       }
       return {
+        data: null,
         error: {
           code: 500,
           message: errorMessage,

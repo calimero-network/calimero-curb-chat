@@ -170,11 +170,11 @@ export default function AdminPanel({
     if (isOpen && groupId) {
       admin.fetchAll(groupId);
     }
-  }, [admin, groupId, isOpen]);
+  }, [admin.fetchAll, groupId, isOpen]);
 
   const handleRefresh = useCallback(() => {
     if (groupId) admin.fetchAll(groupId);
-  }, [groupId, admin]);
+  }, [groupId, admin.fetchAll]);
 
   if (!groupId || permissions.loading || !permissions.isAdmin) {
     return null;
