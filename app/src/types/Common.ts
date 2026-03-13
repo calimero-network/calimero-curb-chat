@@ -26,6 +26,7 @@ export type ActiveChat = {
   canJoin?: boolean;
   isSynced?: boolean;
   channelType?: string;
+  requiresProfileSetup?: boolean;
   /** Identity (public key) for this context, stored after joining via group API */
   contextIdentity?: string;
 };
@@ -45,6 +46,8 @@ export interface GroupContextChannel {
   contextId: string;
   info: ContextInfo | null;
   visibility?: "open" | "restricted";
+  contextIdentity?: string;
+  isJoined?: boolean;
 }
 
 export interface User {

@@ -1,29 +1,21 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, type ChangeEvent, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { styled } from "styled-components";
-import {
-  setAppEndpointKey,
-  setContextId,
-  setExecutorPublicKey,
-  getAppEndpointKey,
-  getContextId,
-  getExecutorPublicKey,
-  apiClient,
-} from "@calimero-network/calimero-client";
-import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
-import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
-import { extractErrorMessage } from "../../utils/errorParser";
-import { defaultActiveChat } from "../../mock/mock";
-import { getStoredSession, updateSessionChat } from "../../utils/session";
-import type { ResponseData } from "@calimero-network/calimero-client";
-import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
-import type { ActiveChat } from "../../types/Common";
-import type { ContextInfo } from "../../api/nodeApi";
+import { getAppEndpointKey } from "@calimero-network/calimero-client";
 import { Button, Input } from "@calimero-network/mero-ui";
-import { StorageHelper } from "../../utils/storage";
+import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
+import type { GroupSummary } from "../../api/groupApi";
+import { clearStoredSession } from "../../utils/session";
 import {
-  saveInvitationToStorage,
+  parseGroupInvitationPayload,
   parseInvitationInput,
 } from "../../utils/invitation";
+import {
+  getGroupMemberIdentity,
+  getGroupId,
+  setGroupId,
+  setGroupMemberIdentity,
+} from "../../constants/config";
 
 const TabContent = styled.div`
   display: flex;
@@ -32,7 +24,6 @@ const TabContent = styled.div`
   align-items: center;
   width: 100%;
 `;
-
 
 const Form = styled.form`
   display: flex;
@@ -124,453 +115,239 @@ export default function ChatTab({
   isConfigSet,
   onInvitationSaved,
 }: ChatTabProps) {
-  const [, setNodeUrl] = useState("");
-  const [availableContexts, setAvailableContexts] = useState<ContextInfo[]>([]);
-  const [selectedContextId, setSelectedContextId] = useState("");
-  const [contextIdentities, setContextIdentities] = useState<string[]>([]);
-  const [selectedIdentityId, setSelectedIdentityId] = useState("");
-  const [username, setUsername] = useState("");
-  const [fetchingContexts, setFetchingContexts] = useState(false);
-  const [fetchingIdentities, setFetchingIdentities] = useState(false);
-  const [checkingUsername, setCheckingUsername] = useState(false);
+  const navigate = useNavigate();
+  const [availableGroups, setAvailableGroups] = useState<GroupSummary[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(getGroupId());
+  const [fetchingGroups, setFetchingGroups] = useState(false);
+  const [openingWorkspace, setOpeningWorkspace] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isDisabled, setIsDisabled] = useState(false);
-  const lastCheckedIdentityRef = useRef<string | null>(null);
   const [invitationInput, setInvitationInput] = useState("");
   const [invitationError, setInvitationError] = useState("");
   const [submittingInvitation, setSubmittingInvitation] = useState(false);
-  const [completeJoinUsername, setCompleteJoinUsername] = useState("");
-  const [completeJoinLoading, setCompleteJoinLoading] = useState(false);
-  const [completeJoinError, setCompleteJoinError] = useState("");
-  const [completeJoinSuccess, setCompleteJoinSuccess] = useState("");
 
-  // Fetch contexts from node API when authenticated (no hardcoded contextId)
-  const fetchContexts = useCallback(async () => {
-    const url = getAppEndpointKey();
-    if (!url) return;
-    setFetchingContexts(true);
+  const fetchGroups = useCallback(async () => {
+    if (!getAppEndpointKey()) {
+      return;
+    }
+
+    setFetchingGroups(true);
     setError("");
+
     try {
-      const nodeApi = new ContextApiDataSource();
-      const response = await nodeApi.listContexts();
+      const response = await new GroupApiDataSource().listGroups();
       if (response.data && response.data.length > 0) {
-        const contextsToShow = response.data;
-        setAvailableContexts(contextsToShow);
-        if (contextsToShow.length === 1) {
-          setSelectedContextId(contextsToShow[0].contextId);
-        }
+        setAvailableGroups(response.data);
+        const storedGroupId = getGroupId();
+        const preferredGroup =
+          response.data.find((group) => group.groupId === storedGroupId) ??
+          response.data[0];
+        setSelectedGroupId(preferredGroup.groupId);
       } else if (response.error) {
-        setError(response.error.message || "Failed to fetch contexts");
-        setAvailableContexts([]);
+        setAvailableGroups([]);
+        setSelectedGroupId("");
+        setError(response.error.message || "Failed to fetch workspaces");
       } else {
-        setError("No contexts found on this node. Join or create a context first.");
-        setAvailableContexts([]);
-        setIsDisabled(true);
+        setAvailableGroups([]);
+        setSelectedGroupId("");
       }
-    } catch (_err) {
-      setError("Failed to fetch contexts from node");
-      setAvailableContexts([]);
+    } catch {
+      setAvailableGroups([]);
+      setSelectedGroupId("");
+      setError("Failed to fetch workspaces from node");
     } finally {
-      setFetchingContexts(false);
+      setFetchingGroups(false);
     }
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated && !isConfigSet) {
-      setNodeUrl(getAppEndpointKey() || "");
-      fetchContexts();
+    if ((isAuthenticated || isConfigSet) && getAppEndpointKey()) {
+      fetchGroups();
     }
-  }, [isAuthenticated, isConfigSet, fetchContexts]);
+  }, [fetchGroups, isAuthenticated, isConfigSet]);
 
-  // When context is selected, fetch identities for that context
-  useEffect(() => {
-    if (!selectedContextId) {
-      setContextIdentities([]);
-      setSelectedIdentityId("");
-      return;
-    }
-    let cancelled = false;
-    setFetchingIdentities(true);
-    setError("");
-    apiClient
-      .node()
-      .fetchContextIdentities(selectedContextId)
-      .then((res: ResponseData<FetchContextIdentitiesResponse>) => {
-        if (cancelled) return;
-        if (res.error) {
-          setError(res.error.message || "Failed to fetch identities");
-          if (res.error.message === "Context not found") {
-            setIsDisabled(true);
-            setError("You are not a member of this context. Join the context first.");
-          }
-          setContextIdentities([]);
-          return;
-        }
-        const identities = res.data?.data?.identities;
-        if (identities && identities.length > 0) {
-          setContextIdentities(identities);
-          if (identities.length === 1) {
-            setSelectedIdentityId(identities[0]);
-          }
-        } else {
-          setContextIdentities([]);
-          setError("No identities found for this context.");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to fetch identities");
-        setContextIdentities([]);
-      })
-      .finally(() => {
-        if (!cancelled) setFetchingIdentities(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedContextId]);
+  const openWorkspace = useCallback(
+    async (groupId: string) => {
+      if (!groupId) {
+        return;
+      }
 
-  // When context + identity are selected, check username: if exists -> login & redirect; else show username step
-  const onIdentitySelected = useCallback(
-    async (identityId: string) => {
-      if (!selectedContextId || !identityId) return;
-      setContextId(selectedContextId);
-      setExecutorPublicKey(identityId);
-      setCheckingUsername(true);
+      setOpeningWorkspace(true);
       setError("");
+      setSuccess("");
+
       try {
-        const usernameResponse = await new ClientApiDataSource().getUsername({
-          userId: identityId,
-          executorPublicKey: identityId,
-          contextId: selectedContextId,
-        });
-        if (usernameResponse.data) {
-          setUsername(usernameResponse.data);
-          StorageHelper.setItem("chat-username", usernameResponse.data);
-          const storedSession: ActiveChat | null = getStoredSession();
-          const chatToUse = storedSession || defaultActiveChat;
-          updateSessionChat(chatToUse);
-          setSuccess("Already joined the chat!");
-          setTimeout(() => {
-            window.location.href = "/" + (window.location.search || "");
-          }, 1000);
+        const groupApi = new GroupApiDataSource();
+        const identityResponse = await groupApi.resolveCurrentMemberIdentity(
+          groupId,
+          getGroupMemberIdentity(groupId),
+        );
+
+        if (identityResponse.error || !identityResponse.data) {
+          throw new Error(
+            identityResponse.error?.message || "Failed to resolve workspace identity",
+          );
         }
-      } catch {
-        setError("Failed to check username");
+
+        setGroupId(groupId);
+        setGroupMemberIdentity(groupId, identityResponse.data.memberIdentity);
+        clearStoredSession();
+        setSuccess("Workspace selected. Opening Browse Channels...");
+        navigate("/");
+      } catch (workspaceError) {
+        setError(
+          workspaceError instanceof Error
+            ? workspaceError.message
+            : "Failed to open workspace",
+        );
       } finally {
-        setCheckingUsername(false);
+        setOpeningWorkspace(false);
       }
     },
-    [selectedContextId],
+    [navigate],
   );
 
-  useEffect(() => {
-    const key = `${selectedContextId}:${selectedIdentityId}`;
-    if (
-      !selectedIdentityId ||
-      !selectedContextId ||
-      lastCheckedIdentityRef.current === key
-    ) {
-      return;
-    }
-    lastCheckedIdentityRef.current = key;
-    onIdentitySelected(selectedIdentityId);
-  }, [selectedIdentityId, selectedContextId, onIdentitySelected]);
-
-  const handleContextChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value;
-    setSelectedContextId(id);
-    setSelectedIdentityId("");
-    setContextIdentities([]);
+  const handleWorkspaceChange = async (
+    event: ChangeEvent<HTMLSelectElement>,
+  ) => {
+    const groupId = event.target.value;
+    setSelectedGroupId(groupId);
+    setSuccess(groupId ? "Workspace selected. Press Join chat to continue." : "");
     setError("");
   };
 
-  const handleIdentityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedIdentityId(e.target.value);
-    setError("");
-  };
-
-  const handleUseInvitation = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUseInvitation = (event: FormEvent) => {
+    event.preventDefault();
     setInvitationError("");
     setSubmittingInvitation(true);
+
     const payload = parseInvitationInput(invitationInput);
     if (!payload) {
-      setInvitationError("Invalid invitation. Paste a full invite URL or the encoded invitation.");
+      setInvitationError(
+        "Invalid invitation. Paste a full invite URL or the encoded invitation.",
+      );
       setSubmittingInvitation(false);
       return;
     }
-    saveInvitationToStorage(payload);
-    setInvitationInput("");
-    setSubmittingInvitation(false);
-    onInvitationSaved?.();
-  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedContextId || !selectedIdentityId || !username.trim()) return;
-    setIsLoading(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const url = getAppEndpointKey();
-      if (url) setAppEndpointKey(url.trim());
-      setContextId(selectedContextId);
-      setExecutorPublicKey(selectedIdentityId);
-      StorageHelper.setItem("chat-username", username.trim());
-      const response: ResponseData<string> =
-        await new ClientApiDataSource().joinChat({
-          isDM: false,
-          username: username.trim(),
-          contextId: selectedContextId,
-          executorPublicKey: selectedIdentityId,
-        });
-      if (response.error) {
-        const errorMessage = extractErrorMessage(response.error);
-        if (errorMessage.includes("Already a member")) {
-          setSuccess("Already connected to chat!");
-          const storedSession: ActiveChat | null = getStoredSession();
-          const chatToUse = storedSession || defaultActiveChat;
-          updateSessionChat(chatToUse);
-        } else {
-          setError(errorMessage);
+    void (async () => {
+      try {
+        const invitation = parseGroupInvitationPayload(payload);
+        if (!invitation) {
+          setInvitationError("This invitation is not a workspace invitation.");
           return;
         }
-      } else {
-        setSuccess("Successfully joined chat!");
-        const storedSession: ActiveChat | null = getStoredSession();
-        const chatToUse = storedSession || defaultActiveChat;
-        updateSessionChat(chatToUse);
-      }
 
-      setTimeout(() => {
-        window.location.href = "/" + (window.location.search || "");
-      }, 1000);
-    } catch (_err) {
-      setError("Failed to save login information");
-    } finally {
-      setIsLoading(false);
-    }
+        const joinResponse = await new GroupApiDataSource().joinGroup({
+          invitation,
+        });
+        if (joinResponse.error || !joinResponse.data) {
+          setInvitationError(
+            joinResponse.error?.message || "Failed to join workspace",
+          );
+          return;
+        }
+
+        setGroupMemberIdentity(
+          joinResponse.data.groupId,
+          joinResponse.data.memberIdentity,
+        );
+        setInvitationInput("");
+        await fetchGroups();
+        setSelectedGroupId(joinResponse.data.groupId);
+        onInvitationSaved?.();
+        setSuccess("Workspace joined. Press Join chat to enter this workspace.");
+      } catch {
+        setInvitationError("Failed to join workspace from invitation.");
+      } finally {
+        setSubmittingInvitation(false);
+      }
+    })();
   };
 
   if (!getAppEndpointKey()) {
     return null;
   }
 
-  // Config set but no chat username yet — show join form. Only hide when they have chat-username (nothing else).
-  const hasChatUsername = !!StorageHelper.getItem("chat-username");
-  if (isConfigSet && !hasChatUsername) {
-    return (
-      <TabContent>
-        <Form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!completeJoinUsername.trim()) return;
-            const ctxId = getContextId();
-            const execKey = getExecutorPublicKey();
-            if (!ctxId || !execKey) {
-              setCompleteJoinError("Context or identity missing. Please log out and select context and identity again.");
-              return;
-            }
-            setCompleteJoinLoading(true);
-            setCompleteJoinError("");
-            setCompleteJoinSuccess("");
-            try {
-              StorageHelper.setItem("chat-username", completeJoinUsername.trim());
-              const response = await new ClientApiDataSource().joinChat({
-                isDM: false,
-                username: completeJoinUsername.trim(),
-                contextId: ctxId,
-                executorPublicKey: execKey,
-              });
-              if (response.error) {
-                const msg = extractErrorMessage(response.error);
-                if (msg.includes("Already a member")) {
-                  setCompleteJoinSuccess("Already connected! Taking you to chat...");
-                  const storedSession = getStoredSession();
-                  const chatToUse = storedSession || defaultActiveChat;
-                  updateSessionChat(chatToUse);
-                } else {
-                  setCompleteJoinError(msg);
-                  setCompleteJoinLoading(false);
-                  return;
-                }
-              } else {
-                setCompleteJoinSuccess("Joined! Taking you to chat...");
-                const storedSession = getStoredSession();
-                const chatToUse = storedSession || defaultActiveChat;
-                updateSessionChat(chatToUse);
-              }
-              setTimeout(() => {
-                window.location.href = "/" + (window.location.search || "");
-              }, 1000);
-            } catch {
-              setCompleteJoinError("Failed to join chat");
-            } finally {
-              setCompleteJoinLoading(false);
-            }
-          }}
-        >
-          <InputGroup>
-            <Label>Context and identity are set</Label>
-            <Note>Enter your username to join the chat (this may help set up the connection).</Note>
-          </InputGroup>
-          <InputGroup>
-            <Label>Username</Label>
-            <Input
-              type="text"
-              placeholder="e.g. John"
-              value={completeJoinUsername}
-              onChange={(e) => setCompleteJoinUsername(e.target.value)}
-              disabled={completeJoinLoading}
-            />
-          </InputGroup>
-          <Button
-            type="submit"
-            disabled={completeJoinLoading || !completeJoinUsername.trim()}
-          >
-            {completeJoinLoading ? "Joining..." : "Join chat"}
-          </Button>
-          {completeJoinError && <Message type="error">{completeJoinError}</Message>}
-          {completeJoinSuccess && <Message type="success">{completeJoinSuccess}</Message>}
-        </Form>
-      </TabContent>
-    );
-  }
-
-  const needUsernameStep = true
-
   return (
     <TabContent>
-      <Form onSubmit={handleSubmit}>
+      <Form onSubmit={(event) => event.preventDefault()}>
         <InputGroup>
-          <Label>Context</Label>
+          <Label>Workspace</Label>
           <Select
-            id="contextSelect"
-            value={selectedContextId}
-            onChange={handleContextChange}
-            disabled={fetchingContexts || availableContexts.length === 0}
+            id="workspaceSelect"
+            value={selectedGroupId}
+            onChange={(event) => {
+              void handleWorkspaceChange(event);
+            }}
+            disabled={fetchingGroups || openingWorkspace || availableGroups.length === 0}
           >
             <option value="">
-              {fetchingContexts
-                ? "Loading contexts..."
-                : availableContexts.length === 0
-                  ? "No contexts available"
-                  : "Select a context..."}
+              {fetchingGroups
+                ? "Loading workspaces..."
+                : availableGroups.length === 0
+                  ? "No workspaces available"
+                  : "Select a workspace..."}
             </option>
-            {availableContexts.map((ctx) => (
-              <option key={ctx.contextId} value={ctx.contextId}>
-                {ctx.contextId.substring(0, 12)}...
+            {availableGroups.map((group) => (
+              <option key={group.groupId} value={group.groupId}>
+                {group.groupId.substring(0, 12)}...
               </option>
             ))}
           </Select>
           <Note>
-            {availableContexts.length > 0
-              ? `${availableContexts.length} context${availableContexts.length !== 1 ? "s" : ""} available`
-              : "Connect to a node to see contexts"}
+            {openingWorkspace
+              ? "Opening workspace..."
+              : availableGroups.length > 0
+                ? "Select a workspace, then press Join chat. Channel identity is resolved later when you join a channel."
+                : "Create a new workspace or join one with an invitation."}
           </Note>
         </InputGroup>
 
-        {!fetchingContexts && availableContexts.length === 0 && (
-          <div style={{ marginTop: "0.75rem" }}>
-            <InputGroup>
-              <Label>No contexts yet — join with an invitation</Label>
-              <Note>
-                Paste an invitation link (web or desktop) or the encoded payload.
-              </Note>
-              <Input
-                id="invitationInput"
-                type="text"
-                placeholder="https://...?invitation=... or calimero://curb/join?invitation=... or paste encoded"
-                value={invitationInput}
-                onChange={(e) => {
-                  setInvitationInput(e.target.value);
-                  setInvitationError("");
-                }}
-                disabled={submittingInvitation}
-              />
-              <Button
-                type="button"
-                variant="primary"
-                style={{ width: "100%", marginTop: "0.5rem" }}
-                onClick={handleUseInvitation}
-                disabled={submittingInvitation || !invitationInput.trim()}
-              >
-                {submittingInvitation ? "Using invitation..." : "Use invitation"}
-              </Button>
-              {invitationError && (
-                <Message type="error" style={{ marginTop: "0.5rem" }}>
-                  {invitationError}
-                </Message>
-              )}
-            </InputGroup>
-          </div>
+        {availableGroups.length > 0 && (
+          <Button
+            type="button"
+            variant="primary"
+            style={{ width: "100%", marginTop: "0.5rem" }}
+            onClick={() => {
+              void openWorkspace(selectedGroupId);
+            }}
+            disabled={!selectedGroupId || fetchingGroups || openingWorkspace}
+          >
+            {openingWorkspace ? "Joining..." : "Join chat"}
+          </Button>
         )}
 
-        {selectedContextId && (
+        {!fetchingGroups && availableGroups.length === 0 && (
           <InputGroup>
-            <Label>Identity</Label>
-            <Select
-              id="identitySelect"
-              value={selectedIdentityId}
-              onChange={handleIdentityChange}
-              disabled={fetchingIdentities || contextIdentities.length === 0}
+            <Label>No workspace yet — join workspace with invitation</Label>
+            <Note>
+              Paste a workspace invite link or encoded invitation payload.
+            </Note>
+            <Input
+              id="invitationInput"
+              type="text"
+              placeholder="https://...?invitation=... or calimero://curb/join?invitation=... or paste encoded"
+              value={invitationInput}
+              onChange={(event) => {
+                setInvitationInput(event.target.value);
+                setInvitationError("");
+              }}
+              disabled={submittingInvitation}
+            />
+            <Button
+              type="button"
+              variant="primary"
+              style={{ width: "100%", marginTop: "0.5rem" }}
+              onClick={handleUseInvitation}
+              disabled={submittingInvitation || !invitationInput.trim()}
             >
-              <option value="">
-                {fetchingIdentities
-                  ? "Loading identities..."
-                  : contextIdentities.length === 0
-                    ? "No identities"
-                    : "Select your identity..."}
-              </option>
-              {contextIdentities.map((id) => (
-                <option key={id} value={id}>
-                  {id.substring(0, 12)}...
-                </option>
-              ))}
-            </Select>
+              {submittingInvitation ? "Using invitation..." : "Use invitation"}
+            </Button>
+            {invitationError && (
+              <Message type="error">{invitationError}</Message>
+            )}
           </InputGroup>
-        )}
-
-        {(checkingUsername || needUsernameStep) && (
-          <>
-            {checkingUsername && (
-              <Message type="info">Checking if you already joined...</Message>
-            )}
-            {needUsernameStep && (
-              <>
-                <InputGroup>
-                  <Label>Username</Label>
-                  <Note>
-                    Choose a unique name to identify you in the chat (can only be
-                    set once).
-                  </Note>
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="e.g. John"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    disabled={isLoading}
-                  />
-                </InputGroup>
-                <Button
-                  type="submit"
-                  disabled={
-                    isLoading ||
-                    isDisabled ||
-                    !username.trim() ||
-                    !selectedContextId ||
-                    !selectedIdentityId
-                  }
-                >
-                  {isLoading ? "Joining..." : "Join chat"}
-                </Button>
-              </>
-            )}
-          </>
         )}
 
         {error && <Message type="error">{error}</Message>}

@@ -53,8 +53,10 @@ cat > res/bundle-temp/manifest.json <<EOF
 }
 EOF
 
-# Sign the manifest
-mero-sign sign --key key.json res/bundle-temp/manifest.json
+# Sign the manifest via core workspace tool
+cargo run --manifest-path ../../core/Cargo.toml -p mero-sign --quiet -- \
+    sign res/bundle-temp/manifest.json \
+    --key ../../core/scripts/test-signing-key/test-key.json
 
 # Create .mpk bundle (tar.gz archive)
 cd res/bundle-temp

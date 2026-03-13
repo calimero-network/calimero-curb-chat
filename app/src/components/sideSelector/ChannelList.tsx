@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { styled } from "styled-components";
-import type { ActiveChat, ChatType, GroupContextChannel } from "../../types/Common";
-import UnreadMessagesBadge from "./UnreadMessageBadge";
+import type { ActiveChat, GroupContextChannel } from "../../types/Common";
+import { buildChannelEntryChat } from "../../utils/channelEntry";
 
 const ChannelListContainer = styled.div`
   background-color: #0e0e10;
@@ -126,16 +126,24 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
               key={channel.contextId}
               selected={isSelected}
               $isCollapsed={isCollapsed}
-              onClick={() =>
-                selectChannel({
-                  type: "channel" as ChatType,
-                  name: displayName,
-                  id: channel.contextId,
-                  contextId: channel.contextId,
-                  readOnly: false,
-                  channelType: isRestricted ? "Private" : "Public",
-                })
-              }
+              onClick={() => {
+                if (!channel.contextIdentity) {
+                  return;
+                }
+
+                selectChannel(
+                  {
+                    ...buildChannelEntryChat({
+                      contextId: channel.contextId,
+                      name: displayName,
+                      contextIdentity: channel.contextIdentity,
+                      username: "",
+                    }),
+                    readOnly: false,
+                    channelType: isRestricted ? "Private" : "Public",
+                  },
+                );
+              }}
             >
               {isCollapsed ? (
                 <IconWrapper style={{ opacity: isSelected ? 0.9 : 0.5 }}>

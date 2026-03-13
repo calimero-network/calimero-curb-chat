@@ -1,9 +1,50 @@
+import type { SignedGroupOpenInvitation } from "../api/groupApi";
+
 /**
  * Invitation utility functions for handling invitation payloads.
  * Uses base64url encoding for compact, URL-safe invitation links.
  */
 
 const INVITATION_STORAGE_KEY = "curb-invitation-payload";
+
+function isSignedGroupOpenInvitation(
+  value: unknown,
+): value is SignedGroupOpenInvitation {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const typedValue = value as {
+    invitation?: Record<string, unknown>;
+    inviterSignature?: unknown;
+    inviter_signature?: unknown;
+  };
+
+  return (
+    (typeof typedValue.inviterSignature === "string" ||
+      typeof typedValue.inviter_signature === "string") &&
+    !!typedValue.invitation &&
+    typeof typedValue.invitation === "object"
+  );
+}
+
+export function serializeGroupInvitationPayload(
+  invitation: SignedGroupOpenInvitation,
+): string {
+  return JSON.stringify(invitation);
+}
+
+export function parseGroupInvitationPayload(
+  payload: string,
+): SignedGroupOpenInvitation | null {
+  try {
+    const parsed = JSON.parse(payload.trim());
+    const inner = parsed?.data ?? parsed;
+    return isSignedGroupOpenInvitation(inner) ? inner : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Base64url encode (URL-safe base64, no padding). Shorter and cleaner than percent-encoded JSON. */
 export function encodeInvitationPayload(payload: string): string {

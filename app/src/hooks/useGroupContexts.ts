@@ -4,7 +4,7 @@ import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
 import { GroupApiDataSource } from "../api/dataSource/groupApiDataSource";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
-import type { GroupContextChannel, ContextInfo } from "../types/Common";
+import type { GroupContextChannel } from "../types/Common";
 import { log } from "../utils/logger";
 
 export interface ContextIdentityMap {
@@ -65,17 +65,32 @@ export function useGroupContexts() {
         ids.map(async (ctxId: string) => {
           const executor = idMap[ctxId];
           if (!executor) {
-            return { contextId: ctxId, info: null };
+            return {
+              contextId: ctxId,
+              info: null,
+              contextIdentity: undefined,
+              isJoined: false,
+            };
           }
           try {
             const infoResp = await clientApi.getContextInfo(ctxId, executor);
             if (infoResp.data) {
-              return { contextId: ctxId, info: infoResp.data };
+              return {
+                contextId: ctxId,
+                info: infoResp.data,
+                contextIdentity: executor,
+                isJoined: true,
+              };
             }
           } catch (err) {
             log.debug("useGroupContexts", `get_info failed for ${ctxId}`, err);
           }
-          return { contextId: ctxId, info: null };
+          return {
+            contextId: ctxId,
+            info: null,
+            contextIdentity: executor,
+            isJoined: true,
+          };
         }),
       );
 

@@ -1,6 +1,6 @@
 import { styled } from "styled-components";
 import Loader from "../loader/Loader";
-import type { ActiveChat, GroupContextChannel, ChatType } from "../../types/Common";
+import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import { useCallback, useEffect, useState } from "react";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
@@ -10,6 +10,8 @@ import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-
 import { getGroupId } from "../../constants/config";
 import { Button, SearchInput } from "@calimero-network/mero-ui";
 import { log } from "../../utils/logger";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
+import { buildChannelEntryChat } from "../../utils/channelEntry";
 
 const SearchContainer = styled.div`
   padding: 24px;
@@ -116,6 +118,10 @@ const SearchContainer = styled.div`
 
 interface BrowsableChannel extends GroupContextChannel {
   isJoined: boolean;
+  visibility: "open" | "restricted";
+  canJoin: boolean;
+  blockedReason: string;
+  joinedIdentity?: string;
 }
 
 interface SearchChannelsContainerProps {
@@ -127,6 +133,8 @@ export default function SearchChannelsContainer({
   onChatSelected,
   fetchChannels,
 }: SearchChannelsContainerProps) {
+  const groupId = getGroupId();
+  const currentGroupPermissions = useCurrentGroupPermissions(groupId);
   const [allChannels, setAllChannels] = useState<BrowsableChannel[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoadingId, setIsLoadingId] = useState("");
@@ -140,7 +148,6 @@ export default function SearchChannelsContainer({
 
   useEffect(() => {
     const loadChannels = async () => {
-      const groupId = getGroupId();
       if (!groupId) return;
 
       const groupApi = new GroupApiDataSource();
@@ -153,6 +160,7 @@ export default function SearchChannelsContainer({
         listResp.data.map(async (ctxId: string) => {
           let isJoined = false;
           let info = null;
+          let joinedIdentity = "";
 
           try {
             const idResp: ResponseData<FetchContextIdentitiesResponse> =
@@ -160,6 +168,7 @@ export default function SearchChannelsContainer({
             const identities = idResp.data?.data?.identities;
             if (identities && identities.length > 0) {
               isJoined = true;
+              joinedIdentity = identities[0];
               const infoResp = await clientApi.getContextInfo(ctxId, identities[0]);
               if (infoResp.data) info = infoResp.data;
             }
@@ -167,53 +176,127 @@ export default function SearchChannelsContainer({
             log.debug("SearchChannels", `Could not fetch info for ${ctxId}`);
           }
 
-          return { contextId: ctxId, info, isJoined };
+          const visibilityResponse = await groupApi.getContextVisibility(groupId, ctxId);
+          const visibility = visibilityResponse.data?.mode ?? "restricted";
+          const memberIdentity = currentGroupPermissions.memberIdentity;
+
+          let canJoin = isJoined;
+          let blockedReason = "";
+
+          if (!canJoin) {
+            if (visibilityResponse.error) {
+              blockedReason =
+                "This channel's visibility could not be loaded, so join access cannot be determined yet.";
+            } else if (currentGroupPermissions.isAdmin) {
+              canJoin = true;
+            } else if (!memberIdentity) {
+              blockedReason =
+                "This node's workspace identity could not be resolved for the selected workspace.";
+            } else if (visibility === "open") {
+              canJoin = currentGroupPermissions.canJoinOpenContexts;
+              if (!canJoin) {
+                blockedReason =
+                  "Open channel, but your workspace identity does not have permission to join open contexts.";
+              }
+            } else {
+              const allowlistResponse = await groupApi.getContextAllowlist(groupId, ctxId);
+              const allowlist = allowlistResponse.data ?? [];
+              canJoin = allowlist.includes(memberIdentity);
+              if (!canJoin) {
+                blockedReason =
+                  "Restricted channel. Your workspace identity is not on the allowlist.";
+              }
+            }
+          }
+
+          return {
+            contextId: ctxId,
+            info,
+            isJoined,
+            visibility,
+            canJoin,
+            blockedReason,
+            joinedIdentity,
+          };
         }),
       );
 
       setAllChannels(enriched.filter((ch) => !ch.info || ch.info.context_type === "Channel"));
     };
 
-    loadChannels();
-  }, []);
+    void loadChannels();
+  }, [
+    currentGroupPermissions.canJoinOpenContexts,
+    currentGroupPermissions.isAdmin,
+    currentGroupPermissions.memberIdentity,
+    groupId,
+  ]);
 
   const handleJoinChannel = useCallback(
     async (contextId: string) => {
-      const groupId = getGroupId();
       if (!groupId) return;
+
+      const channel = allChannels.find((entry) => entry.contextId === contextId);
+      if (channel && !channel.canJoin && !channel.isJoined) {
+        return;
+      }
 
       setIsLoadingId(contextId);
       try {
         const groupApi = new GroupApiDataSource();
-        await groupApi.joinGroupContext(groupId, { contextId });
+        const joinResponse = await groupApi.joinGroupContext(groupId, { contextId });
+        if (joinResponse.error || !joinResponse.data) {
+          return;
+        }
 
         setAllChannels((prev) =>
           prev.map((ch) =>
-            ch.contextId === contextId ? { ...ch, isJoined: true } : ch,
+            ch.contextId === contextId
+              ? {
+                  ...ch,
+                  isJoined: true,
+                  canJoin: true,
+                  blockedReason: "",
+                  joinedIdentity: joinResponse.data.memberPublicKey,
+                }
+              : ch,
           ),
         );
         fetchChannels();
+        if (channel) {
+          onChatSelected(
+            buildChannelEntryChat({
+              contextId,
+              name: channel.info?.name ?? channel.contextId.substring(0, 8),
+              contextIdentity: joinResponse.data.memberPublicKey,
+              username: "",
+            }),
+          );
+        }
       } catch (err) {
         log.error("SearchChannels", "Failed to join channel", err);
       } finally {
         setIsLoadingId("");
       }
     },
-    [fetchChannels],
+    [allChannels, fetchChannels, groupId, onChatSelected],
   );
 
   const onViewChannel = useCallback(
     (channel: BrowsableChannel) => {
       const displayName = channel.info?.name ?? channel.contextId.substring(0, 8);
-      const chat: ActiveChat = {
-        type: "channel" as ChatType,
-        id: channel.contextId,
-        contextId: channel.contextId,
-        name: displayName,
-        readOnly: false,
-        canJoin: !channel.isJoined,
-      };
-      onChatSelected(chat);
+      if (!channel.joinedIdentity) {
+        return;
+      }
+
+      onChatSelected(
+        buildChannelEntryChat({
+          contextId: channel.contextId,
+          name: displayName,
+          contextIdentity: channel.joinedIdentity,
+          username: "",
+        }),
+      );
     },
     [onChatSelected],
   );
@@ -256,6 +339,14 @@ export default function SearchChannelsContainer({
                     </svg>
                     {displayName}
                   </div>
+                  <div className="creatorText">
+                    {channel.visibility === "open"
+                      ? "Open channel"
+                      : "Restricted channel"}
+                    {!channel.isJoined && !channel.canJoin && channel.blockedReason
+                      ? ` • ${channel.blockedReason}`
+                      : ""}
+                  </div>
                   {channel.info?.description && (
                     <div className="creatorText">{channel.info.description}</div>
                   )}
@@ -266,16 +357,20 @@ export default function SearchChannelsContainer({
                       <Loader size={20} />
                     </div>
                   )}
-                  <Button
-                    onClick={() => onViewChannel(channel)}
-                    variant="secondary"
-                    style={{ border: "none", backgroundColor: "transparent" }}
-                  >
-                    View
-                  </Button>
+                  {channel.isJoined && (
+                    <Button
+                      onClick={() => onViewChannel(channel)}
+                      variant="secondary"
+                      style={{ border: "none", backgroundColor: "transparent" }}
+                    >
+                      View
+                    </Button>
+                  )}
                   {!channel.isJoined && (
                     <Button
-                      disabled={channel.contextId === isLoadingId}
+                      disabled={
+                        channel.contextId === isLoadingId || !channel.canJoin
+                      }
                       variant="primary"
                       onClick={() => handleJoinChannel(channel.contextId)}
                       style={{ width: "74px" }}

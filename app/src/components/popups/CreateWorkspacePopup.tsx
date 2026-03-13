@@ -1,13 +1,22 @@
 import { useState, useCallback } from "react";
 import { styled } from "styled-components";
 import { Button, Input } from "@calimero-network/mero-ui";
+import axios from "axios";
+import {
+  getAppEndpointKey,
+  getAuthConfig,
+} from "@calimero-network/calimero-client";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
-import { getApplicationId, setGroupId } from "../../constants/config";
 import {
-  generateInvitationUrl,
-  generateInvitationDeepLink,
+  getApplicationId,
+  setGroupId,
+  setGroupMemberIdentity,
+} from "../../constants/config";
+import {
+  serializeGroupInvitationPayload,
 } from "../../utils/invitation";
+import GroupInviteModal from "./GroupInviteModal";
 
 const Overlay = styled.div`
   position: fixed;
@@ -85,20 +94,6 @@ const Message = styled.div<{ $type?: "success" | "error" | "info" }>`
         : "rgba(184, 184, 209, 0.1)"};
 `;
 
-const InviteLinkBox = styled.div`
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 0.75rem;
-  margin-bottom: 1rem;
-  word-break: break-all;
-  font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 0.75rem;
-  color: #b8b8d1;
-  max-height: 120px;
-  overflow-y: auto;
-`;
-
 const ButtonGroup = styled.div`
   display: flex;
   gap: 0.5rem;
@@ -125,6 +120,45 @@ interface CreateWorkspacePopupProps {
   onCancel: () => void;
 }
 
+const DEFAULT_NODE_ENDPOINT = "http://localhost:2428";
+
+function getAuthHeaders(): Record<string, string> {
+  const authConfig = getAuthConfig();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (authConfig?.jwtToken) {
+    headers.Authorization = `Bearer ${authConfig.jwtToken}`;
+  }
+  return headers;
+}
+
+async function resolveApplicationId(preferredId: string): Promise<string> {
+  const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
+  const response = await axios.get(`${nodeEndpoint}/admin-api/applications`, {
+    headers: getAuthHeaders(),
+  });
+
+  const apps = response.data?.data?.apps;
+  if (!Array.isArray(apps) || apps.length === 0) {
+    throw new Error("No installed applications found on this node.");
+  }
+
+  const appIds = apps
+    .map((app: unknown) => {
+      if (!app || typeof app !== "object") return "";
+      const typedApp = app as { id?: string; applicationId?: string };
+      return typedApp.id || typedApp.applicationId || "";
+    })
+    .filter((id: string) => id.length > 0);
+
+  if (appIds.includes(preferredId)) {
+    return preferredId;
+  }
+
+  return appIds[0];
+}
+
 export default function CreateWorkspacePopup({
   onSuccess,
   onCancel,
@@ -134,7 +168,6 @@ export default function CreateWorkspacePopup({
   const [errorMessage, setErrorMessage] = useState("");
   const [invitePayload, setInvitePayload] = useState("");
   const [createdGroupId, setCreatedGroupId] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const stepsCompleted = step === "form" ? 0 : step === "creating" ? 1 : step === "invite" ? 3 : 0;
 
@@ -144,10 +177,14 @@ export default function CreateWorkspacePopup({
 
     const groupApi = new GroupApiDataSource();
     const nodeApi = new ContextApiDataSource();
-    const applicationId = getApplicationId();
+    const configuredApplicationId = getApplicationId();
 
     try {
-      const groupResult = await groupApi.createGroup({ applicationId });
+      const applicationId = await resolveApplicationId(configuredApplicationId);
+      const groupResult = await groupApi.createGroup({
+        applicationId,
+        upgradePolicy: "LazyOnAccess",
+      });
       if (groupResult.error || !groupResult.data) {
         throw new Error(groupResult.error?.message || "Failed to create group");
       }
@@ -155,13 +192,18 @@ export default function CreateWorkspacePopup({
       setCreatedGroupId(groupId);
       setGroupId(groupId);
 
+      const identityResult = await groupApi.resolveCurrentMemberIdentity(groupId);
+      if (identityResult.data?.memberIdentity) {
+        setGroupMemberIdentity(groupId, identityResult.data.memberIdentity);
+      }
+
       const contextResult = await nodeApi.createGroupContext({
         applicationId,
         protocol: "near",
         groupId,
         initializationParams: {
           name: workspaceName.trim() || "general",
-          type: "channel",
+          context_type: "Channel",
           description: "Default channel",
           created_at: Date.now(),
         },
@@ -178,7 +220,9 @@ export default function CreateWorkspacePopup({
           inviteResult.error?.message || "Failed to create invitation",
         );
       }
-      setInvitePayload(inviteResult.data.payload);
+      setInvitePayload(
+        serializeGroupInvitationPayload(inviteResult.data.invitation),
+      );
       setStep("invite");
     } catch (error) {
       console.error("Create workspace failed:", error);
@@ -189,33 +233,23 @@ export default function CreateWorkspacePopup({
     }
   }, [workspaceName]);
 
-  const handleCopyWebLink = async () => {
-    try {
-      const url = generateInvitationUrl(invitePayload);
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const url = generateInvitationUrl(invitePayload);
-      prompt("Copy this invite link:", url);
-    }
-  };
-
-  const handleCopyDesktopLink = async () => {
-    try {
-      const url = generateInvitationDeepLink(invitePayload);
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const url = generateInvitationDeepLink(invitePayload);
-      prompt("Copy this invite link:", url);
-    }
-  };
-
   const handleDone = () => {
     onSuccess(createdGroupId);
   };
+
+  if (step === "invite") {
+    return (
+      <GroupInviteModal
+        groupId={createdGroupId}
+        isOpen
+        onClose={handleDone}
+        initialInvitationPayload={invitePayload}
+        title="Workspace created!"
+        subtitle="Your workspace is ready. Share an invitation link when you want someone to join the workspace."
+        successMessage="Share this workspace invitation with the people you want to invite."
+      />
+    );
+  }
 
   return (
     <Overlay>
@@ -223,7 +257,7 @@ export default function CreateWorkspacePopup({
         <StepIndicator>
           <StepDot $active={step === "form"} $done={stepsCompleted > 0} />
           <StepDot $active={step === "creating"} $done={stepsCompleted > 1} />
-          <StepDot $active={step === "invite"} $done={stepsCompleted > 2} />
+          <StepDot $active={false} $done={stepsCompleted > 2} />
         </StepIndicator>
 
         {step === "form" && (
@@ -264,42 +298,6 @@ export default function CreateWorkspacePopup({
             <Message $type="info">
               Setting up your group, default channel, and invitation. Please wait.
             </Message>
-          </>
-        )}
-
-        {step === "invite" && (
-          <>
-            <Title>Workspace created!</Title>
-            <Message $type="success">
-              Your workspace is ready. Share the invite link with members.
-            </Message>
-            <Label>Invite link (web)</Label>
-            <InviteLinkBox>{generateInvitationUrl(invitePayload)}</InviteLinkBox>
-            <ButtonGroup>
-              <Button
-                onClick={handleCopyWebLink}
-                variant="secondary"
-                style={{ flex: 1 }}
-              >
-                {copied ? "Copied!" : "Copy web link"}
-              </Button>
-              <Button
-                onClick={handleCopyDesktopLink}
-                variant="secondary"
-                style={{ flex: 1 }}
-              >
-                Copy desktop link
-              </Button>
-            </ButtonGroup>
-            <ButtonGroup>
-              <Button
-                onClick={handleDone}
-                variant="primary"
-                style={{ flex: 1 }}
-              >
-                Done
-              </Button>
-            </ButtonGroup>
           </>
         )}
 

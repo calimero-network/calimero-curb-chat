@@ -9,11 +9,26 @@ export type UpgradePolicy =
 
 export interface CreateGroupRequest {
   applicationId: string;
-  upgradePolicy?: UpgradePolicy;
+  upgradePolicy: UpgradePolicy;
 }
 
 export interface CreateGroupResponse {
   groupId: string;
+}
+
+export interface GroupInvitationFromAdmin {
+  inviter_identity: string;
+  group_id: string;
+  expiration_height: number;
+  secret_salt: number[];
+  protocol: string;
+  network: string;
+  contract_id: string;
+}
+
+export interface SignedGroupOpenInvitation {
+  invitation: GroupInvitationFromAdmin;
+  inviter_signature: string;
 }
 
 export interface GroupInfo {
@@ -54,17 +69,16 @@ export interface GroupUpgradeStatus {
 }
 
 export interface CreateInvitationRequest {
-  inviteeIdentity?: string;
-  expiration?: number;
+  requester?: string;
   expirationBlockHeight?: number;
 }
 
 export interface CreateInvitationResponse {
-  payload: string;
+  invitation: SignedGroupOpenInvitation;
 }
 
 export interface JoinGroupRequest {
-  invitationPayload: string;
+  invitation: SignedGroupOpenInvitation;
 }
 
 export interface JoinGroupResponse {

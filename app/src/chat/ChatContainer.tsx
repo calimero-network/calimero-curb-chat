@@ -15,6 +15,7 @@ import type {
 } from "../types/Common";
 import { MessageStatus } from "../types/Common";
 import JoinChannel from "./JoinChannel";
+import ChannelProfileSetup from "./ChannelProfileSetup";
 import ChatDisplaySplit from "./ChatDisplaySplit";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import {
@@ -660,7 +661,9 @@ function ChatContainer({
           searchContextId={searchContextId}
         />
       )}
-      {activeChat.canJoin && activeChat.type === "channel" ? (
+      {activeChat.requiresProfileSetup && activeChat.type === "channel" ? (
+        <ChannelProfileSetup activeChat={activeChat} onCompleted={onJoinedChat} />
+      ) : activeChat.canJoin && activeChat.type === "channel" ? (
         <JoinChannel
           channelMeta={channelMeta}
           activeChat={activeChat}
@@ -745,6 +748,10 @@ export default memo(ChatContainer, (prevProps, nextProps) => {
   return (
     prevProps.activeChat.id === nextProps.activeChat.id &&
     prevProps.activeChat.contextId === nextProps.activeChat.contextId &&
+    prevProps.activeChat.contextIdentity === nextProps.activeChat.contextIdentity &&
+    prevProps.activeChat.canJoin === nextProps.activeChat.canJoin &&
+    prevProps.activeChat.requiresProfileSetup ===
+      nextProps.activeChat.requiresProfileSetup &&
     prevProps.incomingMessages === nextProps.incomingMessages &&
     prevProps.incomingThreadMessages === nextProps.incomingThreadMessages &&
     prevProps.openThread?.id === nextProps.openThread?.id &&

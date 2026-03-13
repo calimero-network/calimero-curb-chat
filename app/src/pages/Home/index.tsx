@@ -34,9 +34,16 @@ import { useThreadMessages } from "../../hooks/useThreadMessages";
 import { useWebSocket, useWebSocketEvents } from "../../contexts/WebSocketContext";
 import { useChatHandlers } from "../../hooks/useChatHandlers";
 import { getGroupId, getApplicationId } from "../../constants/config";
+import { StorageHelper } from "../../utils/storage";
+import { getAppEntryState } from "../../utils/appEntry";
+import {
+  getCachedUsernameForIdentity,
+  setCachedUsernameForIdentity,
+} from "../../utils/chatProfileCache";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
+  const currentGroupId = getGroupId();
   const [isOpenSearchChannel, setIsOpenSearchChannel] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
@@ -79,8 +86,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const chatMembersHook = useChatMembers();
   const channelMembersHook = useChannelMembers();
 
-  const messagesRef = mainMessages.messagesRef;
-  const incomingMessages = mainMessages.incomingMessages;
   const addOptimisticMessage = mainMessages.addOptimistic;
   const addOptimisticThreadMessage = threadMessages.addOptimistic;
 
@@ -109,6 +114,24 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   useEffect(() => {
     currentOpenThreadRef.current = currentOpenThread;
   }, [currentOpenThread]);
+
+  const entryState = getAppEntryState({
+    isAuthenticated: true,
+    isConfigSet,
+    groupId: currentGroupId,
+    activeChat,
+  });
+
+  useEffect(() => {
+    if (entryState === "browse-channels") {
+      setIsOpenSearchChannel(true);
+      return;
+    }
+
+    if (entryState === "complete-profile" || entryState === "chat") {
+      setIsOpenSearchChannel(false);
+    }
+  }, [entryState]);
 
   const getChannelUsersRef = useRef(channelMembersHook.fetchChannelMembers);
   const getNonInvitedUsersRef = useRef(channelMembersHook.fetchNonInvitedUsers);
@@ -145,12 +168,21 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     setCurrentOpenThread(undefined);
 
     // For group-based channels and DMs, switch context identity
-    if ((selectedChat.type === "channel" || selectedChat.type === "direct_message") && selectedChat.contextId) {
+    let resolvedChat = selectedChat;
+
+    if (
+      (selectedChat.type === "channel" || selectedChat.type === "direct_message") &&
+      selectedChat.contextId
+    ) {
       const identity =
         selectedChat.contextIdentity ||
         groupContextsHook.getIdentity(selectedChat.contextId);
 
       if (identity) {
+        resolvedChat = {
+          ...selectedChat,
+          contextIdentity: identity,
+        };
         setContextId(selectedChat.contextId);
         setExecutorPublicKey(identity);
         log.info(
@@ -166,23 +198,68 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       }
     }
 
-    setIsOpenSearchChannel(false);
-    setActiveChat(selectedChat);
-    activeChatRef.current = selectedChat;
-    setIsSidebarOpen(false);
-    updateSessionChat(selectedChat);
+    if (
+      resolvedChat.type === "channel" &&
+      resolvedChat.contextId &&
+      resolvedChat.contextIdentity
+    ) {
+      const usernameResponse = await new ClientApiDataSource().getUsername({
+        contextId: resolvedChat.contextId,
+        executorPublicKey: resolvedChat.contextIdentity,
+        userId: resolvedChat.contextIdentity,
+      });
 
-    const chatId = selectedChat.id || selectedChat.name;
-    if (lastSelectedChatIdRef.current !== chatId) {
-      lastSelectedChatIdRef.current = chatId;
-
-      if (selectedChat.type === "channel") {
-        getChannelUsers(selectedChat.id);
-        getNonInvitedUsers(selectedChat.id);
+      if (usernameResponse.data) {
+        StorageHelper.setItem("chat-username", usernameResponse.data);
+        setCachedUsernameForIdentity(
+          resolvedChat.contextIdentity,
+          usernameResponse.data,
+        );
+        resolvedChat = {
+          ...resolvedChat,
+          canJoin: false,
+          requiresProfileSetup: false,
+        };
+      } else if (usernameResponse.error?.code === 404) {
+        resolvedChat = {
+          ...resolvedChat,
+          canJoin: false,
+          requiresProfileSetup: true,
+        };
+      } else {
+        const cachedUsername = getCachedUsernameForIdentity(
+          resolvedChat.contextIdentity,
+        );
+        if (cachedUsername) {
+          StorageHelper.setItem("chat-username", cachedUsername);
+        }
+        resolvedChat = {
+          ...resolvedChat,
+          canJoin: false,
+          requiresProfileSetup: !cachedUsername,
+        };
       }
     }
 
-    log.debug("Home", `Active chat changed to: ${selectedChat.name} (context: ${selectedChat.contextId || "n/a"})`);
+    setActiveChat(resolvedChat);
+    activeChatRef.current = resolvedChat;
+    setIsSidebarOpen(false);
+    updateSessionChat(resolvedChat);
+
+    const chatId = resolvedChat.id || resolvedChat.name;
+    if (lastSelectedChatIdRef.current !== chatId) {
+      lastSelectedChatIdRef.current = chatId;
+
+      if (resolvedChat.type === "channel") {
+        getChannelUsers(resolvedChat.id);
+        getNonInvitedUsers(resolvedChat.id);
+      }
+    }
+
+    log.debug(
+      "Home",
+      `Active chat changed to: ${resolvedChat.name} (context: ${resolvedChat.contextId || "n/a"})`,
+    );
   };
 
   const openSearchPage = useCallback(() => {
@@ -211,22 +288,18 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   useEffect(() => {
     const storedSession: ActiveChat | null = getStoredSession();
-    if (!storedSession) return;
-
-    setActiveChat(storedSession);
-    activeChatRef.current = storedSession;
-
-    if (storedSession.type === "channel") {
-      getChannelUsers(storedSession.name);
-      getNonInvitedUsers(storedSession.name);
+    if (!storedSession) {
+      return;
     }
 
     mainMessages.clear();
     threadMessages.clear();
 
-    setTimeout(() => {
-      updateSelectedActiveChat(storedSession);
+    const timer = setTimeout(() => {
+      void updateSelectedActiveChat(storedSession);
     }, SUBSCRIPTION_INIT_DELAY_MS);
+
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -386,20 +459,16 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   // Group-based channels (each context = one channel)
   const channels: GroupContextChannel[] = groupContextsHook.channels.filter(
-    (ch) => !ch.info || ch.info.context_type === "Channel",
+    (ch) => (ch.isJoined ?? false) && (!ch.info || ch.info.context_type === "Channel"),
   );
 
   const privateDMs = dmsHook.dms;
 
   const chatMembers = chatMembersHook.members;
-  const fetchChatMembers = chatMembersHook.fetchMembers;
 
   const {
-    handleMessageUpdates,
     handleThreadMessageUpdates,
-    handleDMUpdates,
     handleStateMutation,
-    handleExecutionEvents,
   } = useChatHandlers(activeChatRef, activeChat, chatHandlersRefs);
 
   useWebSocketEvents(useCallback(async (event: WebSocketEvent) => {
@@ -453,13 +522,20 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     const contextIdsToSubscribe: string[] = [];
 
     // Add all group context IDs (each channel is its own context now)
-    if (groupContextsHook.contextIds.length > 0) {
-      groupContextsHook.contextIds.forEach((id) => {
+    const joinedChannelContextIds = groupContextsHook.channels
+      .filter((channel) => channel.isJoined)
+      .map((channel) => channel.contextId);
+
+    if (joinedChannelContextIds.length > 0) {
+      joinedChannelContextIds.forEach((id) => {
         if (id && !contextIdsToSubscribe.includes(id)) {
           contextIdsToSubscribe.push(id);
         }
       });
-      log.debug("Home", `Adding ${groupContextsHook.contextIds.length} group contexts for subscription`);
+      log.debug(
+        "Home",
+        `Adding ${joinedChannelContextIds.length} joined group contexts for subscription`,
+      );
     }
 
     // Add DM contexts (group-based DMs are also group contexts)
@@ -475,14 +551,14 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     if (contextIdsToSubscribe.length > 0) {
       log.info(
         "Home",
-        `Subscribing to ${contextIdsToSubscribe.length} contexts (${groupContextsHook.contextIds.length} channels + ${privateDMs.length} DMs)`,
+        `Subscribing to ${contextIdsToSubscribe.length} contexts (${joinedChannelContextIds.length} channels + ${privateDMs.length} DMs)`,
         { totalContexts: contextIdsToSubscribe.length },
       );
       webSocket.subscribeToContexts(contextIdsToSubscribe);
     } else {
       log.warn("Home", "No contexts to subscribe to");
     }
-  }, [app, groupContextsHook.contextIds, privateDMs, webSocket]);
+  }, [app, groupContextsHook.channels, privateDMs, webSocket]);
 
   const onJoinedChat = async () => {
     fetchGroupChannels();
@@ -490,6 +566,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     const activeChatCopy = { ...activeChat };
     if (activeChatCopy && activeChat) {
       activeChatCopy.canJoin = false;
+      activeChatCopy.requiresProfileSetup = false;
       activeChatCopy.type = activeChat.type;
       activeChatCopy.id = activeChat.id;
       activeChatCopy.name = activeChat.name;
@@ -497,6 +574,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
     setActiveChat(activeChatCopy as ActiveChat);
     activeChatRef.current = activeChatCopy as ActiveChat;
+    updateSessionChat(activeChatCopy as ActiveChat);
   };
 
   const loadPrevMessages = useCallback(

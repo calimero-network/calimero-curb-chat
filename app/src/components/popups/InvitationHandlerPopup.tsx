@@ -17,7 +17,11 @@ import {
   getInvitationFromStorage,
 } from "../../utils/invitation";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
-import { setGroupId } from "../../constants/config";
+import {
+  setGroupId,
+  setGroupMemberIdentity,
+} from "../../constants/config";
+import { parseGroupInvitationPayload } from "../../utils/invitation";
 
 const Overlay = styled.div`
   position: fixed;
@@ -80,7 +84,7 @@ const ButtonGroup = styled.div`
 type Status =
   | "joining"
   | "syncing"
-  | "joining-context"
+  | "discovering-contexts"
   | "syncing-context"
   | "error";
 
@@ -94,27 +98,14 @@ interface InvitationHandlerPopupProps {
  * context invitation.
  *
  * Legacy context invitations are JSON objects (SignedOpenInvitation) with
- * `invitation` and `inviter_signature` fields.
+ * `invitation` and `invitee_signature` fields.
  *
- * Group invitations are opaque Base58-encoded Borsh blobs (not valid JSON).
- * If the payload doesn't parse as JSON, or parses as JSON but lacks the
- * context invitation shape, treat it as a group invitation.
+ * Group invitations are transparent JSON with `invitation` and
+ * `inviter_signature` fields. Legacy context invitations also use JSON, so we
+ * inspect the payload shape instead of assuming that JSON always means context.
  */
 function isGroupInvitation(payload: string): boolean {
-  const trimmed = payload.trim();
-  try {
-    const parsed = JSON.parse(trimmed);
-    const inner = parsed.data ?? parsed;
-    if (inner.invitation && inner.inviter_signature) {
-      return false;
-    }
-    if (inner.groupId || inner.group_id) {
-      return true;
-    }
-    return true;
-  } catch {
-    return true;
-  }
+  return !!parseGroupInvitationPayload(payload);
 }
 
 export default function InvitationHandlerPopup({
@@ -134,23 +125,30 @@ export default function InvitationHandlerPopup({
       setStatus("joining");
       setStatusMessage("Joining workspace...");
 
+      const invitation = parseGroupInvitationPayload(invitationPayload);
+      if (!invitation) {
+        throw new Error("Invalid workspace invitation");
+      }
+
       const joinResult = await groupApi.joinGroup({
-        invitationPayload,
+        invitation,
       });
       if (joinResult.error || !joinResult.data) {
         throw new Error(
           joinResult.error?.message || "Failed to join workspace",
         );
       }
-      const { groupId } = joinResult.data;
+      const { groupId, memberIdentity } = joinResult.data;
       setGroupId(groupId);
+      setGroupMemberIdentity(groupId, memberIdentity);
 
       setStatus("syncing");
       setStatusMessage("Syncing workspace data...");
 
       await groupApi.syncGroup(groupId);
 
-      setStatusMessage("Looking for channels...");
+      setStatus("discovering-contexts");
+      setStatusMessage("Loading workspace channels...");
       const contextsResult = await groupApi.listGroupContexts(groupId);
       if (contextsResult.error || !contextsResult.data) {
         throw new Error(
@@ -159,88 +157,13 @@ export default function InvitationHandlerPopup({
       }
 
       const contextIds = contextsResult.data;
-      if (contextIds.length === 0) {
-        clearInvitationFromStorage();
-        onSuccess();
-        return;
-      }
-
-      setStatus("joining-context");
-      setStatusMessage("Joining default channel...");
-
-      const defaultContextId = contextIds[0];
-      const joinCtxResult = await groupApi.joinGroupContext(groupId, {
-        contextId: defaultContextId,
-      });
-      if (joinCtxResult.error || !joinCtxResult.data) {
-        throw new Error(
-          joinCtxResult.error?.message || "Failed to join default channel",
-        );
-      }
-
-      setContextId(defaultContextId);
-      setExecutorPublicKey(joinCtxResult.data.memberPublicKey);
-
-      setStatus("syncing-context");
-      setStatusMessage("Waiting for channel to sync...");
-
-      await waitForContextSync(defaultContextId);
-    },
-    [onSuccess],
-  );
-
-  const joinContextFlow = useCallback(
-    async (invitationPayload: string) => {
-      setStatus("joining");
-      setStatusMessage("Creating identity...");
-
-      const identityResponse: ResponseData<NodeIdentity> = await apiClient
-        .node()
-        .createNewIdentity();
-      if (identityResponse.error || !identityResponse.data) {
-        throw new Error(
-          identityResponse.error?.message ||
-            "Failed to create identity for invitation",
-        );
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const identityData =
-        (identityResponse.data as any).data ?? identityResponse.data;
-      const executorPk: string = identityData.publicKey;
-
-      setStatusMessage("Joining context...");
-
-      const parsed = JSON.parse(invitationPayload.trim());
-      const signedInvitation: SignedOpenInvitation = parsed.data ?? parsed;
-
-      const joinResponse: ResponseData<JoinContextResponse> = await apiClient
-        .node()
-        .joinContextByOpenInvitation(signedInvitation, executorPk);
-      if (joinResponse.error || !joinResponse.data) {
-        throw new Error(
-          joinResponse.error?.message || "Failed to join context",
-        );
-      }
-
-      const verifyResponse = await apiClient
-        .node()
-        .getContext(joinResponse.data.contextId);
-      if (verifyResponse.error || !verifyResponse.data) {
-        throw new Error("Failed to verify context");
-      }
-
-      localStorage.setItem(
-        "new-context-identity",
-        JSON.stringify(identityData),
+      setStatusMessage(
+        contextIds.length > 0
+          ? "Workspace joined. Choose a channel next."
+          : "Workspace joined. No channels are available yet.",
       );
-      setContextId(joinResponse.data.contextId);
-      setExecutorPublicKey(executorPk);
-
-      setStatus("syncing-context");
-      setStatusMessage("Waiting for context to sync...");
-
-      await waitForContextSync(joinResponse.data.contextId);
+      clearInvitationFromStorage();
+      onSuccess();
     },
     [onSuccess],
   );
@@ -289,6 +212,66 @@ export default function InvitationHandlerPopup({
         setStatus("error");
       }),
     [onSuccess],
+  );
+
+  const joinContextFlow = useCallback(
+    async (invitationPayload: string) => {
+      setStatus("joining");
+      setStatusMessage("Creating identity...");
+
+      const identityResponse: ResponseData<NodeIdentity> = await apiClient
+        .node()
+        .createNewIdentity();
+      if (identityResponse.error || !identityResponse.data) {
+        throw new Error(
+          identityResponse.error?.message ||
+            "Failed to create identity for invitation",
+        );
+      }
+
+      const identityPayload = identityResponse.data as
+        | NodeIdentity
+        | { data?: NodeIdentity };
+      const identityData: NodeIdentity =
+        "data" in identityPayload && identityPayload.data
+          ? identityPayload.data
+          : (identityPayload as NodeIdentity);
+      const executorPk: string = identityData.publicKey;
+
+      setStatusMessage("Joining context...");
+
+      const parsed = JSON.parse(invitationPayload.trim());
+      const signedInvitation: SignedOpenInvitation = parsed.data ?? parsed;
+
+      const joinResponse: ResponseData<JoinContextResponse> = await apiClient
+        .node()
+        .joinContextByOpenInvitation(signedInvitation, executorPk);
+      if (joinResponse.error || !joinResponse.data) {
+        throw new Error(
+          joinResponse.error?.message || "Failed to join context",
+        );
+      }
+
+      const verifyResponse = await apiClient
+        .node()
+        .getContext(joinResponse.data.contextId);
+      if (verifyResponse.error || !verifyResponse.data) {
+        throw new Error("Failed to verify context");
+      }
+
+      localStorage.setItem(
+        "new-context-identity",
+        JSON.stringify(identityData),
+      );
+      setContextId(joinResponse.data.contextId);
+      setExecutorPublicKey(executorPk);
+
+      setStatus("syncing-context");
+      setStatusMessage("Waiting for context to sync...");
+
+      await waitForContextSync(joinResponse.data.contextId);
+    },
+    [waitForContextSync],
   );
 
   const processInvitation = useCallback(async () => {
@@ -346,8 +329,8 @@ export default function InvitationHandlerPopup({
                 ? "Joining..."
                 : status === "syncing"
                   ? "Syncing workspace..."
-                  : status === "joining-context"
-                    ? "Joining channel..."
+                  : status === "discovering-contexts"
+                    ? "Loading channels..."
                     : "Syncing channel..."}
             </Title>
             <Message $type="info">{statusMessage}</Message>
