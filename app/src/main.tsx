@@ -35,6 +35,27 @@ import 'react-photo-view/dist/react-photo-view.css';
   }
 })();
 
+const CALIMERO_APP_ID_KEY = "calimero-application-id";
+
+function getExplicitApplicationId(): string {
+  const fromSearch = new URLSearchParams(window.location.search).get("app-id")?.trim();
+  if (fromSearch) {
+    return fromSearch;
+  }
+
+  const fromHash = new URLSearchParams(window.location.hash.slice(1)).get("app-id")?.trim();
+  if (fromHash) {
+    return fromHash;
+  }
+
+  return (import.meta.env.VITE_APPLICATION_ID as string | undefined)?.trim() || "";
+}
+
+const explicitApplicationId = getExplicitApplicationId();
+if (explicitApplicationId && !localStorage.getItem(CALIMERO_APP_ID_KEY)) {
+  localStorage.setItem(CALIMERO_APP_ID_KEY, explicitApplicationId);
+}
+
 // Register service worker for PWA
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

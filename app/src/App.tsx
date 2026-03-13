@@ -11,8 +11,8 @@ import {
 import { ToastProvider, useToast } from "./contexts/ToastContext";
 import { ToastManager } from "./components/common/ToastManager";
 import { extractInvitationFromUrl, saveInvitationToStorage } from "./utils/invitation";
-import { StorageHelper } from "./utils/storage";
-import { getNodeUrlFromUrl } from "./constants/config";
+import { getGroupId, getNodeUrlFromUrl } from "./constants/config";
+import { getAppEntryState } from "./utils/appEntry";
 
 // Lazy load pages for better performance
 const Login = lazy(() => import("./pages/Login"));
@@ -79,8 +79,6 @@ function App() {
       const authConfig = getAuthConfig();
       const hasRequiredConfig =
         authConfig?.appEndpointKey &&
-        authConfig?.contextId &&
-        authConfig?.executorPublicKey &&
         authConfig?.jwtToken;
 
       setIsConfigSet(Boolean(hasRequiredConfig));
@@ -89,7 +87,7 @@ function App() {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, []); // Empty deps - only run once on mount
+  }, [location.pathname, navigate]);
 
   // Check for expired session on app initialization and initialize session activity
   useEffect(() => {
@@ -106,6 +104,15 @@ function App() {
     }
   }, [isAuthenticated, logout]);
 
+  const appEntryState = getAppEntryState({
+    isAuthenticated,
+    isConfigSet,
+    groupId: getGroupId(),
+    activeChat: null,
+  });
+
+  const canEnterApp = appEntryState !== "login";
+
   return (
     <ToastProvider>
       <Suspense fallback={<LoadingSpinner />}>
@@ -113,7 +120,7 @@ function App() {
           <Route
             path="/login"
             element={
-              isAuthenticated && isConfigSet && StorageHelper.getItem("chat-username") ? (
+              canEnterApp ? (
                 <Navigate to="/" replace />
               ) : (
                 <Login
@@ -128,7 +135,7 @@ function App() {
             element={
               isLoading ? (
                 <LoadingSpinner />
-              ) : isAuthenticated && isConfigSet && StorageHelper.getItem("chat-username") ? (
+              ) : canEnterApp ? (
                 <IdleTimeoutWrapper>
                   <Home isConfigSet={isConfigSet} />
                 </IdleTimeoutWrapper>

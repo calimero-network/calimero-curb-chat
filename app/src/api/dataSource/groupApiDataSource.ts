@@ -1,4 +1,5 @@
 import axios from "axios";
+import bs58 from "bs58";
 import {
   getAppEndpointKey,
   getAuthConfig,
@@ -12,6 +13,7 @@ import type {
   CreateInvitationResponse,
   GroupApi,
   GroupInfo,
+  SignedGroupOpenInvitation,
   GroupMember,
   GroupSummary,
   GroupUpgradeStatus,
@@ -30,6 +32,8 @@ import type {
   UpgradeGroupRequest,
   UpgradeGroupResponse,
 } from "../groupApi";
+import { parseGroupInvitationPayload } from "../../utils/invitation";
+import { resolveCurrentGroupMemberIdentity } from "../../utils/groupMemberIdentity";
 
 const DEFAULT_NODE_ENDPOINT = "http://localhost:2428";
 
@@ -62,7 +66,83 @@ function httpFail<T>(status: number, statusText: string): Result<T> {
   return fail(status, statusText);
 }
 
+function isHexContextId(value: string): boolean {
+  return /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+function normalizeContextId(value: string): string {
+  if (!isHexContextId(value)) {
+    return value;
+  }
+
+  try {
+    const bytes = new Uint8Array(value.length / 2);
+    for (let index = 0; index < value.length; index += 2) {
+      bytes[index / 2] = parseInt(value.slice(index, index + 2), 16);
+    }
+    return bs58.encode(bytes);
+  } catch {
+    return value;
+  }
+}
+
+function isSignedGroupOpenInvitation(
+  value: unknown,
+): value is SignedGroupOpenInvitation {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const typedValue = value as {
+    invitation?: Record<string, unknown>;
+    inviterSignature?: unknown;
+    inviter_signature?: unknown;
+  };
+
+  return (
+    (typeof typedValue.inviterSignature === "string" ||
+      typeof typedValue.inviter_signature === "string") &&
+    !!typedValue.invitation &&
+    typeof typedValue.invitation === "object"
+  );
+}
+
+function normalizeGroupInvitation(
+  value: unknown,
+): SignedGroupOpenInvitation | null {
+  if (isSignedGroupOpenInvitation(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return parseGroupInvitationPayload(value);
+  }
+
+  if (value && typeof value === "object") {
+    const typedValue = value as { invitation?: unknown; payload?: unknown };
+    if (typedValue.invitation && isSignedGroupOpenInvitation(typedValue.invitation)) {
+      return typedValue.invitation;
+    }
+    if (typeof typedValue.payload === "string") {
+      return parseGroupInvitationPayload(typedValue.payload);
+    }
+  }
+
+  return null;
+}
+
 function catchError<T>(context: string, error: unknown): Result<T> {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status ?? 500;
+    const responseError = error.response?.data?.error;
+    const message =
+      typeof responseError === "string"
+        ? responseError
+        : error.message || `An unexpected error occurred during ${context}`;
+    console.error(`${context} failed:`, error);
+    return fail(status, message);
+  }
+
   const message =
     error instanceof Error
       ? error.message
@@ -140,9 +220,16 @@ export class GroupApiDataSource implements GroupApi {
         request ?? {},
         { headers: getAuthHeaders() },
       );
-      return response.status === 200
-        ? ok(response.data.data)
-        : httpFail(response.status, response.statusText);
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+
+      const invitation = normalizeGroupInvitation(response.data.data);
+      if (!invitation) {
+        return fail(500, "Invalid workspace invitation response");
+      }
+
+      return ok({ invitation });
     } catch (error) {
       return catchError("createInvitation", error);
     }
@@ -154,7 +241,9 @@ export class GroupApiDataSource implements GroupApi {
     try {
       const response = await axios.post(
         `${this.base()}/groups/join`,
-        request,
+        {
+          invitation: request.invitation,
+        },
         { headers: getAuthHeaders() },
       );
       return response.status === 200
@@ -177,6 +266,41 @@ export class GroupApiDataSource implements GroupApi {
     } catch (error) {
       return catchError("listMembers", error);
     }
+  }
+
+  async resolveCurrentMemberIdentity(
+    groupId: string,
+    storedMemberIdentity = "",
+  ): ApiResponse<{ memberIdentity: string; members: GroupMember[] }> {
+    const membersResponse = await this.listMembers(groupId);
+    if (membersResponse.error || !membersResponse.data) {
+      return {
+        data: null,
+        error:
+          membersResponse.error ??
+          {
+            code: 500,
+            message: "Failed to list workspace members",
+          },
+      };
+    }
+
+    const resolution = resolveCurrentGroupMemberIdentity({
+      members: membersResponse.data,
+      storedMemberIdentity,
+    });
+
+    if (!resolution.memberIdentity) {
+      return fail(
+        404,
+        "Could not resolve this node's workspace identity. Rejoin this workspace from an invitation on this device or select a workspace already joined here.",
+      );
+    }
+
+    return ok({
+      memberIdentity: resolution.memberIdentity,
+      members: membersResponse.data,
+    });
   }
 
   async removeMember(
@@ -205,7 +329,7 @@ export class GroupApiDataSource implements GroupApi {
         { headers: getAuthHeaders() },
       );
       return response.status === 200
-        ? ok(response.data.data)
+        ? ok((response.data.data as string[]).map((contextId) => normalizeContextId(contextId)))
         : httpFail(response.status, response.statusText);
     } catch (error) {
       return catchError("listGroupContexts", error);
@@ -217,9 +341,12 @@ export class GroupApiDataSource implements GroupApi {
     request: JoinGroupContextRequest,
   ): ApiResponse<JoinGroupContextResponse> {
     try {
+      const normalizedRequest: JoinGroupContextRequest = {
+        contextId: normalizeContextId(request.contextId),
+      };
       const response = await axios.post(
         `${this.base()}/groups/${groupId}/join-context`,
-        request,
+        normalizedRequest,
         { headers: getAuthHeaders() },
       );
       return response.status === 200

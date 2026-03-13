@@ -73,7 +73,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     const nodeApi = new ContextApiDataSource();
     const initParams = {
       name: channelName,
-      type: "channel",
+      context_type: "Channel",
       description: "",
       created_at: Math.floor(Date.now() / 1000),
     };

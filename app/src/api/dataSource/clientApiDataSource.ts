@@ -53,14 +53,24 @@ export function getJsonRpcClient() {
 export class ClientApiDataSource implements ClientApi {
   async joinChat(props: JoinChatProps): ApiResponse<string> {
     try {
+      if (!props.username?.trim()) {
+        return {
+          data: null,
+          error: {
+            code: 400,
+            message: "Username is required",
+          },
+        };
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<any, string>(
         {
           contextId: props.contextId || getContextId() || "",
-          method: ClientMethod.JOIN_CHAT,
+          method: "set_profile",
           argsJson: {
-            username: props.username,
-            is_dm: props.isDM || false,
+            username: props.username.trim(),
+            avatar: null,
           },
           executorPublicKey:
             (props.isDM ? props.executor : (props.executorPublicKey || getExecutorPublicKey())) || "",
@@ -1449,13 +1459,14 @@ export class ClientApiDataSource implements ClientApi {
   async getUsername(props: GetUsernameProps): ApiResponse<string> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
+      const response = await getJsonRpcClient().execute<
+        any,
+        { identity: string; username: string; avatar?: string }[]
+      >(
         {
           contextId: props.contextId || getContextId() || "",
-          method: ClientMethod.GET_USERNAME,
-          argsJson: {
-            user_id: props.userId,
-          },
+          method: "get_profiles",
+          argsJson: {},
           executorPublicKey: props.executorPublicKey || getExecutorPublicKey() || "",
         },
         {
@@ -1475,8 +1486,23 @@ export class ClientApiDataSource implements ClientApi {
           },
         };
       }
+
+      const profiles = Array.isArray(response?.result?.output)
+        ? response.result.output
+        : [];
+      const match = profiles.find((profile) => profile.identity === props.userId);
+      if (!match) {
+        return {
+          data: null,
+          error: {
+            code: 404,
+            message: "Username not found for this identity",
+          },
+        };
+      }
+
       return {
-        data: response?.result.output as string,
+        data: match.username,
         error: null,
       };
     } catch (error) {

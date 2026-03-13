@@ -37,6 +37,7 @@ export function getNodeUrlFromUrl(): string {
 }
 
 const GROUP_ID_SESSION_KEY = "calimero_group_id";
+const GROUP_MEMBER_IDENTITIES_SESSION_KEY = "calimero_group_member_identities";
 
 /** Group ID: URL param `group-id` > sessionStorage > env VITE_GROUP_ID > empty */
 export function getGroupId(): string {
@@ -58,6 +59,59 @@ export function setGroupId(groupId: string): void {
 
 export function clearGroupId(): void {
   sessionStorage.removeItem(GROUP_ID_SESSION_KEY);
+}
+
+function readStoredGroupMemberIdentities(): Record<string, string> {
+  try {
+    const raw =
+      localStorage.getItem(GROUP_MEMBER_IDENTITIES_SESSION_KEY) ||
+      sessionStorage.getItem(GROUP_MEMBER_IDENTITIES_SESSION_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    localStorage.setItem(GROUP_MEMBER_IDENTITIES_SESSION_KEY, raw);
+
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredGroupMemberIdentities(
+  identities: Record<string, string>,
+): void {
+  const serialized = JSON.stringify(identities);
+  localStorage.setItem(GROUP_MEMBER_IDENTITIES_SESSION_KEY, serialized);
+  sessionStorage.setItem(GROUP_MEMBER_IDENTITIES_SESSION_KEY, serialized);
+}
+
+export function getGroupMemberIdentity(groupId: string): string {
+  return readStoredGroupMemberIdentities()[groupId] || "";
+}
+
+export function setGroupMemberIdentity(
+  groupId: string,
+  memberIdentity: string,
+): void {
+  if (!groupId || !memberIdentity) {
+    return;
+  }
+
+  const identities = readStoredGroupMemberIdentities();
+  identities[groupId] = memberIdentity;
+  writeStoredGroupMemberIdentities(identities);
+}
+
+export function clearGroupMemberIdentity(groupId: string): void {
+  if (!groupId) {
+    return;
+  }
+
+  const identities = readStoredGroupMemberIdentities();
+  delete identities[groupId];
+  writeStoredGroupMemberIdentities(identities);
 }
 
 /** @deprecated Use getApplicationId() for dynamic app-id (URL/env). */

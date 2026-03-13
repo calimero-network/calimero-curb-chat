@@ -24,6 +24,10 @@ import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { scrollbarStyles } from "../styles/scrollbar";
 import { StorageHelper } from "../utils/storage";
 import { log } from "../utils/logger";
+import {
+  getCachedUsernameForIdentity,
+  setCachedUsernameForIdentity,
+} from "../utils/chatProfileCache";
 
 interface ChatDisplaySplitProps {
   readMessage: (message: CurbMessage) => void;
@@ -213,9 +217,11 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
 
     const setUserInfo = async () => {
       const executorId = getExecutorPublicKey() ?? "";
+      const cachedIdentityUsername = getCachedUsernameForIdentity(executorId);
 
       // Check if we already have the username in storage
-      const cachedUsername = StorageHelper.getItem("chat-username");
+      const cachedUsername =
+        cachedIdentityUsername || StorageHelper.getItem("chat-username");
       if (cachedUsername) {
         const normalizedClass = cachedUsername
           .replace(/\s+/g, "")
@@ -232,6 +238,8 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
         userId: executorId ?? "",
       });
       if (response.data) {
+        setCachedUsernameForIdentity(executorId, response.data);
+        StorageHelper.setItem("chat-username", response.data);
         const normalizedClass = response.data
           .replace(/\s+/g, "")
           .toLowerCase()
@@ -298,7 +306,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
       return activeChat.contextId;
     }
     return getGlobalContextId() ?? "";
-  }, [activeChat.contextId, activeChat.type]);
+  }, [activeChat.contextId]);
 
   const renderMessage = (message: CurbMessage, prevMessage?: CurbMessage) => {
     const params: MessageRendererProps = {
