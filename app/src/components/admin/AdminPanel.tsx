@@ -3,6 +3,7 @@ import styled, { keyframes, css } from "styled-components";
 import BaseModal from "../common/popups/BaseModal";
 import { useGroupAdmin } from "../../hooks/useGroupAdmin";
 import { getGroupId } from "../../constants/config";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { scrollbarStyles } from "../../styles/scrollbar";
 import MembersTab from "./MembersTab";
 import ChannelsTab from "./ChannelsTab";
@@ -163,16 +164,21 @@ export default function AdminPanel({
   const [activeTab, setActiveTab] = useState<AdminTab>("members");
   const admin = useGroupAdmin();
   const groupId = getGroupId();
+  const permissions = useCurrentGroupPermissions(groupId);
 
   useEffect(() => {
     if (isOpen && groupId) {
       admin.fetchAll(groupId);
     }
-  }, [isOpen, groupId]);
+  }, [admin, groupId, isOpen]);
 
   const handleRefresh = useCallback(() => {
     if (groupId) admin.fetchAll(groupId);
   }, [groupId, admin]);
+
+  if (!groupId || permissions.loading || !permissions.isAdmin) {
+    return null;
+  }
 
   const tabs: { id: AdminTab; label: string }[] = [
     { id: "members", label: `Members${admin.members.length ? ` (${admin.members.length})` : ""}` },

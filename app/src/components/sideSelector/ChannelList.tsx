@@ -2,6 +2,7 @@ import { memo } from "react";
 import { styled } from "styled-components";
 import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import { buildChannelEntryChat } from "../../utils/channelEntry";
+import { getContextVisibilityLabel } from "../../utils/channelVisibility";
 
 const ChannelListContainer = styled.div`
   background-color: #0e0e10;
@@ -140,7 +141,9 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
                       username: "",
                     }),
                     readOnly: false,
-                    channelType: isRestricted ? "Private" : "Public",
+                    channelType: getContextVisibilityLabel(
+                      isRestricted ? "restricted" : "open",
+                    ),
                   },
                 );
               }}

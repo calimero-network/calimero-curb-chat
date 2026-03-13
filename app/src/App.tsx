@@ -13,6 +13,7 @@ import { ToastManager } from "./components/common/ToastManager";
 import { extractInvitationFromUrl, saveInvitationToStorage } from "./utils/invitation";
 import { getGroupId, getNodeUrlFromUrl } from "./constants/config";
 import { getAppEntryState } from "./utils/appEntry";
+import { getMessengerDisplayName } from "./utils/messengerName";
 
 // Lazy load pages for better performance
 const Login = lazy(() => import("./pages/Login"));
@@ -108,6 +109,7 @@ function App() {
     isAuthenticated,
     isConfigSet,
     groupId: getGroupId(),
+    messengerName: getMessengerDisplayName(),
     activeChat: null,
   });
 

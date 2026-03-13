@@ -17,6 +17,7 @@ describe("getAppEntryState", () => {
         isAuthenticated: true,
         isConfigSet: true,
         groupId: "",
+        messengerName: "Ronit",
         activeChat: null,
       }),
     ).toBe("login");
@@ -28,20 +29,34 @@ describe("getAppEntryState", () => {
         isAuthenticated: true,
         isConfigSet: true,
         groupId: "group-1",
+        messengerName: "Ronit",
         activeChat: null,
       }),
     ).toBe("browse-channels");
   });
 
-  it("routes joined channels without a profile into profile completion", () => {
+  it("keeps the user on login until a global messenger name is chosen", () => {
     expect(
       getAppEntryState({
         isAuthenticated: true,
         isConfigSet: true,
         groupId: "group-1",
+        messengerName: "",
         activeChat: buildChat({ requiresProfileSetup: true }),
       }),
-    ).toBe("complete-profile");
+    ).toBe("login");
+  });
+
+  it("opens joined channels directly after workspace entry", () => {
+    expect(
+      getAppEntryState({
+        isAuthenticated: true,
+        isConfigSet: true,
+        groupId: "group-1",
+        messengerName: "Ronit",
+        activeChat: buildChat({ requiresProfileSetup: true }),
+      }),
+    ).toBe("chat");
   });
 
   it("routes a ready chat to the normal chat view", () => {
@@ -50,6 +65,7 @@ describe("getAppEntryState", () => {
         isAuthenticated: true,
         isConfigSet: true,
         groupId: "group-1",
+        messengerName: "Ronit",
         activeChat: buildChat({ requiresProfileSetup: false }),
       }),
     ).toBe("chat");

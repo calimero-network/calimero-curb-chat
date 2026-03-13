@@ -4,9 +4,13 @@ import { isValidChannelName } from "../../utils/validation";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { getApplicationId, getGroupId } from "../../constants/config";
-import { memo } from "react";
+import { memo, useCallback, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
 import { log } from "../../utils/logger";
+import {
+  getChannelVisibilityOption,
+  getContextVisibilityModeFromOption,
+} from "../../utils/channelVisibility";
 
 const Container = styled.div<{ $isCollapsed?: boolean }>`
   display: flex;
@@ -58,6 +62,8 @@ interface ChannelHeaderProps {
 const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const [isOpen, setIsOpen] = usePersistentState("createChannelModalOpen", false);
   const [inputValue, setInputValue] = usePersistentState("createChannelInputValue", "");
+  const [defaultVisibility, setDefaultVisibility] = useState<"public" | "private">("public");
+  const [isLoadingDefaultVisibility, setIsLoadingDefaultVisibility] = useState(false);
 
   const createChannel = async (
     channelName: string,
@@ -91,16 +97,54 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     }
 
     const contextId = createResp.data.contextId;
+    const groupApi = new GroupApiDataSource();
+    const visibilityMode = getContextVisibilityModeFromOption(
+      isPublic ? "public" : "private",
+    );
 
-    if (!isPublic) {
-      const groupApi = new GroupApiDataSource();
-      await groupApi.setContextVisibility(groupId, contextId, { mode: "restricted" });
+    const visibilityResp = await groupApi.setContextVisibility(groupId, contextId, {
+      mode: visibilityMode,
+    });
+
+    if (visibilityResp.error) {
+      log.error(
+        "ChannelHeader",
+        `Failed to set channel visibility to ${visibilityMode}`,
+        visibilityResp.error,
+      );
     }
 
     setInputValue("");
     setIsOpen(false);
     props.onChannelCreated?.();
   };
+
+  const prepareCreateChannelModal = useCallback(async () => {
+    const groupId = getGroupId();
+    if (!groupId || isLoadingDefaultVisibility) {
+      return;
+    }
+
+    setIsLoadingDefaultVisibility(true);
+    const groupApi = new GroupApiDataSource();
+    const groupResp = await groupApi.getGroup(groupId);
+
+    if (groupResp.data?.defaultVisibility) {
+      setDefaultVisibility(getChannelVisibilityOption(groupResp.data.defaultVisibility));
+    } else {
+      setDefaultVisibility("public");
+      if (groupResp.error) {
+        log.error(
+          "ChannelHeader",
+          "Failed to read group default visibility, falling back to public",
+          groupResp.error,
+        );
+      }
+    }
+
+    setIsLoadingDefaultVisibility(false);
+    setIsOpen(true);
+  }, [isLoadingDefaultVisibility, setIsOpen]);
 
   return (
     <Container $isCollapsed={props.isCollapsed}>
@@ -114,7 +158,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
         placeholder={"# channel name"}
         buttonText={"Create"}
         toggle={
-          <PlusButton onClick={() => setIsOpen(true)}>
+          <PlusButton onClick={prepareCreateChannelModal}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round">
               <path d="M12 5v14M5 12h14" />
             </svg>
@@ -122,6 +166,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
         }
         createChannel={createChannel}
         channelNameValidator={isValidChannelName}
+        defaultVisibility={defaultVisibility}
       />
     </Container>
   );

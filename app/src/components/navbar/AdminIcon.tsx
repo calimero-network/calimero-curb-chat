@@ -1,6 +1,8 @@
 import { useState } from "react";
 import styled from "styled-components";
 import AdminPanel from "../admin/AdminPanel";
+import { getGroupId } from "../../constants/config";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 
 const AdminIconWrapper = styled.div`
   cursor: pointer;
@@ -23,6 +25,12 @@ const AdminIconWrapper = styled.div`
 
 export default function AdminIcon() {
   const [isOpen, setIsOpen] = useState(false);
+  const groupId = getGroupId();
+  const permissions = useCurrentGroupPermissions(groupId);
+
+  if (!groupId || permissions.loading || !permissions.isAdmin) {
+    return null;
+  }
 
   const icon = (
     <AdminIconWrapper title="Workspace Admin">

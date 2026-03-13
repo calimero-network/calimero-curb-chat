@@ -34,12 +34,12 @@ import { useThreadMessages } from "../../hooks/useThreadMessages";
 import { useWebSocket, useWebSocketEvents } from "../../contexts/WebSocketContext";
 import { useChatHandlers } from "../../hooks/useChatHandlers";
 import { getGroupId, getApplicationId } from "../../constants/config";
-import { StorageHelper } from "../../utils/storage";
 import { getAppEntryState } from "../../utils/appEntry";
+import { getContextProfileSyncAction } from "../../utils/contextProfileSync";
 import {
-  getCachedUsernameForIdentity,
-  setCachedUsernameForIdentity,
-} from "../../utils/chatProfileCache";
+  getMessengerDisplayName,
+  setMessengerDisplayName,
+} from "../../utils/messengerName";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
@@ -119,6 +119,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     isAuthenticated: true,
     isConfigSet,
     groupId: currentGroupId,
+    messengerName: getMessengerDisplayName(),
     activeChat,
   });
 
@@ -128,7 +129,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       return;
     }
 
-    if (entryState === "complete-profile" || entryState === "chat") {
+    if (entryState === "chat") {
       setIsOpenSearchChannel(false);
     }
   }, [entryState]);
@@ -199,46 +200,46 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
 
     if (
-      resolvedChat.type === "channel" &&
+      (resolvedChat.type === "channel" ||
+        resolvedChat.type === "direct_message") &&
       resolvedChat.contextId &&
       resolvedChat.contextIdentity
     ) {
+      const messengerName = getMessengerDisplayName();
       const usernameResponse = await new ClientApiDataSource().getUsername({
         contextId: resolvedChat.contextId,
         executorPublicKey: resolvedChat.contextIdentity,
         userId: resolvedChat.contextIdentity,
       });
 
-      if (usernameResponse.data) {
-        StorageHelper.setItem("chat-username", usernameResponse.data);
-        setCachedUsernameForIdentity(
-          resolvedChat.contextIdentity,
-          usernameResponse.data,
-        );
-        resolvedChat = {
-          ...resolvedChat,
-          canJoin: false,
-          requiresProfileSetup: false,
-        };
-      } else if (usernameResponse.error?.code === 404) {
-        resolvedChat = {
-          ...resolvedChat,
-          canJoin: false,
-          requiresProfileSetup: true,
-        };
-      } else {
-        const cachedUsername = getCachedUsernameForIdentity(
-          resolvedChat.contextIdentity,
-        );
-        if (cachedUsername) {
-          StorageHelper.setItem("chat-username", cachedUsername);
+      if (messengerName) {
+        const syncAction = getContextProfileSyncAction({
+          globalName: messengerName,
+          contextUsername: usernameResponse.data || "",
+        });
+
+        if (syncAction === "apply-global-name") {
+          const setProfileResponse = await new ClientApiDataSource().joinChat({
+            contextId: resolvedChat.contextId,
+            executorPublicKey: resolvedChat.contextIdentity,
+            username: messengerName,
+          });
+
+          if (setProfileResponse.error) {
+            log.warn(
+              "Home",
+              `Failed to apply messenger name to ${resolvedChat.contextId}: ${setProfileResponse.error.message}`,
+            );
+          }
         }
-        resolvedChat = {
-          ...resolvedChat,
-          canJoin: false,
-          requiresProfileSetup: !cachedUsername,
-        };
       }
+
+      setMessengerDisplayName(messengerName);
+      resolvedChat = {
+        ...resolvedChat,
+        canJoin: false,
+        requiresProfileSetup: false,
+      };
     }
 
     setActiveChat(resolvedChat);
