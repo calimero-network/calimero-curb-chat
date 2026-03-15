@@ -201,11 +201,11 @@ interface CurbNavbarProps {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isOpen: boolean) => void;
   isOpenSearchChannel: boolean;
-  setIsOpenSearchChannel: (isOpen: boolean) => void;
+  setIsOpenSearchChannel: () => void;
   channelUserList: Map<string, string>;
   nonInvitedUserList: UserId[];
   reFetchChannelMembers: () => void;
-  setActiveChat: (chat: ActiveChat) => void;
+  setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
   wsIsSubscribed?: boolean;
   wsContextId?: string | null;

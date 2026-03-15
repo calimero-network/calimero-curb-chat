@@ -6,6 +6,7 @@ import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { getApplicationId, getGroupId } from "../../constants/config";
 import { memo, useCallback, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { log } from "../../utils/logger";
 import {
   getChannelVisibilityOption,
@@ -64,6 +65,8 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const [inputValue, setInputValue] = usePersistentState("createChannelInputValue", "");
   const [defaultVisibility, setDefaultVisibility] = useState<"public" | "private">("public");
   const [isLoadingDefaultVisibility, setIsLoadingDefaultVisibility] = useState(false);
+  const permissions = useCurrentGroupPermissions(getGroupId());
+  const canCreateChannel = permissions.isAdmin || permissions.canCreateContext;
 
   const createChannel = async (
     channelName: string,
@@ -149,25 +152,34 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   return (
     <Container $isCollapsed={props.isCollapsed}>
       {!props.isCollapsed && <TextBold>{props.title}</TextBold>}
-      <CreateChannelPopup
-        title={"Create new Channel"}
-        inputValue={inputValue}
-        isOpen={isOpen}
-        setIsOpen={setIsOpen}
-        setInputValue={setInputValue}
-        placeholder={"# channel name"}
-        buttonText={"Create"}
-        toggle={
-          <PlusButton onClick={prepareCreateChannelModal}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </PlusButton>
-        }
-        createChannel={createChannel}
-        channelNameValidator={isValidChannelName}
-        defaultVisibility={defaultVisibility}
-      />
+      {canCreateChannel && (
+        <CreateChannelPopup
+          title={"Create new Channel"}
+          inputValue={inputValue}
+          isOpen={isOpen}
+          setIsOpen={setIsOpen}
+          setInputValue={setInputValue}
+          placeholder={"# channel name"}
+          buttonText={"Create"}
+          toggle={
+            <PlusButton onClick={prepareCreateChannelModal}>
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </PlusButton>
+          }
+          createChannel={createChannel}
+          channelNameValidator={isValidChannelName}
+          defaultVisibility={defaultVisibility}
+        />
+      )}
     </Container>
   );
 });

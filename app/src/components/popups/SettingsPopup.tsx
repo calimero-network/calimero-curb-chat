@@ -1,5 +1,6 @@
 import React from "react";
 import { styled, keyframes } from "styled-components";
+import { useNavigate } from "react-router-dom";
 import BaseModal from "../common/popups/BaseModal";
 import TabbedInterface from "../contextOperations/TabbedInterface";
 import { useCalimero } from "@calimero-network/calimero-client";
@@ -7,6 +8,7 @@ import {
   clearStoredSession,
   clearSessionActivity,
 } from "../../utils/session";
+import { clearWorkspaceSelection } from "../../constants/config";
 
 // ─── Animations ────────────────────────────────────────────────────────────────
 
@@ -95,25 +97,46 @@ const LogoutSection = styled.div`
   justify-content: space-between;
 `;
 
+const SessionActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+`;
+
 const LogoutLabel = styled.span`
   font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.3);
   font-weight: 500;
 `;
 
-const LogoutButton = styled.button`
+const SessionButton = styled.button`
   display: flex;
   align-items: center;
   gap: 0.375rem;
   padding: 0.4rem 0.875rem;
   border-radius: 7px;
-  border: 1px solid rgba(255, 80, 80, 0.25);
-  background: rgba(255, 80, 80, 0.06);
-  color: rgba(255, 100, 100, 0.8);
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+`;
+
+const ChangeWorkspaceButton = styled(SessionButton)`
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.72);
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+`;
+
+const LogoutButton = styled(SessionButton)`
+  border: 1px solid rgba(255, 80, 80, 0.25);
+  background: rgba(255, 80, 80, 0.06);
+  color: rgba(255, 100, 100, 0.8);
 
   &:hover {
     border-color: rgba(255, 80, 80, 0.5);
@@ -140,7 +163,16 @@ export default function SettingsPopup({
   toggle,
 }: SettingsPopupProps) {
   const { logout } = useCalimero();
+  const navigate = useNavigate();
   const isOwner = sessionStorage.getItem("curb_is_context_owner") === "true";
+
+  const handleChangeWorkspace = () => {
+    clearStoredSession();
+    clearSessionActivity();
+    clearWorkspaceSelection();
+    navigate("/login");
+    setIsOpen(false);
+  };
 
   const handleLogout = () => {
     clearStoredSession();
@@ -176,14 +208,32 @@ export default function SettingsPopup({
 
       <LogoutSection>
         <LogoutLabel>Session</LogoutLabel>
-        <LogoutButton onClick={handleLogout}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-          Logout
-        </LogoutButton>
+        <SessionActions>
+          <ChangeWorkspaceButton onClick={handleChangeWorkspace}>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 12h13" />
+              <path d="m11 4 8 8-8 8" />
+            </svg>
+            Change workspace
+          </ChangeWorkspaceButton>
+          <LogoutButton onClick={handleLogout}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            Logout
+          </LogoutButton>
+        </SessionActions>
       </LogoutSection>
     </Container>
   );

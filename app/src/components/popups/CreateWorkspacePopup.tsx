@@ -1,13 +1,12 @@
 import { useState, useCallback } from "react";
 import { styled } from "styled-components";
-import { Button, Input } from "@calimero-network/mero-ui";
+import { Button } from "@calimero-network/mero-ui";
 import axios from "axios";
 import {
   getAppEndpointKey,
   getAuthConfig,
 } from "@calimero-network/calimero-client";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
-import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import {
   getApplicationId,
   setGroupId,
@@ -100,19 +99,6 @@ const ButtonGroup = styled.div`
   margin-top: 1rem;
 `;
 
-const FormGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-bottom: 1rem;
-`;
-
-const Label = styled.label`
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #b8b8d1;
-`;
-
 type Step = "form" | "creating" | "invite" | "error";
 
 interface CreateWorkspacePopupProps {
@@ -164,7 +150,6 @@ export default function CreateWorkspacePopup({
   onCancel,
 }: CreateWorkspacePopupProps) {
   const [step, setStep] = useState<Step>("form");
-  const [workspaceName, setWorkspaceName] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [invitePayload, setInvitePayload] = useState("");
   const [createdGroupId, setCreatedGroupId] = useState("");
@@ -176,7 +161,6 @@ export default function CreateWorkspacePopup({
     setErrorMessage("");
 
     const groupApi = new GroupApiDataSource();
-    const nodeApi = new ContextApiDataSource();
     const configuredApplicationId = getApplicationId();
 
     try {
@@ -197,23 +181,6 @@ export default function CreateWorkspacePopup({
         setGroupMemberIdentity(groupId, identityResult.data.memberIdentity);
       }
 
-      const contextResult = await nodeApi.createGroupContext({
-        applicationId,
-        protocol: "near",
-        groupId,
-        initializationParams: {
-          name: workspaceName.trim() || "general",
-          context_type: "Channel",
-          description: "Default channel",
-          created_at: Date.now(),
-        },
-      });
-      if (contextResult.error || !contextResult.data) {
-        throw new Error(
-          contextResult.error?.message || "Failed to create default channel",
-        );
-      }
-
       const inviteResult = await groupApi.createInvitation(groupId);
       if (inviteResult.error || !inviteResult.data) {
         throw new Error(
@@ -231,7 +198,7 @@ export default function CreateWorkspacePopup({
       );
       setStep("error");
     }
-  }, [workspaceName]);
+  }, []);
 
   const handleDone = () => {
     onSuccess(createdGroupId);
@@ -245,7 +212,7 @@ export default function CreateWorkspacePopup({
         onClose={handleDone}
         initialInvitationPayload={invitePayload}
         title="Workspace created!"
-        subtitle="Your workspace is ready. Share an invitation link when you want someone to join the workspace."
+        subtitle="Your workspace is ready. Share an invitation now and create your first channel after you enter."
         successMessage="Share this workspace invitation with the people you want to invite."
       />
     );
@@ -264,19 +231,9 @@ export default function CreateWorkspacePopup({
           <>
             <Title>Create Workspace</Title>
             <Subtitle>
-              Set up a new workspace with a default #general channel.
-              You can invite members after creation.
+              Create a workspace now, then add channels after you enter the
+              workspace. You can also invite members right away.
             </Subtitle>
-            <FormGroup>
-              <Label>Workspace name (first channel)</Label>
-              <Input
-                type="text"
-                placeholder="e.g. general"
-                value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
-                autoFocus
-              />
-            </FormGroup>
             <ButtonGroup>
               <Button
                 onClick={createWorkspace}
@@ -296,7 +253,8 @@ export default function CreateWorkspacePopup({
           <>
             <Title>Creating workspace...</Title>
             <Message $type="info">
-              Setting up your group, default channel, and invitation. Please wait.
+              Setting up your workspace and invitation. You can create your
+              first channel after you enter.
             </Message>
           </>
         )}

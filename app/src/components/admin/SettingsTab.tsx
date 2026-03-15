@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import type { GroupInfo, VisibilityMode } from "../../api/groupApi";
+import {
+  buildGroupCapabilitiesMask,
+  readGroupCapabilitiesMask,
+  type GroupCapabilityToggles,
+} from "../../utils/groupCapabilities";
 
 const Section = styled.div`
   margin-bottom: 1.25rem;
@@ -60,18 +65,47 @@ const ToggleButton = styled.button<{ $active: boolean }>`
   }
 `;
 
-const CapInput = styled.input`
-  width: 120px;
+const CapabilitiesList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+`;
+
+const CapabilityRow = styled.label`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.625rem;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 5px;
+`;
+
+const CapabilityInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+`;
+
+const CapabilityTitle = styled.div`
   color: #fff;
   font-size: 0.78rem;
-  padding: 0.375rem 0.5rem;
-  outline: none;
-  &:focus {
-    border-color: rgba(165, 255, 17, 0.4);
-  }
+  font-weight: 500;
+`;
+
+const CapabilityDescription = styled.div`
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.68rem;
+  line-height: 1.4;
+`;
+
+const CapabilityToggle = styled.input`
+  width: 18px;
+  height: 18px;
+  accent-color: #a5ff11;
+  cursor: pointer;
 `;
 
 const SaveButton = styled.button`
@@ -131,11 +165,15 @@ export default function SettingsTab({
   onSetDefaultCapabilities,
   onSetDefaultVisibility,
 }: SettingsTabProps) {
-  const [capValue, setCapValue] = useState("");
+  const [capToggles, setCapToggles] = useState<GroupCapabilityToggles>({
+    canCreateContext: false,
+    canInviteMembers: false,
+    canJoinOpenContexts: false,
+  });
 
   useEffect(() => {
     if (group) {
-      setCapValue(group.defaultCapabilities.toString());
+      setCapToggles(readGroupCapabilitiesMask(group.defaultCapabilities));
     }
   }, [group]);
 
@@ -144,9 +182,10 @@ export default function SettingsTab({
   }
 
   const handleSaveCapabilities = async () => {
-    const num = parseInt(capValue, 10);
-    if (isNaN(num)) return;
-    await onSetDefaultCapabilities(groupId, num);
+    await onSetDefaultCapabilities(
+      groupId,
+      buildGroupCapabilitiesMask(capToggles),
+    );
   };
 
   const handleToggleVisibility = async (mode: VisibilityMode) => {
@@ -205,25 +244,76 @@ export default function SettingsTab({
       <Section>
         <SectionTitle>Default Capabilities</SectionTitle>
         <Description>
-          Bitmask applied to new members when they join the group.
+          Permissions applied to new members when they join the group.
         </Description>
-        <Row>
-          <CapInput
-            type="number"
-            value={capValue}
-            onChange={(e) => setCapValue(e.target.value)}
-            placeholder="Bitmask"
-          />
-          <SaveButton
-            onClick={handleSaveCapabilities}
-            disabled={
-              actionLoading ||
-              capValue === group.defaultCapabilities.toString()
-            }
-          >
-            Save
-          </SaveButton>
-        </Row>
+        <CapabilitiesList>
+          <CapabilityRow>
+            <CapabilityInfo>
+              <CapabilityTitle>Create channels</CapabilityTitle>
+              <CapabilityDescription>
+                Let new members create new channels in the workspace.
+              </CapabilityDescription>
+            </CapabilityInfo>
+            <CapabilityToggle
+              type="checkbox"
+              aria-label="Create channels"
+              checked={capToggles.canCreateContext}
+              onChange={(e) =>
+                setCapToggles((current) => ({
+                  ...current,
+                  canCreateContext: e.target.checked,
+                }))
+              }
+            />
+          </CapabilityRow>
+          <CapabilityRow>
+            <CapabilityInfo>
+              <CapabilityTitle>Invite members</CapabilityTitle>
+              <CapabilityDescription>
+                Let new members invite other people into the workspace.
+              </CapabilityDescription>
+            </CapabilityInfo>
+            <CapabilityToggle
+              type="checkbox"
+              aria-label="Invite members"
+              checked={capToggles.canInviteMembers}
+              onChange={(e) =>
+                setCapToggles((current) => ({
+                  ...current,
+                  canInviteMembers: e.target.checked,
+                }))
+              }
+            />
+          </CapabilityRow>
+          <CapabilityRow>
+            <CapabilityInfo>
+              <CapabilityTitle>Join open channels</CapabilityTitle>
+              <CapabilityDescription>
+                Let new members join channels marked as open.
+              </CapabilityDescription>
+            </CapabilityInfo>
+            <CapabilityToggle
+              type="checkbox"
+              aria-label="Join open channels"
+              checked={capToggles.canJoinOpenContexts}
+              onChange={(e) =>
+                setCapToggles((current) => ({
+                  ...current,
+                  canJoinOpenContexts: e.target.checked,
+                }))
+              }
+            />
+          </CapabilityRow>
+        </CapabilitiesList>
+        <SaveButton
+          onClick={handleSaveCapabilities}
+          disabled={
+            actionLoading ||
+            buildGroupCapabilitiesMask(capToggles) === group.defaultCapabilities
+          }
+        >
+          Save
+        </SaveButton>
       </Section>
     </>
   );

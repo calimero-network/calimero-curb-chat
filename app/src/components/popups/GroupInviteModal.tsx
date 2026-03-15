@@ -222,6 +222,8 @@ export default function GroupInviteModal({
         {!loading && invitationPayload && (
           <>
             <Message $type="success">{successMessage}</Message>
+            <Label>Workspace ID</Label>
+            <InviteLinkBox>{groupId}</InviteLinkBox>
             <Label>Workspace link (web)</Label>
             <InviteLinkBox>{webUrl}</InviteLinkBox>
             <ButtonGroup>

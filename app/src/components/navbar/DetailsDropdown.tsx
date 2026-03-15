@@ -83,7 +83,7 @@ interface DetailsDropdownProps {
   channelUserList: Map<string, string>;
   nonInvitedUserList: UserId[];
   reFetchChannelMembers: () => void;
-  setActiveChat: (chat: ActiveChat) => void;
+  setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
 }
 

@@ -165,16 +165,17 @@ export default function AdminPanel({
   const admin = useGroupAdmin();
   const groupId = getGroupId();
   const permissions = useCurrentGroupPermissions(groupId);
+  const { fetchAll } = admin;
 
   useEffect(() => {
     if (isOpen && groupId) {
-      admin.fetchAll(groupId);
+      fetchAll(groupId);
     }
-  }, [admin, groupId, isOpen]);
+  }, [fetchAll, groupId, isOpen]);
 
   const handleRefresh = useCallback(() => {
-    if (groupId) admin.fetchAll(groupId);
-  }, [groupId, admin]);
+    if (groupId) fetchAll(groupId);
+  }, [fetchAll, groupId]);
 
   if (!groupId || permissions.loading || !permissions.isAdmin) {
     return null;
