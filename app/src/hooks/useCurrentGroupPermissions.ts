@@ -5,6 +5,7 @@ import {
   setGroupMemberIdentity,
 } from "../constants/config";
 import {
+  canCreateGroupContexts,
   canInviteWorkspaceMembers,
   canJoinOpenGroupContexts,
 } from "../utils/groupCapabilities";
@@ -14,6 +15,7 @@ interface CurrentGroupPermissionsState {
   memberIdentity: string;
   isAdmin: boolean;
   capabilities: number | null;
+  canCreateContext: boolean;
   canInviteMembers: boolean;
   canJoinOpenContexts: boolean;
 }
@@ -23,6 +25,7 @@ const initialState: CurrentGroupPermissionsState = {
   memberIdentity: "",
   isAdmin: false,
   capabilities: null,
+  canCreateContext: false,
   canInviteMembers: false,
   canJoinOpenContexts: false,
 };
@@ -75,6 +78,7 @@ export function useCurrentGroupPermissions(groupId: string) {
           memberIdentity,
           isAdmin: true,
           capabilities: null,
+          canCreateContext: true,
           canInviteMembers: true,
           canJoinOpenContexts: true,
         });
@@ -97,6 +101,7 @@ export function useCurrentGroupPermissions(groupId: string) {
         memberIdentity,
         isAdmin: false,
         capabilities,
+        canCreateContext: canCreateGroupContexts(capabilities),
         canInviteMembers: canInviteWorkspaceMembers(capabilities),
         canJoinOpenContexts: canJoinOpenGroupContexts(capabilities),
       });

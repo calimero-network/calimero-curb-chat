@@ -116,6 +116,29 @@ const SearchContainer = styled.div`
   }
 `;
 
+const EmptyState = styled.div`
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: #141418;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const EmptyStateTitle = styled.div`
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+`;
+
+const EmptyStateDescription = styled.div`
+  color: #9a99a6;
+  font-size: 13px;
+  line-height: 1.5;
+`;
+
 interface BrowsableChannel extends GroupContextChannel {
   isJoined: boolean;
   visibility: "open" | "restricted";
@@ -318,6 +341,23 @@ export default function SearchChannelsContainer({
       <div className="channelListWrapper">
         <div className="listHeader">Channel List</div>
         <div className="list">
+          {allChannels.length === 0 && (
+            <EmptyState>
+              <EmptyStateTitle>No channels yet</EmptyStateTitle>
+              <EmptyStateDescription>
+                This workspace does not have any channels yet. Create your first
+                channel from the Channels panel in the sidebar.
+              </EmptyStateDescription>
+            </EmptyState>
+          )}
+          {allChannels.length > 0 && filteredChannels.length === 0 && (
+            <EmptyState>
+              <EmptyStateTitle>No matching channels</EmptyStateTitle>
+              <EmptyStateDescription>
+                Try a different search or browse the full channel list.
+              </EmptyStateDescription>
+            </EmptyState>
+          )}
           {filteredChannels.map((channel) => {
             const displayName =
               channel.info?.name ?? channel.contextId.substring(0, 12) + "...";

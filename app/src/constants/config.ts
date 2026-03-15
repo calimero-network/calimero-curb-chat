@@ -38,6 +38,7 @@ export function getNodeUrlFromUrl(): string {
 
 const GROUP_ID_SESSION_KEY = "calimero_group_id";
 const GROUP_MEMBER_IDENTITIES_SESSION_KEY = "calimero_group_member_identities";
+const CONTEXT_OWNER_SESSION_KEY = "curb_is_context_owner";
 
 /** Group ID: URL param `group-id` > sessionStorage > env VITE_GROUP_ID > empty */
 export function getGroupId(): string {
@@ -59,6 +60,11 @@ export function setGroupId(groupId: string): void {
 
 export function clearGroupId(): void {
   sessionStorage.removeItem(GROUP_ID_SESSION_KEY);
+}
+
+export function clearWorkspaceSelection(): void {
+  clearGroupId();
+  sessionStorage.removeItem(CONTEXT_OWNER_SESSION_KEY);
 }
 
 function readStoredGroupMemberIdentities(): Record<string, string> {

@@ -1,7 +1,6 @@
 import React, { memo } from "react";
 import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import SideSelector from "../sideSelector/SideSelector";
-import { defaultActiveChat } from "../../mock/mock";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 
@@ -10,7 +9,7 @@ interface ChannelsContainerProps {
   activeChat: ActiveChat | null;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
-  setIsOpenSearchChannel: (open: boolean) => void;
+  setIsOpenSearchChannel: () => void;
   isOpenSearchChannel: boolean;
   onDMSelected: (dm: DMContextInfo) => void;
   channels: GroupContextChannel[];
@@ -39,7 +38,7 @@ function ChannelsContainer(props: ChannelsContainerProps) {
   return (
     <SideSelector
       onChatSelected={onChatSelected}
-      activeChat={activeChat || defaultActiveChat}
+      activeChat={activeChat}
       isSidebarOpen={isSidebarOpen}
       onDMSelected={onDMSelected}
       setIsSidebarOpen={setIsSidebarOpen}

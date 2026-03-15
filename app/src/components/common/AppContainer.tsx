@@ -31,7 +31,7 @@ const Wrapper = styled.div`
 
 interface AppContainerProps {
   isOpenSearchChannel: boolean;
-  setIsOpenSearchChannel: (isOpen: boolean) => void;
+  setIsOpenSearchChannel: () => void;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isOpen: boolean) => void;
   activeChat: ActiveChat | null;

@@ -11,12 +11,12 @@ import { scrollbarStyles } from "../../styles/scrollbar";
 
 interface SideSelectorProps {
   channels: GroupContextChannel[];
-  activeChat: ActiveChat;
+  activeChat: ActiveChat | null;
   onChatSelected: (chat: ActiveChat) => void;
   onDMSelected: (dm: DMContextInfo) => void;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
-  setIsOpenSearchChannel: (open: boolean) => void;
+  setIsOpenSearchChannel: () => void;
   isOpenSearchChannel: boolean;
   chatMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
@@ -209,9 +209,7 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
       <>
         <SearchChannels
           isOpenSearchChannel={isOpenSearchChannel}
-          setIsOpenSearchChannel={() =>
-            setIsOpenSearchChannel(!isOpenSearchChannel)
-          }
+          setIsOpenSearchChannel={setIsOpenSearchChannel}
           isCollapsed={isCollapsed}
           onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
         />
@@ -227,7 +225,7 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
           channels={channels}
           selectChannel={props.onChatSelected}
           selectedChannelId={
-            props.activeChat.type === "channel"
+            props.activeChat?.type === "channel"
               ? props.activeChat.id
               : ""
           }
@@ -238,15 +236,15 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
         <DMSideSelector
           chatMembers={props.chatMembers}
           onDMSelected={props.onDMSelected}
-          selectChannel={props.onChatSelected}
           selectedDM={
-            props.activeChat.type === "direct_message"
+            props.activeChat?.type === "direct_message"
               ? props.activeChat.contextId || props.activeChat.id
               : ""
           }
           createDM={props.createDM}
           privateDMs={props.privateDMs}
           isCollapsed={isCollapsed}
+          onNoActiveChat={props.setIsOpenSearchChannel}
         />
       </>
     );

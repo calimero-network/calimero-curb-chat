@@ -4,7 +4,6 @@ import DMHeader from "./DMHeader";
 import UserList from "./UserList";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
-import type { ActiveChat } from "../../types/Common";
 
 const DMContainer = styled.div`
   background-color: #0e0e10;
@@ -21,7 +20,7 @@ interface DMSideSelectorProps {
   selectedDM: string;
   privateDMs: DMContextInfo[];
   isCollapsed?: boolean;
-  selectChannel: (channel: ActiveChat) => void;
+  onNoActiveChat: () => void;
 }
 
 function DMSideSelector({
@@ -31,7 +30,7 @@ function DMSideSelector({
   selectedDM,
   privateDMs,
   isCollapsed,
-  selectChannel,
+  onNoActiveChat,
 }: DMSideSelectorProps) {
   return (
     <DMContainer>
@@ -46,7 +45,7 @@ function DMSideSelector({
         onDMSelected={onDMSelected}
         privateDMs={privateDMs}
         isCollapsed={isCollapsed}
-        selectChannel={selectChannel}
+        onNoActiveChat={onNoActiveChat}
       />
     </DMContainer>
   );

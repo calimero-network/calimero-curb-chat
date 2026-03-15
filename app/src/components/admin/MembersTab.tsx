@@ -3,6 +3,11 @@ import styled from "styled-components";
 import { Avatar } from "@calimero-network/mero-ui";
 import type { GroupMember, MemberCapabilities } from "../../api/groupApi";
 import ConfirmPopup from "../popups/ConfirmPopup";
+import {
+  buildGroupCapabilitiesMask,
+  readGroupCapabilitiesMask,
+  type GroupCapabilityToggles,
+} from "../../utils/groupCapabilities";
 
 const List = styled.div`
   display: flex;
@@ -109,18 +114,46 @@ const CapLabel = styled.div`
   margin-bottom: 0.375rem;
 `;
 
-const CapInput = styled.input`
-  width: 100%;
+const CapabilitiesList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const CapabilityRow = styled.label`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.625rem;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 5px;
+`;
+
+const CapabilityInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+`;
+
+const CapabilityTitle = styled.div`
   color: #fff;
   font-size: 0.78rem;
-  padding: 0.375rem 0.5rem;
-  outline: none;
-  &:focus {
-    border-color: rgba(165, 255, 17, 0.4);
-  }
+  font-weight: 500;
+`;
+
+const CapabilityDescription = styled.div`
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.68rem;
+  line-height: 1.4;
+`;
+
+const CapabilityToggle = styled.input`
+  width: 18px;
+  height: 18px;
+  accent-color: #a5ff11;
+  cursor: pointer;
 `;
 
 const CapActions = styled.div`
@@ -162,21 +195,27 @@ export default function MembersTab({
   onRefresh,
 }: MembersTabProps) {
   const [capEditIdentity, setCapEditIdentity] = useState<string | null>(null);
-  const [capValue, setCapValue] = useState("");
+  const [capToggles, setCapToggles] = useState<GroupCapabilityToggles>({
+    canCreateContext: false,
+    canInviteMembers: false,
+    canJoinOpenContexts: false,
+  });
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
   const openCapabilities = async (identity: string) => {
     const caps = await onGetCapabilities(groupId, identity);
-    setCapValue(caps?.capabilities?.toString() ?? "0");
+    setCapToggles(readGroupCapabilitiesMask(caps?.capabilities));
     setCapEditIdentity(identity);
   };
 
   const saveCapabilities = async () => {
     if (!capEditIdentity) return;
-    const num = parseInt(capValue, 10);
-    if (isNaN(num)) return;
-    const ok = await onSetCapabilities(groupId, capEditIdentity, num);
+    const ok = await onSetCapabilities(
+      groupId,
+      capEditIdentity,
+      buildGroupCapabilitiesMask(capToggles),
+    );
     if (ok) setCapEditIdentity(null);
   };
 
@@ -208,12 +247,14 @@ export default function MembersTab({
               </RoleBadge>
             </MemberInfo>
             <Actions>
-              <SmallButton
-                onClick={() => openCapabilities(member.identity)}
-                disabled={actionLoading}
-              >
-                Capabilities
-              </SmallButton>
+              {member.role !== "Admin" && (
+                <SmallButton
+                  onClick={() => openCapabilities(member.identity)}
+                  disabled={actionLoading}
+                >
+                  Capabilities
+                </SmallButton>
+              )}
               {member.role !== "Admin" && (
                 <ConfirmPopup
                   title="Remove Member"
@@ -239,17 +280,67 @@ export default function MembersTab({
             </Actions>
           </MemberRow>
 
-          {capEditIdentity === member.identity && (
+          {member.role !== "Admin" && capEditIdentity === member.identity && (
             <CapabilitiesOverlay>
               <CapLabel>
-                Capabilities bitmask for {truncateIdentity(member.identity)}
+                Member permissions for {truncateIdentity(member.identity)}
               </CapLabel>
-              <CapInput
-                type="number"
-                value={capValue}
-                onChange={(e) => setCapValue(e.target.value)}
-                placeholder="Capabilities (integer)"
-              />
+              <CapabilitiesList>
+                <CapabilityRow>
+                  <CapabilityInfo>
+                    <CapabilityTitle>Create channels</CapabilityTitle>
+                    <CapabilityDescription>
+                      Allow this member to create new channels in the workspace.
+                    </CapabilityDescription>
+                  </CapabilityInfo>
+                  <CapabilityToggle
+                    type="checkbox"
+                    checked={capToggles.canCreateContext}
+                    onChange={(e) =>
+                      setCapToggles((current) => ({
+                        ...current,
+                        canCreateContext: e.target.checked,
+                      }))
+                    }
+                  />
+                </CapabilityRow>
+                <CapabilityRow>
+                  <CapabilityInfo>
+                    <CapabilityTitle>Invite members</CapabilityTitle>
+                    <CapabilityDescription>
+                      Allow this member to invite other people into the workspace.
+                    </CapabilityDescription>
+                  </CapabilityInfo>
+                  <CapabilityToggle
+                    type="checkbox"
+                    checked={capToggles.canInviteMembers}
+                    onChange={(e) =>
+                      setCapToggles((current) => ({
+                        ...current,
+                        canInviteMembers: e.target.checked,
+                      }))
+                    }
+                  />
+                </CapabilityRow>
+                <CapabilityRow>
+                  <CapabilityInfo>
+                    <CapabilityTitle>Join open channels</CapabilityTitle>
+                    <CapabilityDescription>
+                      Allow this member to join channels marked as open.
+                    </CapabilityDescription>
+                  </CapabilityInfo>
+                  <CapabilityToggle
+                    type="checkbox"
+                    checked={capToggles.canJoinOpenContexts}
+                    onChange={(e) =>
+                      setCapToggles((current) => ({
+                        ...current,
+                        canJoinOpenContexts: e.target.checked,
+                      }))
+                    }
+                  />
+                </CapabilityRow>
+              </CapabilitiesList>
               <CapActions>
                 <SmallButton onClick={() => setCapEditIdentity(null)}>
                   Cancel

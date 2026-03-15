@@ -2,7 +2,6 @@ import { useCallback, memo, useState } from "react";
 import { styled } from "styled-components";
 import { Avatar } from "@calimero-network/mero-ui";
 import type { DMContextInfo } from "../../hooks/useDMs";
-import type { ActiveChat } from "../../types/Common";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { useToast } from "../../contexts/ToastContext";
 import ConfirmPopup from "../popups/ConfirmPopup";
@@ -78,7 +77,7 @@ interface UserItemProps {
   selected: boolean;
   dm: DMContextInfo;
   isCollapsed?: boolean;
-  selectChannel: (channel: ActiveChat) => void;
+  onNoActiveChat: () => void;
 }
 
 function UserItem({
@@ -86,7 +85,7 @@ function UserItem({
   selected,
   dm,
   isCollapsed,
-  selectChannel,
+  onNoActiveChat,
 }: UserItemProps) {
   const { addToast } = useToast();
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -106,11 +105,11 @@ function UserItem({
         return;
       }
       addToast({ title: "DM", message: "DM deleted", type: "dm", duration: 2500 });
-      selectChannel({ type: "channel", id: "general", name: "general" });
+      onNoActiveChat();
     } catch {
       addToast({ title: "DM", message: "Failed to delete DM", type: "dm", duration: 3000 });
     }
-  }, [dm, addToast, selectChannel]);
+  }, [dm, addToast, onNoActiveChat]);
 
   return (
     <UserListItem

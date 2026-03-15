@@ -30,6 +30,13 @@ const ScrollableChannelList = styled.div`
   }
 `;
 
+const EmptyChannelState = styled.div`
+  color: #7c7c88;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 0.5rem 0.625rem 0.75rem;
+`;
+
 const ChannelListItem = styled.div<{
   selected: boolean;
   $isCollapsed?: boolean;
@@ -117,6 +124,11 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
   return (
     <ChannelListContainer>
       <ScrollableChannelList>
+        {channels.length === 0 && !isCollapsed && (
+          <EmptyChannelState>
+            No channels yet. Create one to start chatting.
+          </EmptyChannelState>
+        )}
         {channels.map((channel) => {
           const displayName = channel.info?.name ?? channel.contextId.substring(0, 8);
           const isRestricted = channel.visibility === "restricted";

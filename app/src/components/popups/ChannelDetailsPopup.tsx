@@ -5,7 +5,6 @@ import BaseModal from "../common/popups/BaseModal";
 import type { ChannelInfo, UserId } from "../../api/clientApi";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
-import { defaultActiveChat } from "../../mock/mock";
 
 interface ChannelDetailsPopupProps {
   toggle: React.ReactNode;
@@ -16,7 +15,7 @@ interface ChannelDetailsPopupProps {
   setIsOpen: (isOpen: boolean) => void;
   selectedTabIndex: number;
   reFetchChannelMembers: () => void;
-  setActiveChat: (chat: ActiveChat) => void;
+  setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
 }
 
@@ -70,7 +69,7 @@ export default function ChannelDetailsPopup({
     await new ClientApiDataSource().leaveChannel({
       channel: { name: channelName },
     });
-    setActiveChat(defaultActiveChat);
+    setActiveChat(null);
     fetchChannels();
     setIsOpen(false);
   };

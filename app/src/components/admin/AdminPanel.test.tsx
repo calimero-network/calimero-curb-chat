@@ -115,4 +115,55 @@ describe("AdminPanel", () => {
 
     expect(screen.getByText("Workspace Admin")).toBeInTheDocument();
   });
+
+  it("does not refetch admin data on rerender when hook object identity changes", () => {
+    const fetchAll = vi.fn();
+
+    mockUseCurrentGroupPermissions.mockReturnValue({
+      loading: false,
+      isAdmin: true,
+    });
+
+    mockUseGroupAdmin.mockImplementation(() => ({
+      group: null,
+      members: [],
+      upgradeStatus: null,
+      loading: false,
+      actionLoading: false,
+      error: null,
+      fetchAll,
+      clearError: vi.fn(),
+      removeMember: vi.fn(),
+      setMemberCapabilities: vi.fn(),
+      getMemberCapabilities: vi.fn(),
+      getContextVisibility: vi.fn(),
+      setContextVisibility: vi.fn(),
+      getContextAllowlist: vi.fn(),
+      manageAllowlist: vi.fn(),
+      setDefaultCapabilities: vi.fn(),
+      setDefaultVisibility: vi.fn(),
+      triggerUpgrade: vi.fn(),
+      refreshUpgradeStatus: vi.fn(),
+    }));
+
+    const view = render(
+      <AdminPanel
+        isOpen={true}
+        setIsOpen={vi.fn()}
+        toggle={<button>toggle</button>}
+      />,
+    );
+
+    expect(fetchAll).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <AdminPanel
+        isOpen={true}
+        setIsOpen={vi.fn()}
+        toggle={<button>toggle</button>}
+      />,
+    );
+
+    expect(fetchAll).toHaveBeenCalledTimes(1);
+  });
 });
