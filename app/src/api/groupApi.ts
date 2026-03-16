@@ -68,6 +68,14 @@ export interface GroupUpgradeStatus {
   completedAt: number | null;
 }
 
+export interface GroupContextEntry {
+  contextId: string;
+  alias?: string;
+  sharedContextType?: "Channel" | "Dm";
+  memberIdentities?: string[];
+  metadata?: Record<string, unknown>;
+}
+
 export interface CreateInvitationRequest {
   requester?: string;
   expirationBlockHeight?: number;
@@ -170,7 +178,7 @@ export interface GroupApi {
     groupId: string,
     memberIdentity: string,
   ): ApiResponse<void>;
-  listGroupContexts(groupId: string): ApiResponse<string[]>;
+  listGroupContexts(groupId: string): ApiResponse<GroupContextEntry[]>;
   joinGroupContext(
     groupId: string,
     request: JoinGroupContextRequest,

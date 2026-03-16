@@ -6,6 +6,8 @@ import { log } from "../utils/logger";
 import { apiClient } from "@calimero-network/calimero-client";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
+import { getGroupMemberIdentity, setGroupMemberIdentity } from "../constants/config";
+import { resolveSharedDmDiscovery } from "../utils/dmContext";
 
 export interface DMContextInfo extends GroupContextChannel {
   otherUsername: string;
@@ -32,6 +34,14 @@ export function useDMs() {
     try {
       const groupApi = new GroupApiDataSource();
       const clientApi = new ClientApiDataSource();
+      const currentIdentityResponse = await groupApi.resolveCurrentMemberIdentity(
+        groupId,
+        getGroupMemberIdentity(groupId),
+      );
+      const currentMemberIdentity = currentIdentityResponse.data?.memberIdentity ?? "";
+      if (currentMemberIdentity) {
+        setGroupMemberIdentity(groupId, currentMemberIdentity);
+      }
 
       const listResponse = await groupApi.listGroupContexts(groupId);
       if (listResponse.error || !listResponse.data) {
@@ -40,60 +50,79 @@ export function useDMs() {
         return [];
       }
 
-      const contextIds = listResponse.data;
+      const contextEntries = listResponse.data;
 
       const enriched: (DMContextInfo | null)[] = await Promise.all(
-        contextIds.map(async (ctxId: string) => {
-          let identity: string | undefined;
+        contextEntries.map(async (entry) => {
+          const { contextId: ctxId, alias } = entry;
+          const discovery = currentMemberIdentity
+            ? resolveSharedDmDiscovery(entry, currentMemberIdentity)
+            : null;
+
+          let joinedIdentity: string | undefined;
           try {
             const resp: ResponseData<FetchContextIdentitiesResponse> =
               await apiClient.node().fetchContextIdentities(ctxId);
             const list = resp.data?.data?.identities;
             if (list && list.length > 0) {
-              identity = list[0];
+              joinedIdentity = list[0];
             }
           } catch {
             // No identity means we haven't joined this context
           }
 
-          if (!identity) return null;
-
           let info: ContextInfo | null = null;
-          try {
-            const infoResp = await clientApi.getContextInfo(ctxId, identity);
-            if (infoResp.data) {
-              info = infoResp.data;
+          if (joinedIdentity) {
+            try {
+              const infoResp = await clientApi.getContextInfo(ctxId, joinedIdentity);
+              if (infoResp.data) {
+                info = infoResp.data;
+              }
+            } catch {
+              log.debug("useDMs", `get_info failed for ${ctxId}`);
             }
-          } catch {
-            log.debug("useDMs", `get_info failed for ${ctxId}`);
           }
 
-          if (!info || info.context_type !== "Dm") return null;
+          if (info && info.context_type !== "Dm") {
+            return null;
+          }
 
-          // Fetch profiles to determine the other user
+          const shouldInclude =
+            info?.context_type === "Dm" || (!info && Boolean(discovery));
+          if (!shouldInclude) {
+            return null;
+          }
+
           let otherUsername = "";
-          let otherIdentity = "";
-          try {
-            const profilesResp = await clientApi.getProfiles(ctxId, identity);
-            if (profilesResp.data && Array.isArray(profilesResp.data)) {
-              const other = profilesResp.data.find(
-                (p: { identity: string; username: string }) => p.identity !== identity,
-              );
-              if (other) {
-                otherUsername = other.username;
-                otherIdentity = other.identity;
+          let otherIdentity = discovery?.otherIdentity || "";
+
+          if (joinedIdentity) {
+            try {
+              const profilesResp = await clientApi.getProfiles(ctxId, joinedIdentity);
+              if (profilesResp.data && Array.isArray(profilesResp.data)) {
+                const other = profilesResp.data.find(
+                  (p: { identity: string; username: string }) =>
+                    p.identity !== joinedIdentity,
+                );
+                if (other) {
+                  otherUsername = other.username;
+                  otherIdentity = other.identity;
+                }
               }
+            } catch {
+              log.debug("useDMs", `get_profiles failed for ${ctxId}`);
             }
-          } catch {
-            log.debug("useDMs", `get_profiles failed for ${ctxId}`);
           }
 
           return {
             contextId: ctxId,
+            alias,
             info,
             otherUsername,
             otherIdentity,
-            myIdentity: identity,
+            myIdentity: joinedIdentity || "",
+            contextIdentity: joinedIdentity,
+            isJoined: Boolean(joinedIdentity),
           };
         }),
       );

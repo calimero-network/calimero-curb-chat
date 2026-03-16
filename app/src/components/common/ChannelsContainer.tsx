@@ -14,6 +14,7 @@ interface ChannelsContainerProps {
   onDMSelected: (dm: DMContextInfo) => void;
   channels: GroupContextChannel[];
   chatMembers: Map<string, string>;
+  dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
   privateDMs: DMContextInfo[];
   onChannelCreated?: () => void;
@@ -30,6 +31,7 @@ function ChannelsContainer(props: ChannelsContainerProps) {
     onDMSelected,
     channels,
     chatMembers,
+    dmMembers,
     createDM,
     privateDMs,
     onChannelCreated,
@@ -46,6 +48,7 @@ function ChannelsContainer(props: ChannelsContainerProps) {
       isOpenSearchChannel={isOpenSearchChannel}
       channels={channels || []}
       chatMembers={chatMembers}
+      dmMembers={dmMembers}
       createDM={createDM}
       privateDMs={privateDMs}
       onChannelCreated={onChannelCreated}

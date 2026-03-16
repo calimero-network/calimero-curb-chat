@@ -12,6 +12,7 @@ import type {
   CreateInvitationRequest,
   CreateInvitationResponse,
   GroupApi,
+  GroupContextEntry,
   GroupInfo,
   SignedGroupOpenInvitation,
   GroupMember,
@@ -84,6 +85,69 @@ function normalizeContextId(value: string): string {
   } catch {
     return value;
   }
+}
+
+function normalizeGroupContextEntry(entry: unknown): GroupContextEntry | null {
+  if (typeof entry === "string") {
+    return { contextId: normalizeContextId(entry) };
+  }
+
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const typedEntry = entry as {
+    contextId?: unknown;
+    alias?: unknown;
+    contextType?: unknown;
+    context_type?: unknown;
+    memberIdentities?: unknown;
+    members?: unknown;
+    participants?: unknown;
+    metadata?: unknown;
+  };
+  if (typeof typedEntry.contextId !== "string") {
+    return null;
+  }
+
+  const metadata =
+    typedEntry.metadata && typeof typedEntry.metadata === "object"
+      ? (typedEntry.metadata as Record<string, unknown>)
+      : undefined;
+
+  const sharedContextTypeValue =
+    typedEntry.contextType ?? typedEntry.context_type ?? metadata?.contextType ?? metadata?.context_type;
+  const sharedContextType =
+    sharedContextTypeValue === "Dm" || sharedContextTypeValue === "Channel"
+      ? sharedContextTypeValue
+      : typeof sharedContextTypeValue === "string"
+        ? sharedContextTypeValue.toLowerCase() === "dm"
+          ? "Dm"
+          : sharedContextTypeValue.toLowerCase() === "channel"
+            ? "Channel"
+            : undefined
+        : undefined;
+
+  const memberIdentitiesValue =
+    typedEntry.memberIdentities ??
+    typedEntry.members ??
+    typedEntry.participants ??
+    metadata?.memberIdentities ??
+    metadata?.members ??
+    metadata?.participants;
+  const memberIdentities = Array.isArray(memberIdentitiesValue)
+    ? memberIdentitiesValue.filter(
+        (value): value is string => typeof value === "string" && value.trim().length > 0,
+      )
+    : undefined;
+
+  return {
+    contextId: normalizeContextId(typedEntry.contextId),
+    alias: typeof typedEntry.alias === "string" ? typedEntry.alias : undefined,
+    sharedContextType,
+    memberIdentities: memberIdentities && memberIdentities.length > 0 ? memberIdentities : undefined,
+    metadata,
+  };
 }
 
 function isSignedGroupOpenInvitation(
@@ -322,15 +386,24 @@ export class GroupApiDataSource implements GroupApi {
     }
   }
 
-  async listGroupContexts(groupId: string): ApiResponse<string[]> {
+  async listGroupContexts(groupId: string): ApiResponse<GroupContextEntry[]> {
     try {
       const response = await axios.get(
         `${this.base()}/groups/${groupId}/contexts`,
         { headers: getAuthHeaders() },
       );
-      return response.status === 200
-        ? ok((response.data.data as string[]).map((contextId) => normalizeContextId(contextId)))
-        : httpFail(response.status, response.statusText);
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+
+      const rawContexts: unknown[] = Array.isArray(response.data.data)
+        ? response.data.data
+        : [];
+      const contexts = rawContexts
+        .map((entry: unknown) => normalizeGroupContextEntry(entry))
+        .filter((entry: GroupContextEntry | null): entry is GroupContextEntry => entry !== null)
+
+      return ok(contexts);
     } catch (error) {
       return catchError("listGroupContexts", error);
     }

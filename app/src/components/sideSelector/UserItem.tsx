@@ -5,6 +5,7 @@ import type { DMContextInfo } from "../../hooks/useDMs";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { useToast } from "../../contexts/ToastContext";
 import ConfirmPopup from "../popups/ConfirmPopup";
+import { getDmDisplayName } from "../../utils/dmContext";
 
 const UserListItem = styled.div<{
   $selected: boolean;
@@ -89,11 +90,25 @@ function UserItem({
 }: UserItemProps) {
   const { addToast } = useToast();
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isJoinOpen, setIsJoinOpen] = useState(false);
 
-  const displayName = dm.otherUsername || dm.contextId.substring(0, 8) + "...";
+  const displayName = getDmDisplayName({
+    otherUsername: dm.otherUsername,
+    otherIdentity: dm.otherIdentity,
+    contextId: dm.contextId,
+  });
 
   const handleClick = useCallback(() => {
+    if (!dm.isJoined) {
+      setIsJoinOpen(true);
+      return;
+    }
+
     onDMSelected(dm);
+  }, [dm, onDMSelected]);
+
+  const confirmJoin = useCallback(async () => {
+    await onDMSelected(dm);
   }, [dm, onDMSelected]);
 
   const confirmDelete = useCallback(async () => {
@@ -126,6 +141,18 @@ function UserItem({
             <NameContainer>{displayName}</NameContainer>
           </UserInfoContainer>
           <ActionsContainer>
+            <ConfirmPopup
+              title="Join DM"
+              message={`Join the private DM context with ${displayName}?`}
+              confirmLabel="Join DM"
+              cancelLabel="Cancel"
+              onConfirm={confirmJoin}
+              onCancel={() => {}}
+              toggle={<span />}
+              isOpen={isJoinOpen}
+              setIsOpen={setIsJoinOpen}
+              isChild
+            />
             <ConfirmPopup
               title="Delete DM"
               message="This will delete the DM context. Are you sure?"

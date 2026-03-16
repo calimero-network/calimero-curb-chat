@@ -1,13 +1,19 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SearchChannelsContainer from "./SearchChannelsContainer";
 
 const {
   mockListGroupContexts,
+  mockGetContextVisibility,
   mockUseCurrentGroupPermissions,
+  mockGetContextInfo,
+  mockFetchContextIdentities,
 } = vi.hoisted(() => ({
   mockListGroupContexts: vi.fn(),
+  mockGetContextVisibility: vi.fn(),
   mockUseCurrentGroupPermissions: vi.fn(),
+  mockGetContextInfo: vi.fn(),
+  mockFetchContextIdentities: vi.fn(),
 }));
 
 vi.mock("@calimero-network/mero-ui", () => ({
@@ -55,17 +61,20 @@ vi.mock("../../hooks/useCurrentGroupPermissions", () => ({
 vi.mock("../../api/dataSource/groupApiDataSource", () => ({
   GroupApiDataSource: class MockGroupApiDataSource {
     listGroupContexts = mockListGroupContexts;
+    getContextVisibility = mockGetContextVisibility;
   },
 }));
 
 vi.mock("../../api/dataSource/clientApiDataSource", () => ({
-  ClientApiDataSource: class MockClientApiDataSource {},
+  ClientApiDataSource: class MockClientApiDataSource {
+    getContextInfo = mockGetContextInfo;
+  },
 }));
 
 vi.mock("@calimero-network/calimero-client", () => ({
   apiClient: {
     node: () => ({
-      fetchContextIdentities: vi.fn(),
+      fetchContextIdentities: mockFetchContextIdentities,
     }),
   },
 }));
@@ -73,15 +82,29 @@ vi.mock("@calimero-network/calimero-client", () => ({
 describe("SearchChannelsContainer", () => {
   beforeEach(() => {
     mockListGroupContexts.mockReset();
+    mockGetContextVisibility.mockReset();
     mockUseCurrentGroupPermissions.mockReset();
+    mockGetContextInfo.mockReset();
+    mockFetchContextIdentities.mockReset();
 
     mockListGroupContexts.mockResolvedValue({
       data: [],
+    });
+    mockGetContextVisibility.mockResolvedValue({
+      data: { mode: "open" },
+      error: null,
     });
     mockUseCurrentGroupPermissions.mockReturnValue({
       isAdmin: false,
       canJoinOpenContexts: false,
       memberIdentity: "member-1",
+    });
+    mockGetContextInfo.mockResolvedValue({
+      data: null,
+      error: null,
+    });
+    mockFetchContextIdentities.mockResolvedValue({
+      data: { data: { identities: [] } },
     });
   });
 
@@ -101,5 +124,51 @@ describe("SearchChannelsContainer", () => {
     expect(
       screen.getByText(/create your first channel from the channels panel/i),
     ).toBeInTheDocument();
+  });
+
+  it("shows alias-based channel labels and matches searches against the alias", async () => {
+    mockListGroupContexts.mockResolvedValue({
+      data: [{ contextId: "abcdefgh12345678", alias: "Project Alpha" }],
+      error: null,
+    });
+    mockFetchContextIdentities.mockResolvedValue({
+      data: { data: { identities: ["member-key-1"] } },
+    });
+
+    render(
+      <SearchChannelsContainer
+        onChatSelected={vi.fn()}
+        fetchChannels={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("Project Alpha")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search Channels"), {
+      target: { value: "alpha" },
+    });
+
+    expect(await screen.findByText("Project Alpha")).toBeInTheDocument();
+    expect(screen.queryByText(/no matching channels/i)).not.toBeInTheDocument();
+  });
+
+  it("does not list DM contexts in the channel browser", async () => {
+    mockListGroupContexts.mockResolvedValue({
+      data: [
+        { contextId: "ctx-dm", alias: "DM_CONTEXT_member-1_member-2" },
+        { contextId: "ctx-channel", alias: "Project Alpha" },
+      ],
+      error: null,
+    });
+
+    render(
+      <SearchChannelsContainer
+        onChatSelected={vi.fn()}
+        fetchChannels={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("Project Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("DM_CONTEXT_member-1_member-2")).not.toBeInTheDocument();
   });
 });

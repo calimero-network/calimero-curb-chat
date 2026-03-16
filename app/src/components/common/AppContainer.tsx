@@ -31,7 +31,7 @@ const Wrapper = styled.div`
 
 interface AppContainerProps {
   isOpenSearchChannel: boolean;
-  setIsOpenSearchChannel: () => void;
+  setIsOpenSearchChannel: (isOpen: boolean) => void;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isOpen: boolean) => void;
   activeChat: ActiveChat | null;
@@ -49,6 +49,7 @@ interface AppContainerProps {
   onJoinedChat: () => void;
   loadPrevMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
   chatMembers: Map<string, string>;
+  dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
   privateDMs: DMContextInfo[];
   loadInitialThreadMessages: (
@@ -96,6 +97,7 @@ function AppContainer({
   onJoinedChat,
   loadPrevMessages,
   chatMembers,
+  dmMembers,
   createDM,
   privateDMs,
   loadInitialThreadMessages,
@@ -137,11 +139,15 @@ function AppContainer({
     <>
       <CurbNavbar
         activeChat={activeChat}
-        setActiveChat={updateSelectedActiveChat}
+        setActiveChat={(chat) => {
+          if (chat) {
+            updateSelectedActiveChat(chat);
+          }
+        }}
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
         isOpenSearchChannel={isOpenSearchChannel}
-        setIsOpenSearchChannel={setIsOpenSearchChannel}
+        setIsOpenSearchChannel={() => setIsOpenSearchChannel(true)}
         channelUserList={channelUsers}
         nonInvitedUserList={nonInvitedUserList}
         reFetchChannelMembers={reFetchChannelMembers}
@@ -165,6 +171,7 @@ function AppContainer({
           onDMSelected={onDMSelected}
           channels={channels}
           chatMembers={chatMembers}
+          dmMembers={dmMembers}
           createDM={createDM}
           privateDMs={privateDMs}
           onChannelCreated={onChannelCreated}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
   type ActiveChat,
@@ -29,17 +29,29 @@ import { useGroupContexts } from "../../hooks/useGroupContexts";
 import { useDMs } from "../../hooks/useDMs";
 import { useChatMembers } from "../../hooks/useChatMembers";
 import { useChannelMembers } from "../../hooks/useChannelMembers";
+import { useGroupMembers } from "../../hooks/useGroupMembers";
 import { useMessages } from "../../hooks/useMessages";
 import { useThreadMessages } from "../../hooks/useThreadMessages";
 import { useWebSocket, useWebSocketEvents } from "../../contexts/WebSocketContext";
 import { useChatHandlers } from "../../hooks/useChatHandlers";
-import { getGroupId, getApplicationId } from "../../constants/config";
+import {
+  getApplicationId,
+  getGroupId,
+  getGroupMemberIdentity,
+  setGroupMemberIdentity,
+} from "../../constants/config";
 import { getAppEntryState } from "../../utils/appEntry";
 import { getContextProfileSyncAction } from "../../utils/contextProfileSync";
 import {
   getMessengerDisplayName,
   setMessengerDisplayName,
 } from "../../utils/messengerName";
+import {
+  createDmContextInGroup,
+  getDmDisplayName,
+} from "../../utils/dmContext";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
+import { buildDmMemberOptions } from "../../utils/dmMemberOptions";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { app } = useCalimero();
@@ -85,6 +97,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const dmsHook = useDMs();
   const chatMembersHook = useChatMembers();
   const channelMembersHook = useChannelMembers();
+  const groupMembersHook = useGroupMembers();
+  const currentGroupPermissions = useCurrentGroupPermissions(currentGroupId);
 
   const addOptimisticMessage = mainMessages.addOptimistic;
   const addOptimisticThreadMessage = threadMessages.addOptimistic;
@@ -325,6 +339,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const membersDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  const groupMembersDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
   const fetchGroupChannels = useCallback(() => {
     const gid = getGroupId();
@@ -334,10 +351,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const fetchChannelsRef = useRef(fetchGroupChannels);
   const fetchDmsRef = useRef(fetchDmsWithGroup);
   const fetchMembersRef = useRef(chatMembersHook.fetchMembers);
+  const fetchGroupMembersRef = useRef(groupMembersHook.fetchGroupMembers);
 
   fetchChannelsRef.current = fetchGroupChannels;
   fetchDmsRef.current = fetchDmsWithGroup;
   fetchMembersRef.current = chatMembersHook.fetchMembers;
+  fetchGroupMembersRef.current = groupMembersHook.fetchGroupMembers;
 
   const debouncedFetchChannels = useCallback(async () => {
     clearTimeout(channelsDebounceRef.current);
@@ -358,6 +377,16 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       () => fetchMembersRef.current(),
       3000,
     );
+  }, []);
+
+  const debouncedFetchGroupMembers = useCallback(async () => {
+    clearTimeout(groupMembersDebounceRef.current);
+    groupMembersDebounceRef.current = setTimeout(() => {
+      const groupId = getGroupId();
+      if (groupId) {
+        fetchGroupMembersRef.current(groupId);
+      }
+    }, 3000);
   }, []);
 
   const mainMessagesRef = useRef(mainMessages);
@@ -389,6 +418,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     fetchChannels: { current: debouncedFetchChannels },
     fetchDMs: { current: debouncedFetchDMs },
     fetchMembers: { current: debouncedFetchMembers },
+    fetchGroupMembers: { current: debouncedFetchGroupMembers },
   }).current;
 
   const updateSelectedActiveChatRef = useRef(updateSelectedActiveChat);
@@ -397,6 +427,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const onDMSelected = useCallback(
     async (dm: DMContextInfo) => {
       const contextId = dm.contextId;
+      const groupId = getGroupId();
 
       const now = Date.now();
       if (
@@ -410,20 +441,55 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       lastDMSelectionRef.current = { contextId, timestamp: now };
 
+      let selectedDm = dm;
+      let resolvedIdentity = dm.contextIdentity || dm.myIdentity;
+
+      if (!dm.isJoined) {
+        if (!groupId) {
+          return;
+        }
+
+        const groupApi = new GroupApiDataSource();
+        const joinResponse = await groupApi.joinGroupContext(groupId, {
+          contextId,
+        });
+        if (joinResponse.error || !joinResponse.data) {
+          log.warn(
+            "Home",
+            `Failed to join DM context ${contextId}: ${joinResponse.error?.message || "unknown error"}`,
+          );
+          return;
+        }
+
+        resolvedIdentity = joinResponse.data.memberPublicKey;
+        const refreshedDms = await fetchDmsWithGroup();
+        const refreshedDm = refreshedDms.find(
+          (entry) => entry.contextId === contextId,
+        );
+        selectedDm =
+          refreshedDm ??
+          {
+            ...dm,
+            contextIdentity: resolvedIdentity,
+            myIdentity: resolvedIdentity,
+            isJoined: true,
+          };
+      }
+
       const selectedChat: ActiveChat = {
         type: "direct_message",
         contextId,
         id: contextId,
-        name: dm.otherUsername || contextId,
-        username: dm.otherUsername,
+        name: getDmDisplayName(selectedDm),
+        username: selectedDm.otherUsername || undefined,
         readOnly: false,
         isSynced: true,
-        contextIdentity: dm.myIdentity,
+        contextIdentity: resolvedIdentity,
       };
 
-      if (dm.myIdentity) {
+      if (resolvedIdentity) {
         setContextId(contextId);
-        setExecutorPublicKey(dm.myIdentity);
+        setExecutorPublicKey(resolvedIdentity);
       }
 
       mainMessagesRef.current.clear();
@@ -466,6 +532,21 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const privateDMs = dmsHook.dms;
 
   const chatMembers = chatMembersHook.members;
+  const currentMemberIdentity =
+    currentGroupPermissions.memberIdentity || getGroupMemberIdentity(currentGroupId);
+  const dmMembers = useMemo(
+    () =>
+      buildDmMemberOptions({
+        groupMembers: groupMembersHook.members,
+        currentMemberIdentity,
+        labelsByIdentity: chatMembers,
+      }),
+    [
+      groupMembersHook.members,
+      currentMemberIdentity,
+      chatMembers,
+    ],
+  );
 
   const {
     handleThreadMessageUpdates,
@@ -500,6 +581,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       ];
 
       if (groupId) {
+        fetchPromises.push(groupMembersHook.fetchGroupMembers(groupId));
         fetchPromises.push(groupContextsHook.fetchGroupContexts(groupId));
         fetchPromises.push(dmsHook.fetchDms(groupId));
       }
@@ -514,7 +596,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           isFetchingInitial.current = false;
         });
     }
-  }, [dmsHook, chatMembersHook, groupContextsHook]);
+  }, [dmsHook, chatMembersHook, groupContextsHook, groupMembersHook]);
 
   // Subscribe to ALL group contexts + DM contexts for real-time updates
   useEffect(() => {
@@ -604,48 +686,43 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     try {
       const nodeApi = new ContextApiDataSource();
       const groupApi = new GroupApiDataSource();
-
-      // @ts-expect-error - chatMembers is a Map<string, string>
-      const otherUsername = chatMembers[otherIdentity] || "";
-
-      const createResponse = await nodeApi.createGroupContext({
-        applicationId: getApplicationId(),
-        protocol: "near",
+      const identityResponse = await groupApi.resolveCurrentMemberIdentity(
         groupId,
-        initializationParams: {
-          name: otherUsername ? `DM: ${otherUsername}` : "DM",
-          context_type: "Dm",
-          description: "",
-          created_at: Date.now(),
-        },
-      });
+        getGroupMemberIdentity(groupId),
+      );
+      const myIdentity = identityResponse.data?.memberIdentity || "";
+      if (!myIdentity) {
+        return {
+          data: "",
+          error:
+            identityResponse.error?.message ||
+            "Could not resolve your workspace identity",
+        };
+      }
+      setGroupMemberIdentity(groupId, myIdentity);
+      if (myIdentity === otherIdentity) {
+        return {
+          data: "",
+          error: "Select another workspace member to start a DM",
+        };
+      }
+      const otherUsername = dmMembers.get(otherIdentity) || chatMembers.get(otherIdentity) || "";
 
+      const createResponse = await createDmContextInGroup({
+        applicationId: getApplicationId(),
+        groupId,
+        myIdentity,
+        otherIdentity,
+        otherUsername,
+        contextApi: nodeApi,
+        groupApi,
+        onWarning: (message) => log.warn("createDM", message),
+      });
       if (createResponse.error || !createResponse.data) {
         return {
           data: "",
-          error: createResponse.error?.message || "Failed to create DM context",
+          error: createResponse.error || "Failed to create DM context",
         };
-      }
-
-      const contextId = createResponse.data.contextId;
-      const myIdentity = createResponse.data.memberPublicKey;
-
-      const visibilityResponse = await groupApi.setContextVisibility(
-        groupId,
-        contextId,
-        { mode: "restricted" },
-      );
-      if (visibilityResponse.error) {
-        log.warn("createDM", `Failed to set restricted visibility: ${visibilityResponse.error.message}`);
-      }
-
-      const allowlistResponse = await groupApi.manageContextAllowlist(
-        groupId,
-        contextId,
-        { add: [myIdentity, otherIdentity] },
-      );
-      if (allowlistResponse.error) {
-        log.warn("createDM", `Failed to add to allowlist: ${allowlistResponse.error.message}`);
       }
 
       await fetchDmsWithGroup();
@@ -715,6 +792,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       onJoinedChat={onJoinedChat}
       loadPrevMessages={loadPrevMessages}
       chatMembers={chatMembers}
+      dmMembers={dmMembers}
       createDM={createDM}
       privateDMs={privateDMs}
       loadInitialThreadMessages={loadInitialThreadMessages}
