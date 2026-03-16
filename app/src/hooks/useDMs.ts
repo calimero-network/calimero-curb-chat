@@ -11,6 +11,7 @@ import { resolveSharedDmDiscovery } from "../utils/dmContext";
 
 export interface DMContextInfo extends GroupContextChannel {
   otherUsername: string;
+  otherAlias: string;
   otherIdentity: string;
   myIdentity: string;
 }
@@ -41,6 +42,17 @@ export function useDMs() {
       const currentMemberIdentity = currentIdentityResponse.data?.memberIdentity ?? "";
       if (currentMemberIdentity) {
         setGroupMemberIdentity(groupId, currentMemberIdentity);
+      }
+
+      const membersResponse = await groupApi.listMembers(groupId);
+      const memberAliasByIdentity = new Map<string, string>();
+      if (membersResponse.data) {
+        membersResponse.data.forEach((member) => {
+          const alias = member.alias?.trim();
+          if (alias) {
+            memberAliasByIdentity.set(member.identity, alias);
+          }
+        });
       }
 
       const listResponse = await groupApi.listGroupContexts(groupId);
@@ -95,6 +107,9 @@ export function useDMs() {
 
           let otherUsername = "";
           let otherIdentity = discovery?.otherIdentity || "";
+          let otherAlias = otherIdentity
+            ? memberAliasByIdentity.get(otherIdentity) || ""
+            : "";
 
           if (joinedIdentity) {
             try {
@@ -107,6 +122,7 @@ export function useDMs() {
                 if (other) {
                   otherUsername = other.username;
                   otherIdentity = other.identity;
+                  otherAlias = memberAliasByIdentity.get(other.identity) || "";
                 }
               }
             } catch {
@@ -119,6 +135,7 @@ export function useDMs() {
             alias,
             info,
             otherUsername,
+            otherAlias,
             otherIdentity,
             myIdentity: joinedIdentity || "",
             contextIdentity: joinedIdentity,

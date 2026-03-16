@@ -180,7 +180,7 @@ export default function DetailsDropdown({
   }
   const title =
     activeChat.type === "direct_message"
-      ? activeChat.username || ""
+      ? activeChat.name
       : activeChat.name;
 
   return (

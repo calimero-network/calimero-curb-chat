@@ -17,7 +17,9 @@ export function buildDmMemberOptions(params: {
 
     options.set(
       member.identity,
-      params.labelsByIdentity.get(member.identity) || "",
+      member.alias?.trim() ||
+        params.labelsByIdentity.get(member.identity) ||
+        member.identity,
     );
   });
 

@@ -109,6 +109,37 @@ export function useGroupAdmin() {
     [],
   );
 
+  const setMemberAlias = useCallback(
+    async (
+      groupId: string,
+      identity: string,
+      alias: string,
+    ): Promise<boolean> => {
+      setActionLoading(true);
+      setError(null);
+      try {
+        const resp = await api.setMemberAlias(groupId, identity, { alias });
+        if (resp.error) {
+          setError(resp.error.message);
+          return false;
+        }
+        setMembers((prev) =>
+          prev.map((member) =>
+            member.identity === identity ? { ...member, alias } : member,
+          ),
+        );
+        return true;
+      } catch (err) {
+        log.error("useGroupAdmin", "Failed to set member alias", err);
+        setError("Failed to set member alias");
+        return false;
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [],
+  );
+
   const getMemberCapabilities = useCallback(
     async (
       groupId: string,
@@ -315,6 +346,7 @@ export function useGroupAdmin() {
     fetchAll,
     removeMember,
     setMemberCapabilities,
+    setMemberAlias,
     getMemberCapabilities,
     getContextVisibility,
     setContextVisibility,

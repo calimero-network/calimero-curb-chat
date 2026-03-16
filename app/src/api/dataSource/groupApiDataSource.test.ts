@@ -2,13 +2,15 @@ import bs58 from "bs58";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupApiDataSource } from "./groupApiDataSource";
 
-const { mockAxiosGet } = vi.hoisted(() => ({
+const { mockAxiosGet, mockAxiosPut } = vi.hoisted(() => ({
   mockAxiosGet: vi.fn(),
+  mockAxiosPut: vi.fn(),
 }));
 
 vi.mock("axios", () => ({
   default: {
     get: mockAxiosGet,
+    put: mockAxiosPut,
   },
   isAxiosError: () => false,
 }));
@@ -21,6 +23,7 @@ vi.mock("@calimero-network/calimero-client", () => ({
 describe("GroupApiDataSource", () => {
   beforeEach(() => {
     mockAxiosGet.mockReset();
+    mockAxiosPut.mockReset();
   });
 
   it("preserves optional aliases when listing group contexts", async () => {
@@ -54,6 +57,36 @@ describe("GroupApiDataSource", () => {
           alias: "Project Alpha",
         },
       ],
+      error: null,
+    });
+  });
+
+  it("updates a member alias through the admin member alias endpoint", async () => {
+    mockAxiosPut.mockResolvedValue({
+      status: 200,
+      data: {
+        data: undefined,
+      },
+      statusText: "OK",
+    });
+
+    const dataSource = new GroupApiDataSource();
+    const response = await dataSource.setMemberAlias("group-1", "member-1", {
+      alias: "Taylor",
+    });
+
+    expect(mockAxiosPut).toHaveBeenCalledWith(
+      "http://localhost:2428/admin-api/groups/group-1/members/member-1/alias",
+      { alias: "Taylor" },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer token",
+        },
+      },
+    );
+    expect(response).toEqual({
+      data: undefined,
       error: null,
     });
   });

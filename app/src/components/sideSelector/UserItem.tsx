@@ -94,6 +94,7 @@ function UserItem({
 
   const displayName = getDmDisplayName({
     otherUsername: dm.otherUsername,
+    otherAlias: dm.otherAlias,
     otherIdentity: dm.otherIdentity,
     contextId: dm.contextId,
   });

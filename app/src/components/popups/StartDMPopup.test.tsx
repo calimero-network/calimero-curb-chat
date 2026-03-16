@@ -78,7 +78,7 @@ describe("StartDMPopup", () => {
     });
   });
 
-  it("searches by member identity and submits the selected identity", async () => {
+  it("searches by alias and submits the selected identity", async () => {
     render(
       <StartDMPopup
         title="Create a DM"
@@ -92,8 +92,8 @@ describe("StartDMPopup", () => {
         functionLoader={mockFunctionLoader}
         chatMembers={
           new Map([
-            ["member-a", "Alice"],
-            ["member-b", "Bob"],
+            ["member-a", "Alice Alias"],
+            ["member-b", "Bob Alias"],
           ])
         }
       />,
@@ -101,13 +101,13 @@ describe("StartDMPopup", () => {
 
     fireEvent.focus(screen.getByPlaceholderText("Search by member identity"));
     fireEvent.change(screen.getByPlaceholderText("Search by member identity"), {
-      target: { value: "bob" },
+      target: { value: "bob alias" },
     });
 
+    expect(screen.getByText("Bob Alias")).toBeInTheDocument();
     expect(screen.getByText("member-b")).toBeInTheDocument();
-    expect(screen.getByText("Bob")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("member-b"));
+    fireEvent.click(screen.getByText("Bob Alias"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     await waitFor(() => {
@@ -115,7 +115,7 @@ describe("StartDMPopup", () => {
     });
   });
 
-  it("shows available member identities when the popup opens", () => {
+  it("shows available member aliases when the popup opens", () => {
     render(
       <StartDMPopup
         title="Create a DM"
@@ -129,14 +129,14 @@ describe("StartDMPopup", () => {
         functionLoader={mockFunctionLoader}
         chatMembers={
           new Map([
-            ["member-a", "Alice"],
-            ["member-b", "Bob"],
+            ["member-a", "Alice Alias"],
+            ["member-b", "Bob Alias"],
           ])
         }
       />,
     );
 
-    expect(screen.getByText("member-a")).toBeInTheDocument();
-    expect(screen.getByText("member-b")).toBeInTheDocument();
+    expect(screen.getByText("Alice Alias")).toBeInTheDocument();
+    expect(screen.getByText("Bob Alias")).toBeInTheDocument();
   });
 });

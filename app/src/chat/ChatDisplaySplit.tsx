@@ -382,7 +382,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
           selectedChat={
             activeChat.type === "channel"
               ? activeChat.name
-              : activeChat.username || ""
+                : activeChat.name
           }
           contextId={resolvedContextId}
           sendMessage={sendMessage}

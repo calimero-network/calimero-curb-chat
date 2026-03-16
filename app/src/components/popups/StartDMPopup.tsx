@@ -117,7 +117,7 @@ const InputWrapper = styled.div`
 
 interface MemberSuggestion {
   identity: string;
-  username: string;
+  label: string;
 }
 
 export interface CreateContextResult {
@@ -165,9 +165,9 @@ const StartDMPopup = memo(function StartDMPopup({
 
   const memberOptions = useMemo(
     () =>
-      Array.from(chatMembers.entries()).map(([identity, username]) => ({
+      Array.from(chatMembers.entries()).map(([identity, label]) => ({
         identity,
-        username,
+        label,
       })),
     [chatMembers],
   );
@@ -199,9 +199,9 @@ const StartDMPopup = memo(function StartDMPopup({
     }
 
     return memberOptions.filter(
-      ({ identity, username }) =>
+      ({ identity, label }) =>
         identity.toLowerCase().includes(query) ||
-        username.toLowerCase().includes(query),
+        label.toLowerCase().includes(query),
     );
   };
 
@@ -275,9 +275,9 @@ const StartDMPopup = memo(function StartDMPopup({
                 key={suggestion.identity}
                 onClick={() => handleSuggestionClick(suggestion)}
               >
-                <SuggestionIdentity>{suggestion.identity}</SuggestionIdentity>
-                {suggestion.username && (
-                  <SuggestionLabel>{suggestion.username}</SuggestionLabel>
+                <SuggestionIdentity>{suggestion.label}</SuggestionIdentity>
+                {suggestion.identity && (
+                  <SuggestionLabel>{suggestion.identity}</SuggestionLabel>
                 )}
               </SuggestionItem>
             ))}

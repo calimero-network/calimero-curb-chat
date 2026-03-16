@@ -98,6 +98,7 @@ describe("dmContext", () => {
       getDmDisplayName({
         contextId: "ctx-1",
         otherUsername: "Alice",
+        otherAlias: "Alice Alias",
         otherIdentity: "member-a",
       }),
     ).toBe("Alice");
@@ -106,6 +107,16 @@ describe("dmContext", () => {
       getDmDisplayName({
         contextId: "ctx-1",
         otherUsername: "",
+        otherAlias: "Alice Alias",
+        otherIdentity: "member-a",
+      }),
+    ).toBe("Alice Alias");
+
+    expect(
+      getDmDisplayName({
+        contextId: "ctx-1",
+        otherUsername: "",
+        otherAlias: "",
         otherIdentity: "member-a",
       }),
     ).toBe("member-a");
