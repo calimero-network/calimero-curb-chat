@@ -4,6 +4,7 @@ import { useDMs } from "./useDMs";
 
 const {
   mockListGroupContexts,
+  mockListMembers,
   mockResolveCurrentMemberIdentity,
   mockGetContextInfo,
   mockGetProfiles,
@@ -12,6 +13,7 @@ const {
   mockSetGroupMemberIdentity,
 } = vi.hoisted(() => ({
   mockListGroupContexts: vi.fn(),
+  mockListMembers: vi.fn(),
   mockResolveCurrentMemberIdentity: vi.fn(),
   mockGetContextInfo: vi.fn(),
   mockGetProfiles: vi.fn(),
@@ -23,6 +25,7 @@ const {
 vi.mock("../api/dataSource/groupApiDataSource", () => ({
   GroupApiDataSource: class MockGroupApiDataSource {
     listGroupContexts = mockListGroupContexts;
+    listMembers = mockListMembers;
     resolveCurrentMemberIdentity = mockResolveCurrentMemberIdentity;
   },
 }));
@@ -50,6 +53,7 @@ vi.mock("../constants/config", () => ({
 describe("useDMs", () => {
   beforeEach(() => {
     mockListGroupContexts.mockReset();
+    mockListMembers.mockReset();
     mockResolveCurrentMemberIdentity.mockReset();
     mockGetContextInfo.mockReset();
     mockGetProfiles.mockReset();
@@ -58,6 +62,10 @@ describe("useDMs", () => {
     mockSetGroupMemberIdentity.mockReset();
 
     mockGetGroupMemberIdentity.mockReturnValue("member-me");
+    mockListMembers.mockResolvedValue({
+      data: [],
+      error: null,
+    });
     mockResolveCurrentMemberIdentity.mockResolvedValue({
       data: {
         memberIdentity: "member-me",
@@ -151,9 +159,67 @@ describe("useDMs", () => {
     expect(dms[0]).toEqual(
       expect.objectContaining({
         contextId: "ctx-me-you",
+        otherAlias: "",
         otherIdentity: "member-you",
         otherUsername: "",
         isJoined: true,
+      }),
+    );
+  });
+
+  it("uses the member alias when DM profiles do not provide a username", async () => {
+    mockListGroupContexts.mockResolvedValue({
+      data: [
+        {
+          contextId: "ctx-me-you",
+          alias: "DM_CONTEXT_member-me_member-you",
+        },
+      ],
+      error: null,
+    });
+    mockListMembers.mockResolvedValue({
+      data: [
+        { identity: "member-me", role: "Member" },
+        { identity: "member-you", alias: "Taylor", role: "Member" },
+      ],
+      error: null,
+    });
+    mockFetchContextIdentities.mockResolvedValue({
+      data: {
+        data: {
+          identities: ["member-me"],
+        },
+      },
+    });
+    mockGetContextInfo.mockResolvedValue({
+      data: {
+        name: "DM",
+        context_type: "Dm",
+      },
+      error: null,
+    });
+    mockGetProfiles.mockResolvedValue({
+      data: [
+        {
+          identity: "member-me",
+          username: "Me",
+        },
+      ],
+      error: null,
+    });
+
+    const { result } = renderHook(() => useDMs());
+
+    let dms: Awaited<ReturnType<typeof result.current.fetchDms>> = [];
+    await act(async () => {
+      dms = await result.current.fetchDms("group-1");
+    });
+
+    expect(dms[0]).toEqual(
+      expect.objectContaining({
+        otherAlias: "Taylor",
+        otherIdentity: "member-you",
+        otherUsername: "",
       }),
     );
   });

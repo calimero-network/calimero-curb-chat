@@ -28,6 +28,7 @@ import type {
   SetContextVisibilityRequest,
   SetDefaultCapabilitiesRequest,
   SetDefaultVisibilityRequest,
+  SetMemberAliasRequest,
   SetMemberCapabilitiesRequest,
   SyncGroupResponse,
   UpgradeGroupRequest,
@@ -550,6 +551,25 @@ export class GroupApiDataSource implements GroupApi {
         : httpFail(response.status, response.statusText);
     } catch (error) {
       return catchError("setMemberCapabilities", error);
+    }
+  }
+
+  async setMemberAlias(
+    groupId: string,
+    identity: string,
+    request: SetMemberAliasRequest,
+  ): ApiResponse<void> {
+    try {
+      const response = await axios.put(
+        `${this.base()}/groups/${groupId}/members/${identity}/alias`,
+        request,
+        { headers: getAuthHeaders() },
+      );
+      return response.status === 200
+        ? ok(undefined as void)
+        : httpFail(response.status, response.statusText);
+    } catch (error) {
+      return catchError("setMemberAlias", error);
     }
   }
 

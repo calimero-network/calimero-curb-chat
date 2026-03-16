@@ -6,7 +6,7 @@ describe("buildDmMemberOptions", () => {
     const options = buildDmMemberOptions({
       groupMembers: [
         { identity: "member-me", role: "Admin" },
-        { identity: "member-a", role: "Member" },
+        { identity: "member-a", alias: "Alice Alias", role: "Member" },
         { identity: "member-b", role: "Member" },
       ],
       currentMemberIdentity: "member-me",
@@ -17,7 +17,7 @@ describe("buildDmMemberOptions", () => {
     });
 
     expect(Array.from(options.entries())).toEqual([
-      ["member-a", "Alice"],
+      ["member-a", "Alice Alias"],
       ["member-b", "Bob"],
     ]);
   });
@@ -33,7 +33,7 @@ describe("buildDmMemberOptions", () => {
     });
 
     expect(Array.from(options.keys())).toEqual(["member-a"]);
-    expect(options.get("member-a")).toBe("");
+    expect(options.get("member-a")).toBe("member-a");
     expect(options.has("member-me")).toBe(false);
   });
 });

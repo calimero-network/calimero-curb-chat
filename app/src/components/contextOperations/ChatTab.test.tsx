@@ -78,9 +78,10 @@ vi.mock("../../utils/invitation", () => ({
   parseGroupInvitationPayload: mockParseGroupInvitationPayload,
 }));
 
-function makeGroup(groupId: string) {
+function makeGroup(groupId: string, alias?: string) {
   return {
     groupId,
+    alias,
     appKey: "test-app",
     targetApplicationId: "test-target",
     upgradePolicy: "Automatic" as const,
@@ -133,6 +134,30 @@ describe("ChatTab", () => {
 
     expect(
       screen.getByText(/join workspace with invitation/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the group alias in the workspace picker when available", async () => {
+    mockListGroups.mockResolvedValue({
+      data: [makeGroup("group-1", "Product Team")],
+    });
+
+    renderChatTab();
+
+    expect(
+      await screen.findByRole("option", { name: "Product Team" }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to a truncated group ID when the workspace alias is missing", async () => {
+    mockListGroups.mockResolvedValue({
+      data: [makeGroup("abcdefghijklmnop")],
+    });
+
+    renderChatTab();
+
+    expect(
+      await screen.findByRole("option", { name: "abcdefghijkl..." }),
     ).toBeInTheDocument();
   });
 

@@ -33,6 +33,7 @@ export interface SignedGroupOpenInvitation {
 
 export interface GroupInfo {
   groupId: string;
+  alias?: string;
   appKey: string;
   targetApplicationId: string;
   upgradePolicy: UpgradePolicy;
@@ -45,6 +46,7 @@ export interface GroupInfo {
 
 export interface GroupSummary {
   groupId: string;
+  alias?: string;
   appKey: string;
   targetApplicationId: string;
   upgradePolicy: UpgradePolicy;
@@ -53,6 +55,7 @@ export interface GroupSummary {
 
 export interface GroupMember {
   identity: string;
+  alias?: string;
   role: GroupMemberRole;
 }
 
@@ -127,6 +130,10 @@ export interface ManageAllowlistRequest {
 
 export interface SetMemberCapabilitiesRequest {
   capabilities: number;
+}
+
+export interface SetMemberAliasRequest {
+  alias: string;
 }
 
 export interface MemberCapabilities {
@@ -212,6 +219,11 @@ export interface GroupApi {
     groupId: string,
     identity: string,
     request: SetMemberCapabilitiesRequest,
+  ): ApiResponse<void>;
+  setMemberAlias(
+    groupId: string,
+    identity: string,
+    request: SetMemberAliasRequest,
   ): ApiResponse<void>;
   setDefaultCapabilities(
     groupId: string,

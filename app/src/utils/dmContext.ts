@@ -222,12 +222,18 @@ export function isDmContextCandidate(params: {
 
 export function getDmDisplayName(params: {
   otherUsername?: string;
+  otherAlias?: string;
   otherIdentity?: string;
   contextId: string;
 }): string {
   const username = params.otherUsername?.trim();
   if (username) {
     return username;
+  }
+
+  const alias = params.otherAlias?.trim();
+  if (alias) {
+    return alias;
   }
 
   const identity = params.otherIdentity?.trim();

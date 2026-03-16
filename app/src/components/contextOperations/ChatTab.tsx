@@ -114,14 +114,22 @@ interface ChatTabProps {
   onInvitationSaved?: () => void;
 }
 
-function buildJoinedWorkspaceFallback(groupId: string): GroupSummary {
+function buildJoinedWorkspaceFallback(
+  groupId: string,
+  alias?: string,
+): GroupSummary {
   return {
     groupId,
+    alias,
     appKey: "",
     targetApplicationId: "",
     upgradePolicy: "Automatic",
     createdAt: Math.floor(Date.now() / 1000),
   };
+}
+
+function getWorkspaceLabel(group: GroupSummary): string {
+  return group.alias?.trim() || `${group.groupId.substring(0, 12)}...`;
 }
 
 export default function ChatTab({
@@ -331,7 +339,7 @@ export default function ChatTab({
             </option>
             {availableGroups.map((group) => (
               <option key={group.groupId} value={group.groupId}>
-                {group.groupId.substring(0, 12)}...
+                {getWorkspaceLabel(group)}
               </option>
             ))}
           </Select>

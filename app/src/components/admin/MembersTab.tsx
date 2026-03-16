@@ -43,6 +43,21 @@ const Identity = styled.span`
   max-width: 240px;
 `;
 
+const IdentityStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`;
+
+const SecondaryIdentity = styled.span`
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.45);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+`;
+
 const RoleBadge = styled.span<{ $admin: boolean }>`
   font-size: 0.65rem;
   font-weight: 600;
@@ -168,6 +183,10 @@ function truncateIdentity(id: string): string {
   return `${id.slice(0, 8)}...${id.slice(-8)}`;
 }
 
+function getMemberDisplayName(member: GroupMember): string {
+  return member.alias?.trim() || truncateIdentity(member.identity);
+}
+
 interface MembersTabProps {
   groupId: string;
   members: GroupMember[];
@@ -238,10 +257,17 @@ export default function MembersTab({
         <React.Fragment key={member.identity}>
           <MemberRow>
             <MemberInfo>
-              <Avatar size="xs" name={truncateIdentity(member.identity)} />
-              <Identity title={member.identity}>
-                {truncateIdentity(member.identity)}
-              </Identity>
+              <Avatar size="xs" name={getMemberDisplayName(member)} />
+              <IdentityStack>
+                <Identity title={member.identity}>
+                  {getMemberDisplayName(member)}
+                </Identity>
+                {member.alias?.trim() && (
+                  <SecondaryIdentity title={member.identity}>
+                    {truncateIdentity(member.identity)}
+                  </SecondaryIdentity>
+                )}
+              </IdentityStack>
               <RoleBadge $admin={member.role === "Admin"}>
                 {member.role}
               </RoleBadge>
