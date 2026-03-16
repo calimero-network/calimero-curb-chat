@@ -130,7 +130,9 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
           </EmptyChannelState>
         )}
         {channels.map((channel) => {
-          const displayName = channel.info?.name ?? channel.contextId.substring(0, 8);
+          const displayName =
+            channel.info?.name ?? channel.alias ?? channel.contextId.substring(0, 8);
+          const activeChatName = channel.info?.name ?? channel.contextId.substring(0, 8);
           const isRestricted = channel.visibility === "restricted";
           const isSelected = selectedChannelId === channel.contextId;
 
@@ -148,7 +150,7 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
                   {
                     ...buildChannelEntryChat({
                       contextId: channel.contextId,
-                      name: displayName,
+                      name: activeChatName,
                       contextIdentity: channel.contextIdentity,
                       username: "",
                     }),

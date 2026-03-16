@@ -35,7 +35,8 @@ export function useGroupContexts() {
         return;
       }
 
-      const ids = listResponse.data;
+      const contextEntries = listResponse.data;
+      const ids = contextEntries.map((entry) => entry.contextId);
       setContextIds(ids);
 
       const idMap: ContextIdentityMap = { ...identitiesRef.current };
@@ -62,11 +63,12 @@ export function useGroupContexts() {
 
       // Fetch get_info() for each context where we have an identity
       const enriched: GroupContextChannel[] = await Promise.all(
-        ids.map(async (ctxId: string) => {
+        contextEntries.map(async ({ contextId: ctxId, alias }) => {
           const executor = idMap[ctxId];
           if (!executor) {
             return {
               contextId: ctxId,
+              alias,
               info: null,
               contextIdentity: undefined,
               isJoined: false,
@@ -77,6 +79,7 @@ export function useGroupContexts() {
             if (infoResp.data) {
               return {
                 contextId: ctxId,
+                alias,
                 info: infoResp.data,
                 contextIdentity: executor,
                 isJoined: true,
@@ -87,6 +90,7 @@ export function useGroupContexts() {
           }
           return {
             contextId: ctxId,
+            alias,
             info: null,
             contextIdentity: executor,
             isJoined: true,

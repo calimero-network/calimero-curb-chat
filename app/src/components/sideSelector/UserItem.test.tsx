@@ -31,14 +31,16 @@ vi.mock("../popups/ConfirmPopup", () => ({
     toggle,
     isOpen,
     onConfirm,
+    title,
   }: {
     toggle: React.ReactNode;
     isOpen: boolean;
     onConfirm: () => void;
+    title: string;
   }) => (
     <div>
       {toggle}
-      {isOpen ? <button onClick={onConfirm}>Confirm delete</button> : null}
+      {isOpen ? <button onClick={onConfirm}>Confirm {title}</button> : null}
     </div>
   ),
 }));
@@ -62,9 +64,12 @@ describe("UserItem", () => {
       <UserItem
         dm={{
           contextId: "dm-1",
-          otherParticipant: "user-2",
+          info: null,
+          otherIdentity: "user-2",
           otherUsername: "Jane",
           contextIdentity: "identity-1",
+          myIdentity: "identity-1",
+          isJoined: true,
         }}
         onDMSelected={vi.fn()}
         onNoActiveChat={onNoActiveChat}
@@ -83,6 +88,61 @@ describe("UserItem", () => {
     expect(mockAddToast).toHaveBeenCalledWith(
       expect.objectContaining({
         message: "DM deleted",
+      }),
+    );
+  });
+
+  it("falls back to the participant identity when no DM profile username exists", () => {
+    render(
+      <UserItem
+        dm={{
+          contextId: "dm-2",
+          info: null,
+          otherIdentity: "user-2",
+          otherUsername: "",
+          contextIdentity: "identity-1",
+          myIdentity: "identity-1",
+          isJoined: true,
+        }}
+        onDMSelected={vi.fn()}
+        onNoActiveChat={vi.fn()}
+        selected={false}
+      />,
+    );
+
+    expect(screen.getAllByText("user-2")).toHaveLength(2);
+  });
+
+  it("asks for confirmation before joining an unjoined DM", () => {
+    const onDMSelected = vi.fn();
+
+    render(
+      <UserItem
+        dm={{
+          contextId: "dm-3",
+          info: null,
+          otherIdentity: "user-3",
+          otherUsername: "Sam",
+          contextIdentity: undefined,
+          myIdentity: "",
+          isJoined: false,
+        }}
+        onDMSelected={onDMSelected}
+        onNoActiveChat={vi.fn()}
+        selected={false}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByText("Sam")[0]);
+
+    expect(onDMSelected).not.toHaveBeenCalled();
+    expect(screen.getByText("Confirm Join DM")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Confirm Join DM"));
+
+    expect(onDMSelected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextId: "dm-3",
       }),
     );
   });

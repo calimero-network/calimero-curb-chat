@@ -12,6 +12,7 @@ import { Button, SearchInput } from "@calimero-network/mero-ui";
 import { log } from "../../utils/logger";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { buildChannelEntryChat } from "../../utils/channelEntry";
+import { isDmContextCandidate } from "../../utils/dmContext";
 
 const SearchContainer = styled.div`
   padding: 24px;
@@ -152,6 +153,16 @@ interface SearchChannelsContainerProps {
   fetchChannels: () => void;
 }
 
+function getChannelListName(channel: Pick<GroupContextChannel, "contextId" | "alias" | "info">) {
+  return channel.info?.name ?? channel.alias ?? `${channel.contextId.substring(0, 12)}...`;
+}
+
+function getActiveChannelName(
+  channel: Pick<GroupContextChannel, "contextId" | "info">,
+) {
+  return channel.info?.name ?? channel.contextId.substring(0, 8);
+}
+
 export default function SearchChannelsContainer({
   onChatSelected,
   fetchChannels,
@@ -164,8 +175,10 @@ export default function SearchChannelsContainer({
 
   const filteredChannels = inputValue
     ? allChannels.filter((ch) => {
-        const name = ch.info?.name ?? ch.contextId;
-        return name.toLowerCase().includes(inputValue.toLowerCase());
+        const query = inputValue.toLowerCase();
+        return [ch.alias, ch.info?.name, ch.contextId].some(
+          (value) => value?.toLowerCase().includes(query),
+        );
       })
     : allChannels;
 
@@ -179,8 +192,13 @@ export default function SearchChannelsContainer({
       const listResp = await groupApi.listGroupContexts(groupId);
       if (!listResp.data) return;
 
-      const enriched: BrowsableChannel[] = await Promise.all(
-        listResp.data.map(async (ctxId: string) => {
+      const enriched: (BrowsableChannel | null)[] = await Promise.all(
+        listResp.data.map(async (entry) => {
+          const { contextId: ctxId, alias } = entry;
+          if (isDmContextCandidate({ entry })) {
+            return null;
+          }
+
           let isJoined = false;
           let info = null;
           let joinedIdentity = "";
@@ -197,6 +215,10 @@ export default function SearchChannelsContainer({
             }
           } catch {
             log.debug("SearchChannels", `Could not fetch info for ${ctxId}`);
+          }
+
+          if (isDmContextCandidate({ entry, info })) {
+            return null;
           }
 
           const visibilityResponse = await groupApi.getContextVisibility(groupId, ctxId);
@@ -234,6 +256,7 @@ export default function SearchChannelsContainer({
 
           return {
             contextId: ctxId,
+            alias,
             info,
             isJoined,
             visibility,
@@ -244,7 +267,12 @@ export default function SearchChannelsContainer({
         }),
       );
 
-      setAllChannels(enriched.filter((ch) => !ch.info || ch.info.context_type === "Channel"));
+      setAllChannels(
+        enriched.filter(
+          (ch): ch is BrowsableChannel =>
+            ch !== null && (!ch.info || ch.info.context_type === "Channel"),
+        ),
+      );
     };
 
     void loadChannels();
@@ -290,7 +318,7 @@ export default function SearchChannelsContainer({
           onChatSelected(
             buildChannelEntryChat({
               contextId,
-              name: channel.info?.name ?? channel.contextId.substring(0, 8),
+              name: getActiveChannelName(channel),
               contextIdentity: joinResponse.data.memberPublicKey,
               username: "",
             }),
@@ -307,7 +335,6 @@ export default function SearchChannelsContainer({
 
   const onViewChannel = useCallback(
     (channel: BrowsableChannel) => {
-      const displayName = channel.info?.name ?? channel.contextId.substring(0, 8);
       if (!channel.joinedIdentity) {
         return;
       }
@@ -315,7 +342,7 @@ export default function SearchChannelsContainer({
       onChatSelected(
         buildChannelEntryChat({
           contextId: channel.contextId,
-          name: displayName,
+          name: getActiveChannelName(channel),
           contextIdentity: channel.joinedIdentity,
           username: "",
         }),
@@ -359,8 +386,7 @@ export default function SearchChannelsContainer({
             </EmptyState>
           )}
           {filteredChannels.map((channel) => {
-            const displayName =
-              channel.info?.name ?? channel.contextId.substring(0, 12) + "...";
+            const displayName = getChannelListName(channel);
             return (
               <div key={channel.contextId} className="listItem">
                 <div>

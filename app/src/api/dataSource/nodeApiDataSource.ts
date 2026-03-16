@@ -257,6 +257,7 @@ export class ContextApiDataSource implements NodeApi {
     groupId: string;
     initializationParams: Record<string, unknown>;
     identitySecret?: string;
+    alias?: string;
   }): ApiResponse<CreateContextResponse> {
     try {
       const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
@@ -271,6 +272,9 @@ export class ContextApiDataSource implements NodeApi {
       };
       if (params.identitySecret) {
         body.identitySecret = params.identitySecret;
+      }
+      if (params.alias) {
+        body.alias = params.alias;
       }
 
       const response = await axios.post(

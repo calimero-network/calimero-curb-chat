@@ -14,7 +14,7 @@ const DMContainer = styled.div`
 `;
 
 interface DMSideSelectorProps {
-  chatMembers: Map<string, string>;
+  dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
   onDMSelected: (dm: DMContextInfo) => void;
   selectedDM: string;
@@ -24,7 +24,7 @@ interface DMSideSelectorProps {
 }
 
 function DMSideSelector({
-  chatMembers,
+  dmMembers,
   createDM,
   onDMSelected,
   selectedDM,
@@ -37,7 +37,7 @@ function DMSideSelector({
       <DMHeader
         key="dm-header"
         createDM={createDM}
-        chatMembers={chatMembers}
+        availableMembers={dmMembers}
         isCollapsed={isCollapsed}
       />
       <UserList

@@ -44,6 +44,7 @@ export interface ContextInfo {
 /** A group context enriched with metadata from `get_info()` */
 export interface GroupContextChannel {
   contextId: string;
+  alias?: string;
   info: ContextInfo | null;
   visibility?: "open" | "restricted";
   contextIdentity?: string;

@@ -19,6 +19,7 @@ interface SideSelectorProps {
   setIsOpenSearchChannel: () => void;
   isOpenSearchChannel: boolean;
   chatMembers: Map<string, string>;
+  dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
   privateDMs: DMContextInfo[];
   onChannelCreated?: () => void;
@@ -234,7 +235,7 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
         <HorizontalSeparatorLine $isMobile={true} />
         {isCollapsed && <SectionLabel>DM</SectionLabel>}
         <DMSideSelector
-          chatMembers={props.chatMembers}
+          dmMembers={props.dmMembers}
           onDMSelected={props.onDMSelected}
           selectedDM={
             props.activeChat?.type === "direct_message"

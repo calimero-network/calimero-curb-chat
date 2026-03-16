@@ -91,6 +91,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
       applicationId: getApplicationId(),
       protocol: "near",
       groupId,
+      alias: channelName,
       initializationParams: initParams,
     });
 
