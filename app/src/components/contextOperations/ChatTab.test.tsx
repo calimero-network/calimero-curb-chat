@@ -14,7 +14,9 @@ const {
   mockSetGroupId,
   mockGetGroupId,
   mockGetGroupMemberIdentity,
+  mockGetStoredGroupAlias,
   mockGetMessengerDisplayName,
+  mockSetStoredGroupAlias,
   mockSetMessengerDisplayName,
   mockClearStoredSession,
   mockParseInvitationInput,
@@ -29,7 +31,9 @@ const {
   mockSetGroupId: vi.fn(),
   mockGetGroupId: vi.fn(),
   mockGetGroupMemberIdentity: vi.fn(),
+  mockGetStoredGroupAlias: vi.fn(),
   mockGetMessengerDisplayName: vi.fn(),
+  mockSetStoredGroupAlias: vi.fn(),
   mockSetMessengerDisplayName: vi.fn(),
   mockClearStoredSession: vi.fn(),
   mockParseInvitationInput: vi.fn(),
@@ -63,8 +67,10 @@ vi.mock("../../api/dataSource/groupApiDataSource", () => ({
 vi.mock("../../constants/config", () => ({
   getGroupId: mockGetGroupId,
   getGroupMemberIdentity: mockGetGroupMemberIdentity,
+  getStoredGroupAlias: mockGetStoredGroupAlias,
   setGroupId: mockSetGroupId,
   setGroupMemberIdentity: mockSetGroupMemberIdentity,
+  setStoredGroupAlias: mockSetStoredGroupAlias,
 }));
 
 vi.mock("../../utils/messengerName", () => ({
@@ -115,7 +121,9 @@ describe("ChatTab", () => {
     mockSetGroupId.mockReset();
     mockGetGroupId.mockReset();
     mockGetGroupMemberIdentity.mockReset();
+    mockGetStoredGroupAlias.mockReset();
     mockGetMessengerDisplayName.mockReset();
+    mockSetStoredGroupAlias.mockReset();
     mockSetMessengerDisplayName.mockReset();
     mockClearStoredSession.mockReset();
     mockParseInvitationInput.mockReset();
@@ -123,6 +131,7 @@ describe("ChatTab", () => {
 
     mockGetGroupId.mockReturnValue("");
     mockGetGroupMemberIdentity.mockReturnValue("");
+    mockGetStoredGroupAlias.mockReturnValue("");
     mockGetMessengerDisplayName.mockReturnValue("Ronit");
     mockSetMemberAlias.mockResolvedValue({
       data: undefined,
@@ -154,6 +163,21 @@ describe("ChatTab", () => {
 
     expect(
       await screen.findByRole("option", { name: "Product Team" }),
+    ).toBeInTheDocument();
+  });
+
+  it("uses the locally stored group alias when the refreshed list is still unnamed", async () => {
+    mockGetStoredGroupAlias.mockImplementation((groupId: string) =>
+      groupId === "group-1" ? "Locally Named Workspace" : "",
+    );
+    mockListGroups.mockResolvedValue({
+      data: [makeGroup("group-1")],
+    });
+
+    renderChatTab();
+
+    expect(
+      await screen.findByRole("option", { name: "Locally Named Workspace" }),
     ).toBeInTheDocument();
   });
 
@@ -220,7 +244,7 @@ describe("ChatTab", () => {
 
   it("joins a workspace from invitation and selects the joined workspace", async () => {
     const onInvitationSaved = vi.fn();
-    const joinedInvitation = {
+    const invitation = {
       invitation: {
         inviter_identity: "admin",
         group_id: "group-2",
@@ -231,6 +255,10 @@ describe("ChatTab", () => {
         contract_id: "contract.testnet",
       },
       inviter_signature: "signature",
+    };
+    const joinedInvitation = {
+      invitation,
+      groupAlias: "Joined Workspace",
     };
 
     mockListGroups
@@ -271,7 +299,8 @@ describe("ChatTab", () => {
 
     await waitFor(() => {
       expect(mockJoinGroup).toHaveBeenCalledWith({
-        invitation: joinedInvitation,
+        invitation,
+        groupAlias: "Joined Workspace",
       });
     });
 
@@ -282,6 +311,11 @@ describe("ChatTab", () => {
       );
     });
 
+    expect(mockSetStoredGroupAlias).toHaveBeenCalledWith(
+      "group-2",
+      "Joined Workspace",
+    );
+
     await waitFor(() => {
       expect(
         screen.getByRole("combobox"),
@@ -291,8 +325,8 @@ describe("ChatTab", () => {
     expect(onInvitationSaved).toHaveBeenCalled();
   });
 
-  it("keeps the joined workspace enterable when the post-join refresh fails", async () => {
-    const joinedInvitation = {
+  it("keeps the joined workspace enterable with its alias when the post-join refresh fails", async () => {
+    const invitation = {
       invitation: {
         inviter_identity: "admin",
         group_id: "group-2",
@@ -303,6 +337,10 @@ describe("ChatTab", () => {
         contract_id: "contract.testnet",
       },
       inviter_signature: "signature",
+    };
+    const joinedInvitation = {
+      invitation,
+      groupAlias: "Joined Workspace",
     };
 
     mockListGroups
@@ -347,6 +385,9 @@ describe("ChatTab", () => {
     });
 
     expect(screen.getByRole("combobox")).toHaveValue("group-2");
+    expect(
+      screen.getByRole("option", { name: "Joined Workspace" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(joinChatButton);
 

@@ -34,7 +34,10 @@ import type {
   UpgradeGroupRequest,
   UpgradeGroupResponse,
 } from "../groupApi";
-import { parseGroupInvitationPayload } from "../../utils/invitation";
+import {
+  parseGroupInvitationPayload,
+  type GroupInvitationPayload,
+} from "../../utils/invitation";
 import { resolveCurrentGroupMemberIdentity } from "../../utils/groupMemberIdentity";
 
 const DEFAULT_NODE_ENDPOINT = "http://localhost:2428";
@@ -172,11 +175,11 @@ function isSignedGroupOpenInvitation(
   );
 }
 
-function normalizeGroupInvitation(
+function normalizeGroupInvitationPayload(
   value: unknown,
-): SignedGroupOpenInvitation | null {
+): GroupInvitationPayload | null {
   if (isSignedGroupOpenInvitation(value)) {
-    return value;
+    return { invitation: value };
   }
 
   if (typeof value === "string") {
@@ -184,9 +187,19 @@ function normalizeGroupInvitation(
   }
 
   if (value && typeof value === "object") {
-    const typedValue = value as { invitation?: unknown; payload?: unknown };
+    const typedValue = value as {
+      invitation?: unknown;
+      payload?: unknown;
+      groupAlias?: unknown;
+    };
     if (typedValue.invitation && isSignedGroupOpenInvitation(typedValue.invitation)) {
-      return typedValue.invitation;
+      return {
+        invitation: typedValue.invitation,
+        groupAlias:
+          typeof typedValue.groupAlias === "string"
+            ? typedValue.groupAlias
+            : undefined,
+      };
     }
     if (typeof typedValue.payload === "string") {
       return parseGroupInvitationPayload(typedValue.payload);
@@ -289,12 +302,15 @@ export class GroupApiDataSource implements GroupApi {
         return httpFail(response.status, response.statusText);
       }
 
-      const invitation = normalizeGroupInvitation(response.data.data);
-      if (!invitation) {
+      const invitationPayload = normalizeGroupInvitationPayload(response.data.data);
+      if (!invitationPayload) {
         return fail(500, "Invalid workspace invitation response");
       }
 
-      return ok({ invitation });
+      return ok({
+        invitation: invitationPayload.invitation,
+        groupAlias: invitationPayload.groupAlias,
+      });
     } catch (error) {
       return catchError("createInvitation", error);
     }
@@ -308,6 +324,7 @@ export class GroupApiDataSource implements GroupApi {
         `${this.base()}/groups/join`,
         {
           invitation: request.invitation,
+          groupAlias: request.groupAlias,
         },
         { headers: getAuthHeaders() },
       );

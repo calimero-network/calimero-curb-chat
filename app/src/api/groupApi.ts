@@ -10,6 +10,7 @@ export type UpgradePolicy =
 export interface CreateGroupRequest {
   applicationId: string;
   upgradePolicy: UpgradePolicy;
+  alias?: string;
 }
 
 export interface CreateGroupResponse {
@@ -86,10 +87,12 @@ export interface CreateInvitationRequest {
 
 export interface CreateInvitationResponse {
   invitation: SignedGroupOpenInvitation;
+  groupAlias?: string;
 }
 
 export interface JoinGroupRequest {
   invitation: SignedGroupOpenInvitation;
+  groupAlias?: string;
 }
 
 export interface JoinGroupResponse {

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { styled } from "styled-components";
-import { Button } from "@calimero-network/mero-ui";
+import { Button, Input } from "@calimero-network/mero-ui";
 import axios from "axios";
 import {
   getAppEndpointKey,
@@ -93,6 +93,18 @@ const Message = styled.div<{ $type?: "success" | "error" | "info" }>`
         : "rgba(184, 184, 209, 0.1)"};
 `;
 
+const InputGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+`;
+
+const Label = styled.label`
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #b8b8d1;
+`;
+
 const ButtonGroup = styled.div`
   display: flex;
   gap: 0.5rem;
@@ -151,8 +163,11 @@ export default function CreateWorkspacePopup({
 }: CreateWorkspacePopupProps) {
   const [step, setStep] = useState<Step>("form");
   const [errorMessage, setErrorMessage] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
   const [invitePayload, setInvitePayload] = useState("");
   const [createdGroupId, setCreatedGroupId] = useState("");
+  const trimmedWorkspaceName = workspaceName.trim();
+  const canCreateWorkspace = trimmedWorkspaceName.length > 0;
 
   const stepsCompleted = step === "form" ? 0 : step === "creating" ? 1 : step === "invite" ? 3 : 0;
 
@@ -168,6 +183,7 @@ export default function CreateWorkspacePopup({
       const groupResult = await groupApi.createGroup({
         applicationId,
         upgradePolicy: "LazyOnAccess",
+        alias: trimmedWorkspaceName,
       });
       if (groupResult.error || !groupResult.data) {
         throw new Error(groupResult.error?.message || "Failed to create group");
@@ -188,7 +204,10 @@ export default function CreateWorkspacePopup({
         );
       }
       setInvitePayload(
-        serializeGroupInvitationPayload(inviteResult.data.invitation),
+        serializeGroupInvitationPayload({
+          invitation: inviteResult.data.invitation,
+          groupAlias: inviteResult.data.groupAlias ?? trimmedWorkspaceName,
+        }),
       );
       setStep("invite");
     } catch (error) {
@@ -198,7 +217,7 @@ export default function CreateWorkspacePopup({
       );
       setStep("error");
     }
-  }, []);
+  }, [trimmedWorkspaceName]);
 
   const handleDone = () => {
     onSuccess(createdGroupId);
@@ -234,11 +253,23 @@ export default function CreateWorkspacePopup({
               Create a workspace now, then add channels after you enter the
               workspace. You can also invite members right away.
             </Subtitle>
+            <InputGroup>
+              <Label htmlFor="workspaceName">Workspace name</Label>
+              <Input
+                id="workspaceName"
+                type="text"
+                placeholder="Enter a workspace name"
+                value={workspaceName}
+                onChange={(event) => setWorkspaceName(event.target.value)}
+                autoFocus
+              />
+            </InputGroup>
             <ButtonGroup>
               <Button
                 onClick={createWorkspace}
                 variant="primary"
                 style={{ flex: 1 }}
+                disabled={!canCreateWorkspace}
               >
                 Create workspace
               </Button>

@@ -38,6 +38,7 @@ export function getNodeUrlFromUrl(): string {
 
 const GROUP_ID_SESSION_KEY = "calimero_group_id";
 const GROUP_MEMBER_IDENTITIES_SESSION_KEY = "calimero_group_member_identities";
+const GROUP_ALIASES_STORAGE_KEY = "calimero_group_aliases";
 const CONTEXT_OWNER_SESSION_KEY = "curb_is_context_owner";
 
 /** Group ID: URL param `group-id` > sessionStorage > env VITE_GROUP_ID > empty */
@@ -93,6 +94,35 @@ function writeStoredGroupMemberIdentities(
   sessionStorage.setItem(GROUP_MEMBER_IDENTITIES_SESSION_KEY, serialized);
 }
 
+function readStoredGroupAliases(): Record<string, string> {
+  try {
+    const raw =
+      localStorage.getItem(GROUP_ALIASES_STORAGE_KEY) ||
+      sessionStorage.getItem(GROUP_ALIASES_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    localStorage.setItem(GROUP_ALIASES_STORAGE_KEY, raw);
+    sessionStorage.setItem(GROUP_ALIASES_STORAGE_KEY, raw);
+
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredGroupAliases(aliases: Record<string, string>): void {
+  try {
+    const serialized = JSON.stringify(aliases);
+    localStorage.setItem(GROUP_ALIASES_STORAGE_KEY, serialized);
+    sessionStorage.setItem(GROUP_ALIASES_STORAGE_KEY, serialized);
+  } catch {
+    // Alias caching is best-effort and should never block workspace join flows.
+  }
+}
+
 export function getGroupMemberIdentity(groupId: string): string {
   return readStoredGroupMemberIdentities()[groupId] || "";
 }
@@ -108,6 +138,31 @@ export function setGroupMemberIdentity(
   const identities = readStoredGroupMemberIdentities();
   identities[groupId] = memberIdentity;
   writeStoredGroupMemberIdentities(identities);
+}
+
+export function getStoredGroupAlias(groupId: string): string {
+  return readStoredGroupAliases()[groupId] || "";
+}
+
+export function setStoredGroupAlias(groupId: string, alias: string): void {
+  const trimmedAlias = alias.trim();
+  if (!groupId || !trimmedAlias) {
+    return;
+  }
+
+  const aliases = readStoredGroupAliases();
+  aliases[groupId] = trimmedAlias;
+  writeStoredGroupAliases(aliases);
+}
+
+export function clearStoredGroupAlias(groupId: string): void {
+  if (!groupId) {
+    return;
+  }
+
+  const aliases = readStoredGroupAliases();
+  delete aliases[groupId];
+  writeStoredGroupAliases(aliases);
 }
 
 export function clearGroupMemberIdentity(groupId: string): void {

@@ -32,13 +32,15 @@ vi.mock("@calimero-network/mero-ui", () => ({
   Button: ({
     children,
     onClick,
+    disabled,
     type,
   }: {
     children: React.ReactNode;
     onClick?: () => void;
+    disabled?: boolean;
     type?: "button" | "submit";
   }) => (
-    <button type={type ?? "button"} onClick={onClick}>
+    <button type={type ?? "button"} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   ),
@@ -130,6 +132,7 @@ describe("CreateWorkspacePopup", () => {
         invitation: {
           invitation: "payload",
         },
+        groupAlias: "Team Space",
       },
     });
     mockSerializeGroupInvitationPayload.mockReturnValue("serialized-invite");
@@ -142,12 +145,36 @@ describe("CreateWorkspacePopup", () => {
     expect(
       screen.getByText(/add channels after you enter the workspace/i),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: /workspace name/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("requires a workspace name before creation is enabled", () => {
+    render(<CreateWorkspacePopup onSuccess={vi.fn()} onCancel={vi.fn()} />);
+
+    const createButton = screen.getByRole("button", {
+      name: /create workspace/i,
+    });
+    const nameInput = screen.getByRole("textbox", {
+      name: /workspace name/i,
+    });
+
+    expect(createButton).toBeDisabled();
+
+    fireEvent.change(nameInput, { target: { value: "   " } });
+    expect(createButton).toBeDisabled();
+
+    fireEvent.change(nameInput, { target: { value: "Team Space" } });
+    expect(createButton).toBeEnabled();
   });
 
   it("creates only the workspace and invitation during onboarding", async () => {
     render(<CreateWorkspacePopup onSuccess={vi.fn()} onCancel={vi.fn()} />);
 
+    fireEvent.change(screen.getByRole("textbox", { name: /workspace name/i }), {
+      target: { value: "  Team Space  " },
+    });
     fireEvent.click(
       screen.getByRole("button", { name: /create workspace/i }),
     );
@@ -156,6 +183,7 @@ describe("CreateWorkspacePopup", () => {
       expect(mockCreateGroup).toHaveBeenCalledWith({
         applicationId: "app-1",
         upgradePolicy: "LazyOnAccess",
+        alias: "Team Space",
       });
     });
 
@@ -170,7 +198,10 @@ describe("CreateWorkspacePopup", () => {
       "member-1",
     );
     expect(mockSerializeGroupInvitationPayload).toHaveBeenCalledWith({
-      invitation: "payload",
+      invitation: {
+        invitation: "payload",
+      },
+      groupAlias: "Team Space",
     });
 
     expect(await screen.findByText("Workspace created!")).toBeInTheDocument();

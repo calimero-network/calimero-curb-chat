@@ -13,8 +13,10 @@ import {
 import {
   getGroupMemberIdentity,
   getGroupId,
+  getStoredGroupAlias,
   setGroupId,
   setGroupMemberIdentity,
+  setStoredGroupAlias,
 } from "../../constants/config";
 import {
   getMessengerDisplayName,
@@ -188,11 +190,15 @@ export default function ChatTab({
     try {
       const response = await new GroupApiDataSource().listGroups();
       if (response.data && response.data.length > 0) {
-        setAvailableGroups(response.data);
+        const groupsWithStoredAliases = response.data.map((group) => ({
+          ...group,
+          alias: group.alias?.trim() || getStoredGroupAlias(group.groupId) || undefined,
+        }));
+        setAvailableGroups(groupsWithStoredAliases);
         const storedGroupId = getGroupId();
         const preferredGroup =
-          response.data.find((group) => group.groupId === storedGroupId) ??
-          response.data[0];
+          groupsWithStoredAliases.find((group) => group.groupId === storedGroupId) ??
+          groupsWithStoredAliases[0];
         setSelectedGroupId(preferredGroup.groupId);
       } else if (response.error) {
         setAvailableGroups([]);
@@ -316,14 +322,15 @@ export default function ChatTab({
 
     void (async () => {
       try {
-        const invitation = parseGroupInvitationPayload(payload);
-        if (!invitation) {
+        const parsedInvitation = parseGroupInvitationPayload(payload);
+        if (!parsedInvitation) {
           setInvitationError("This invitation is not a workspace invitation.");
           return;
         }
 
         const joinResponse = await new GroupApiDataSource().joinGroup({
-          invitation,
+          invitation: parsedInvitation.invitation,
+          groupAlias: parsedInvitation.groupAlias,
         });
         if (joinResponse.error || !joinResponse.data) {
           setInvitationError(
@@ -338,22 +345,36 @@ export default function ChatTab({
         );
         setInvitationInput("");
         const previousGroups = availableGroups;
+        const joinedGroupAlias = parsedInvitation.groupAlias?.trim() || undefined;
+        if (joinedGroupAlias) {
+          setStoredGroupAlias(joinResponse.data.groupId, joinedGroupAlias);
+        }
         await fetchGroups();
         setAvailableGroups((currentGroups) => {
           const groupsToKeep =
             currentGroups.length > 0 ? currentGroups : previousGroups;
+          const existingGroup = groupsToKeep.find(
+            (group) => group.groupId === joinResponse.data.groupId,
+          );
 
-          if (
-            groupsToKeep.some(
-              (group) => group.groupId === joinResponse.data.groupId,
-            )
-          ) {
-            return groupsToKeep;
+          if (existingGroup) {
+            if (existingGroup.alias?.trim() || !joinedGroupAlias) {
+              return groupsToKeep;
+            }
+
+            return groupsToKeep.map((group) =>
+              group.groupId === joinResponse.data.groupId
+                ? { ...group, alias: joinedGroupAlias }
+                : group,
+            );
           }
 
           return [
             ...groupsToKeep,
-            buildJoinedWorkspaceFallback(joinResponse.data.groupId),
+            buildJoinedWorkspaceFallback(
+              joinResponse.data.groupId,
+              joinedGroupAlias,
+            ),
           ];
         });
         setSelectedGroupId(joinResponse.data.groupId);

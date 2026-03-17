@@ -20,6 +20,7 @@ import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import {
   setGroupId,
   setGroupMemberIdentity,
+  setStoredGroupAlias,
 } from "../../constants/config";
 import { parseGroupInvitationPayload } from "../../utils/invitation";
 
@@ -125,13 +126,14 @@ export default function InvitationHandlerPopup({
       setStatus("joining");
       setStatusMessage("Joining workspace...");
 
-      const invitation = parseGroupInvitationPayload(invitationPayload);
-      if (!invitation) {
+      const parsedInvitation = parseGroupInvitationPayload(invitationPayload);
+      if (!parsedInvitation) {
         throw new Error("Invalid workspace invitation");
       }
 
       const joinResult = await groupApi.joinGroup({
-        invitation,
+        invitation: parsedInvitation.invitation,
+        groupAlias: parsedInvitation.groupAlias,
       });
       if (joinResult.error || !joinResult.data) {
         throw new Error(
@@ -141,6 +143,9 @@ export default function InvitationHandlerPopup({
       const { groupId, memberIdentity } = joinResult.data;
       setGroupId(groupId);
       setGroupMemberIdentity(groupId, memberIdentity);
+      if (parsedInvitation.groupAlias?.trim()) {
+        setStoredGroupAlias(groupId, parsedInvitation.groupAlias);
+      }
 
       setStatus("syncing");
       setStatusMessage("Syncing workspace data...");
