@@ -7,6 +7,7 @@ import type { ChannelMeta } from "../../types/Common";
 import type { UserId } from "../../api/clientApi";
 import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
+import { isRestrictedChannelType } from "../../utils/channelVisibility";
 
 const Wrapper = styled.div``;
 
@@ -51,7 +52,7 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
   const [selectedTabIndex, setSelectedTabIndex] = useState(initialTabIndex);
 
   const ChannelName = () => {
-    const isPrivateChannel = channelMeta.channelType === "Private";
+    const isPrivateChannel = isRestrictedChannelType(channelMeta.channelType);
 
     return (
       <ChannelTitle>

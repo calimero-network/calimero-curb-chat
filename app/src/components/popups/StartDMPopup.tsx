@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, memo } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
 import BaseModal from "../common/popups/BaseModal";
 import Loader from "../loader/Loader";
 import { styled } from "styled-components";
-import type { UserId } from "../../api/clientApi";
 import { usePersistentState } from "../../hooks/usePersistentState";
 import { Button, Input } from "@calimero-network/mero-ui";
 
@@ -24,6 +23,17 @@ const SuggestionItem = styled.div`
   &:hover {
     background-color: #1f1f21;
   }
+`;
+
+const SuggestionIdentity = styled.div`
+  font-size: 13px;
+  font-weight: 600;
+`;
+
+const SuggestionLabel = styled.div`
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
 `;
 
 const Text = styled.div`
@@ -105,6 +115,11 @@ const InputWrapper = styled.div`
   margin-top: 0.5rem;
 `;
 
+interface MemberSuggestion {
+  identity: string;
+  label: string;
+}
+
 export interface CreateContextResult {
   data: string;
   error: string;
@@ -137,7 +152,7 @@ const StartDMPopup = memo(function StartDMPopup({
   );
   const [validInput, setValidInput] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [suggestions, setSuggestions] = useState<UserId[]>([]);
+  const [suggestions, setSuggestions] = useState<MemberSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const inputRef = useRef("");
@@ -148,21 +163,53 @@ const StartDMPopup = memo(function StartDMPopup({
     inputRef.current = inputValue;
   }, [inputValue]);
 
+  const memberOptions = useMemo(
+    () =>
+      Array.from(chatMembers.entries()).map(([identity, label]) => ({
+        identity,
+        label,
+      })),
+    [chatMembers],
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShowSuggestions(false);
+      return;
+    }
+
+    if (!inputValue.trim()) {
+      setSuggestions(memberOptions);
+      setShowSuggestions(memberOptions.length > 0);
+    }
+  }, [inputValue, isOpen, memberOptions]);
+
+  const updateValidation = (value: string) => {
+    if (validator) {
+      const { isValid, error } = validator(value.trim());
+      setValidInput(isValid);
+      setErrorMessage(error ? error : "");
+    }
+  };
+
+  const filterSuggestions = (value: string) => {
+    const query = value.trim().toLowerCase();
+    if (!query) {
+      return memberOptions;
+    }
+
+    return memberOptions.filter(
+      ({ identity, label }) =>
+        identity.toLowerCase().includes(query) ||
+        label.toLowerCase().includes(query),
+    );
+  };
+
   const runProcess = async () => {
     setIsProcessing(true);
     setErrorMessage("");
-    // inputValue is the username -> identity here
-
-    const identity = Object.keys(chatMembers).find(
-      // @ts-expect-error - chatMembers is a Map<string, string>
-      (key) => chatMembers[key] === inputValue,
-    );
-    if (!identity) {
-      setErrorMessage("User not found");
-      setIsProcessing(false);
-      return;
-    }
-    const result = await functionLoader(identity);
+    const selectedIdentity = inputValue.trim();
+    const result = await functionLoader(selectedIdentity);
     if (result.data) {
       setIsProcessing(false);
       setInputValue(""); // Clear input on success
@@ -188,22 +235,10 @@ const StartDMPopup = memo(function StartDMPopup({
     const value = e.target.value;
     setInputValue(value);
     setErrorMessage("");
-    if (value.length > 0) {
-      const s = Object.values(chatMembers).filter((member) =>
-        member.toLowerCase().startsWith(value.toLowerCase()),
-      );
-      setSuggestions(s);
-      setShowSuggestions(s.length > 0);
-    } else {
-      setShowSuggestions(false);
-      setSuggestions([]);
-    }
-
-    if (validator) {
-      const { isValid, error } = validator(value);
-      setValidInput(isValid);
-      setErrorMessage(error ? error : "");
-    }
+    const filtered = filterSuggestions(value);
+    setSuggestions(filtered);
+    setShowSuggestions(filtered.length > 0);
+    updateValidation(value);
   };
 
   const handleClosePopup = () => {
@@ -211,13 +246,9 @@ const StartDMPopup = memo(function StartDMPopup({
     setIsOpen(false);
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    if (validator) {
-      const { isValid, error } = validator(suggestion);
-      setValidInput(isValid);
-      setErrorMessage(error ? error : "");
-    }
-    setInputValue(suggestion);
+  const handleSuggestionClick = (suggestion: MemberSuggestion) => {
+    updateValidation(suggestion.identity);
+    setInputValue(suggestion.identity);
     setShowSuggestions(false);
     setSuggestions([]);
   };
@@ -239,12 +270,15 @@ const StartDMPopup = memo(function StartDMPopup({
         {/* {isInvalid && <ExclamationIcon />} */}
         {showSuggestions && suggestions && suggestions.length > 0 && (
           <SuggestionsDropdown>
-            {suggestions.map((suggestion, index) => (
+            {suggestions.map((suggestion) => (
               <SuggestionItem
-                key={index}
+                key={suggestion.identity}
                 onClick={() => handleSuggestionClick(suggestion)}
               >
-                {suggestion}
+                <SuggestionIdentity>{suggestion.label}</SuggestionIdentity>
+                {suggestion.identity && (
+                  <SuggestionLabel>{suggestion.identity}</SuggestionLabel>
+                )}
               </SuggestionItem>
             ))}
           </SuggestionsDropdown>

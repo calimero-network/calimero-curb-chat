@@ -1,9 +1,94 @@
+import type { SignedGroupOpenInvitation } from "../api/groupApi";
+
 /**
  * Invitation utility functions for handling invitation payloads.
  * Uses base64url encoding for compact, URL-safe invitation links.
  */
 
 const INVITATION_STORAGE_KEY = "curb-invitation-payload";
+
+export interface GroupInvitationPayload {
+  invitation: SignedGroupOpenInvitation;
+  groupAlias?: string;
+}
+
+function isSignedGroupOpenInvitation(
+  value: unknown,
+): value is SignedGroupOpenInvitation {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const typedValue = value as {
+    invitation?: Record<string, unknown>;
+    inviterSignature?: unknown;
+    inviter_signature?: unknown;
+  };
+
+  return (
+    (typeof typedValue.inviterSignature === "string" ||
+      typeof typedValue.inviter_signature === "string") &&
+    !!typedValue.invitation &&
+    typeof typedValue.invitation === "object"
+  );
+}
+
+function isWrappedGroupInvitationPayload(
+  value: unknown,
+): value is GroupInvitationPayload {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const typedValue = value as {
+    invitation?: unknown;
+    groupAlias?: unknown;
+  };
+
+  return (
+    isSignedGroupOpenInvitation(typedValue.invitation) &&
+    (typedValue.groupAlias === undefined ||
+      typeof typedValue.groupAlias === "string")
+  );
+}
+
+function normalizeGroupInvitationPayload(
+  payload: SignedGroupOpenInvitation | GroupInvitationPayload,
+): GroupInvitationPayload {
+  if (isSignedGroupOpenInvitation(payload)) {
+    return { invitation: payload };
+  }
+
+  return {
+    invitation: payload.invitation,
+    groupAlias:
+      typeof payload.groupAlias === "string" ? payload.groupAlias : undefined,
+  };
+}
+
+export function serializeGroupInvitationPayload(
+  invitation: SignedGroupOpenInvitation | GroupInvitationPayload,
+): string {
+  return JSON.stringify(normalizeGroupInvitationPayload(invitation));
+}
+
+export function parseGroupInvitationPayload(
+  payload: string,
+): GroupInvitationPayload | null {
+  try {
+    const parsed = JSON.parse(payload.trim());
+    const inner = parsed?.data ?? parsed;
+    if (isWrappedGroupInvitationPayload(inner)) {
+      return normalizeGroupInvitationPayload(inner);
+    }
+
+    return isSignedGroupOpenInvitation(inner)
+      ? normalizeGroupInvitationPayload(inner)
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Base64url encode (URL-safe base64, no padding). Shorter and cleaner than percent-encoded JSON. */
 export function encodeInvitationPayload(payload: string): string {
