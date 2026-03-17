@@ -9,6 +9,7 @@ const {
   mockListGroups,
   mockJoinGroup,
   mockResolveCurrentMemberIdentity,
+  mockSetMemberAlias,
   mockSetGroupMemberIdentity,
   mockSetGroupId,
   mockGetGroupId,
@@ -23,6 +24,7 @@ const {
   mockListGroups: vi.fn(),
   mockJoinGroup: vi.fn(),
   mockResolveCurrentMemberIdentity: vi.fn(),
+  mockSetMemberAlias: vi.fn(),
   mockSetGroupMemberIdentity: vi.fn(),
   mockSetGroupId: vi.fn(),
   mockGetGroupId: vi.fn(),
@@ -54,6 +56,7 @@ vi.mock("../../api/dataSource/groupApiDataSource", () => ({
     listGroups = mockListGroups;
     joinGroup = mockJoinGroup;
     resolveCurrentMemberIdentity = mockResolveCurrentMemberIdentity;
+    setMemberAlias = mockSetMemberAlias;
   },
 }));
 
@@ -107,6 +110,7 @@ describe("ChatTab", () => {
     mockListGroups.mockReset();
     mockJoinGroup.mockReset();
     mockResolveCurrentMemberIdentity.mockReset();
+    mockSetMemberAlias.mockReset();
     mockSetGroupMemberIdentity.mockReset();
     mockSetGroupId.mockReset();
     mockGetGroupId.mockReset();
@@ -120,6 +124,10 @@ describe("ChatTab", () => {
     mockGetGroupId.mockReturnValue("");
     mockGetGroupMemberIdentity.mockReturnValue("");
     mockGetMessengerDisplayName.mockReturnValue("Ronit");
+    mockSetMemberAlias.mockResolvedValue({
+      data: undefined,
+      error: null,
+    });
     mockListGroups.mockResolvedValue({
       data: [makeGroup("group-1")],
     });
@@ -159,6 +167,55 @@ describe("ChatTab", () => {
     expect(
       await screen.findByRole("option", { name: "abcdefghijkl..." }),
     ).toBeInTheDocument();
+  });
+
+  it("loads the selected workspace member alias into the name field", async () => {
+    mockResolveCurrentMemberIdentity.mockResolvedValue({
+      data: {
+        memberIdentity: "member-1",
+        members: [
+          {
+            identity: "member-1",
+            alias: "Product Ronit",
+            role: "Member",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    renderChatTab();
+
+    await waitFor(() => {
+      expect(mockResolveCurrentMemberIdentity).toHaveBeenCalledWith("group-1", "");
+    });
+
+    expect(screen.getByPlaceholderText(/enter your name/i)).toHaveValue(
+      "Product Ronit",
+    );
+  });
+
+  it("keeps the messenger name when the selected workspace member has no alias", async () => {
+    mockResolveCurrentMemberIdentity.mockResolvedValue({
+      data: {
+        memberIdentity: "member-1",
+        members: [
+          {
+            identity: "member-1",
+            role: "Member",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    renderChatTab();
+
+    await waitFor(() => {
+      expect(mockResolveCurrentMemberIdentity).toHaveBeenCalledWith("group-1", "");
+    });
+
+    expect(screen.getByPlaceholderText(/enter your name/i)).toHaveValue("Ronit");
   });
 
   it("joins a workspace from invitation and selects the joined workspace", async () => {
@@ -307,6 +364,51 @@ describe("ChatTab", () => {
       "resolved-member-2",
     );
     expect(mockClearStoredSession).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith("/");
+  });
+
+  it("saves the typed name as the resolved member alias before entering the workspace", async () => {
+    mockResolveCurrentMemberIdentity.mockResolvedValue({
+      data: {
+        memberIdentity: "resolved-member-1",
+        members: [
+          {
+            identity: "resolved-member-1",
+            alias: "Existing Alias",
+            role: "Member",
+          },
+        ],
+      },
+      error: null,
+    });
+    mockSetMemberAlias.mockResolvedValue({
+      data: undefined,
+      error: null,
+    });
+
+    renderChatTab();
+
+    await waitFor(() => {
+      expect(mockResolveCurrentMemberIdentity).toHaveBeenCalledWith("group-1", "");
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/enter your name/i), {
+      target: { value: "Updated Alias" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /join chat/i }));
+
+    await waitFor(() => {
+      expect(mockSetMemberAlias).toHaveBeenCalledWith("group-1", "resolved-member-1", {
+        alias: "Updated Alias",
+      });
+    });
+
+    expect(mockSetGroupId).toHaveBeenCalledWith("group-1");
+    expect(mockSetMessengerDisplayName).toHaveBeenCalledWith("Updated Alias");
+    expect(mockSetGroupMemberIdentity).toHaveBeenCalledWith(
+      "group-1",
+      "resolved-member-1",
+    );
     expect(mockNavigate).toHaveBeenCalledWith("/");
   });
 });
