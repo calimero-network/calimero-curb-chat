@@ -2,14 +2,16 @@ import bs58 from "bs58";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupApiDataSource } from "./groupApiDataSource";
 
-const { mockAxiosGet, mockAxiosPut } = vi.hoisted(() => ({
+const { mockAxiosGet, mockAxiosPost, mockAxiosPut } = vi.hoisted(() => ({
   mockAxiosGet: vi.fn(),
+  mockAxiosPost: vi.fn(),
   mockAxiosPut: vi.fn(),
 }));
 
 vi.mock("axios", () => ({
   default: {
     get: mockAxiosGet,
+    post: mockAxiosPost,
     put: mockAxiosPut,
   },
   isAxiosError: () => false,
@@ -23,7 +25,146 @@ vi.mock("@calimero-network/calimero-client", () => ({
 describe("GroupApiDataSource", () => {
   beforeEach(() => {
     mockAxiosGet.mockReset();
+    mockAxiosPost.mockReset();
     mockAxiosPut.mockReset();
+  });
+
+  it("passes the optional alias when creating a group", async () => {
+    mockAxiosPost.mockResolvedValue({
+      status: 200,
+      data: {
+        data: {
+          groupId: "group-1",
+        },
+      },
+      statusText: "OK",
+    });
+
+    const dataSource = new GroupApiDataSource();
+    const response = await dataSource.createGroup({
+      applicationId: "app-1",
+      upgradePolicy: "LazyOnAccess",
+      alias: "Product Team",
+    });
+
+    expect(mockAxiosPost).toHaveBeenCalledWith(
+      "http://localhost:2428/admin-api/groups",
+      {
+        applicationId: "app-1",
+        upgradePolicy: "LazyOnAccess",
+        alias: "Product Team",
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer token",
+        },
+      },
+    );
+    expect(response).toEqual({
+      data: {
+        groupId: "group-1",
+      },
+      error: null,
+    });
+  });
+
+  it("returns the invitation group alias when the backend wraps the payload", async () => {
+    mockAxiosPost.mockResolvedValue({
+      status: 200,
+      data: {
+        data: {
+          invitation: {
+            invitation: {
+              inviter_identity: "admin",
+              group_id: "group-1",
+              expiration_height: 42,
+              secret_salt: [1, 2, 3],
+              protocol: "near",
+              network: "testnet",
+              contract_id: "contract.testnet",
+            },
+            inviter_signature: "signature",
+          },
+          groupAlias: "Product Team",
+        },
+      },
+      statusText: "OK",
+    });
+
+    const dataSource = new GroupApiDataSource();
+    const response = await dataSource.createInvitation("group-1");
+
+    expect(response).toEqual({
+      data: {
+        invitation: {
+          invitation: {
+            inviter_identity: "admin",
+            group_id: "group-1",
+            expiration_height: 42,
+            secret_salt: [1, 2, 3],
+            protocol: "near",
+            network: "testnet",
+            contract_id: "contract.testnet",
+          },
+          inviter_signature: "signature",
+        },
+        groupAlias: "Product Team",
+      },
+      error: null,
+    });
+  });
+
+  it("forwards the optional group alias when joining a group", async () => {
+    const invitation = {
+      invitation: {
+        inviter_identity: "admin",
+        group_id: "group-1",
+        expiration_height: 42,
+        secret_salt: [1, 2, 3],
+        protocol: "near",
+        network: "testnet",
+        contract_id: "contract.testnet",
+      },
+      inviter_signature: "signature",
+    };
+    mockAxiosPost.mockResolvedValue({
+      status: 200,
+      data: {
+        data: {
+          groupId: "group-1",
+          memberIdentity: "member-1",
+        },
+      },
+      statusText: "OK",
+    });
+
+    const dataSource = new GroupApiDataSource();
+    const response = await dataSource.joinGroup({
+      invitation,
+      groupAlias: "Product Team",
+    });
+
+    expect(mockAxiosPost).toHaveBeenCalledWith(
+      "http://localhost:2428/admin-api/groups/join",
+      {
+        invitation,
+        groupAlias: "Product Team",
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer token",
+        },
+      },
+    );
+    expect(response).toEqual({
+      data: {
+        groupId: "group-1",
+        memberIdentity: "member-1",
+      },
+      error: null,
+    });
   });
 
   it("preserves optional aliases when listing group contexts", async () => {

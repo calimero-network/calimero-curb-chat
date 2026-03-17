@@ -160,7 +160,10 @@ export default function GroupInviteModal({
       }
 
       setInvitationPayload(
-        serializeGroupInvitationPayload(response.data.invitation),
+        serializeGroupInvitationPayload({
+          invitation: response.data.invitation,
+          groupAlias: response.data.groupAlias,
+        }),
       );
       setLoading(false);
     };
