@@ -4,7 +4,7 @@ import { styled } from "styled-components";
 import { getAppEndpointKey } from "@calimero-network/calimero-client";
 import { Button, Input } from "@calimero-network/mero-ui";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
-import type { GroupSummary } from "../../api/groupApi";
+import type { GroupMember, GroupSummary } from "../../api/groupApi";
 import { clearStoredSession } from "../../utils/session";
 import {
   parseGroupInvitationPayload,
@@ -132,6 +132,12 @@ function getWorkspaceLabel(group: GroupSummary): string {
   return group.alias?.trim() || `${group.groupId.substring(0, 12)}...`;
 }
 
+function getMemberAlias(members: GroupMember[], memberIdentity: string): string {
+  return (
+    members.find((member) => member.identity === memberIdentity)?.alias?.trim() || ""
+  );
+}
+
 export default function ChatTab({
   isAuthenticated,
   isConfigSet,
@@ -149,6 +155,27 @@ export default function ChatTab({
   const [invitationError, setInvitationError] = useState("");
   const [submittingInvitation, setSubmittingInvitation] = useState(false);
   const hasWorkspaces = availableGroups.length > 0;
+
+  const resolveWorkspaceMember = useCallback(async (groupId: string) => {
+    const identityResponse = await new GroupApiDataSource().resolveCurrentMemberIdentity(
+      groupId,
+      getGroupMemberIdentity(groupId),
+    );
+
+    if (identityResponse.error || !identityResponse.data) {
+      throw new Error(
+        identityResponse.error?.message || "Failed to resolve workspace identity",
+      );
+    }
+
+    return {
+      memberIdentity: identityResponse.data.memberIdentity,
+      memberAlias: getMemberAlias(
+        identityResponse.data.members ?? [],
+        identityResponse.data.memberIdentity,
+      ),
+    };
+  }, []);
 
   const fetchGroups = useCallback(async () => {
     if (!getAppEndpointKey()) {
@@ -190,6 +217,37 @@ export default function ChatTab({
     }
   }, [fetchGroups, isAuthenticated, isConfigSet]);
 
+  useEffect(() => {
+    if (!selectedGroupId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const { memberIdentity, memberAlias } = await resolveWorkspaceMember(
+          selectedGroupId,
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setGroupMemberIdentity(selectedGroupId, memberIdentity);
+        setMessengerName(memberAlias || getMessengerDisplayName());
+      } catch {
+        if (!cancelled) {
+          setMessengerName(getMessengerDisplayName());
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolveWorkspaceMember, selectedGroupId]);
+
   const openWorkspace = useCallback(
     async (groupId: string) => {
       const trimmedMessengerName = messengerName.trim();
@@ -204,20 +262,17 @@ export default function ChatTab({
 
       try {
         const groupApi = new GroupApiDataSource();
-        const identityResponse = await groupApi.resolveCurrentMemberIdentity(
-          groupId,
-          getGroupMemberIdentity(groupId),
-        );
-
-        if (identityResponse.error || !identityResponse.data) {
-          throw new Error(
-            identityResponse.error?.message || "Failed to resolve workspace identity",
-          );
+        const { memberIdentity } = await resolveWorkspaceMember(groupId);
+        const aliasResponse = await groupApi.setMemberAlias(groupId, memberIdentity, {
+          alias: trimmedMessengerName,
+        });
+        if (aliasResponse.error) {
+          throw new Error(aliasResponse.error.message || "Failed to save workspace alias");
         }
 
         setGroupId(groupId);
         setMessengerDisplayName(trimmedMessengerName);
-        setGroupMemberIdentity(groupId, identityResponse.data.memberIdentity);
+        setGroupMemberIdentity(groupId, memberIdentity);
         clearStoredSession();
         setSuccess("Workspace selected. Opening Browse Channels...");
         navigate("/");
@@ -231,7 +286,7 @@ export default function ChatTab({
         setOpeningWorkspace(false);
       }
     },
-    [messengerName, navigate],
+    [messengerName, navigate, resolveWorkspaceMember],
   );
 
   const handleWorkspaceChange = async (
