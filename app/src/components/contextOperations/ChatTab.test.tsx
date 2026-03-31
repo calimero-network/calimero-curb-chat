@@ -1,0 +1,455 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ComponentProps } from "react";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import ChatTab from "./ChatTab";
+
+const {
+  mockNavigate,
+  mockListGroups,
+  mockJoinGroup,
+  mockResolveCurrentMemberIdentity,
+  mockSetMemberAlias,
+  mockSetGroupMemberIdentity,
+  mockSetGroupId,
+  mockGetGroupId,
+  mockGetGroupMemberIdentity,
+  mockGetStoredGroupAlias,
+  mockGetMessengerDisplayName,
+  mockSetStoredGroupAlias,
+  mockSetMessengerDisplayName,
+  mockClearStoredSession,
+  mockParseInvitationInput,
+  mockParseGroupInvitationPayload,
+} = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockListGroups: vi.fn(),
+  mockJoinGroup: vi.fn(),
+  mockResolveCurrentMemberIdentity: vi.fn(),
+  mockSetMemberAlias: vi.fn(),
+  mockSetGroupMemberIdentity: vi.fn(),
+  mockSetGroupId: vi.fn(),
+  mockGetGroupId: vi.fn(),
+  mockGetGroupMemberIdentity: vi.fn(),
+  mockGetStoredGroupAlias: vi.fn(),
+  mockGetMessengerDisplayName: vi.fn(),
+  mockSetStoredGroupAlias: vi.fn(),
+  mockSetMessengerDisplayName: vi.fn(),
+  mockClearStoredSession: vi.fn(),
+  mockParseInvitationInput: vi.fn(),
+  mockParseGroupInvitationPayload: vi.fn(),
+}));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom",
+  );
+
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
+vi.mock("@calimero-network/calimero-client", () => ({
+  getAppEndpointKey: () => "test-app-endpoint",
+}));
+
+vi.mock("../../api/dataSource/groupApiDataSource", () => ({
+  GroupApiDataSource: class MockGroupApiDataSource {
+    listGroups = mockListGroups;
+    joinGroup = mockJoinGroup;
+    resolveCurrentMemberIdentity = mockResolveCurrentMemberIdentity;
+    setMemberAlias = mockSetMemberAlias;
+  },
+}));
+
+vi.mock("../../constants/config", () => ({
+  getGroupId: mockGetGroupId,
+  getGroupMemberIdentity: mockGetGroupMemberIdentity,
+  getStoredGroupAlias: mockGetStoredGroupAlias,
+  setGroupId: mockSetGroupId,
+  setGroupMemberIdentity: mockSetGroupMemberIdentity,
+  setStoredGroupAlias: mockSetStoredGroupAlias,
+}));
+
+vi.mock("../../utils/messengerName", () => ({
+  getMessengerDisplayName: mockGetMessengerDisplayName,
+  setMessengerDisplayName: mockSetMessengerDisplayName,
+}));
+
+vi.mock("../../utils/session", () => ({
+  clearStoredSession: mockClearStoredSession,
+}));
+
+vi.mock("../../utils/invitation", () => ({
+  parseInvitationInput: mockParseInvitationInput,
+  parseGroupInvitationPayload: mockParseGroupInvitationPayload,
+}));
+
+function makeGroup(groupId: string, alias?: string) {
+  return {
+    groupId,
+    alias,
+    appKey: "test-app",
+    targetApplicationId: "test-target",
+    upgradePolicy: "Automatic" as const,
+    createdAt: 0,
+  };
+}
+
+function renderChatTab(props?: Partial<ComponentProps<typeof ChatTab>>) {
+  return render(
+    <MemoryRouter>
+      <ChatTab
+        isAuthenticated={true}
+        isConfigSet={true}
+        {...props}
+      />
+    </MemoryRouter>,
+  );
+}
+
+describe("ChatTab", () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+    mockListGroups.mockReset();
+    mockJoinGroup.mockReset();
+    mockResolveCurrentMemberIdentity.mockReset();
+    mockSetMemberAlias.mockReset();
+    mockSetGroupMemberIdentity.mockReset();
+    mockSetGroupId.mockReset();
+    mockGetGroupId.mockReset();
+    mockGetGroupMemberIdentity.mockReset();
+    mockGetStoredGroupAlias.mockReset();
+    mockGetMessengerDisplayName.mockReset();
+    mockSetStoredGroupAlias.mockReset();
+    mockSetMessengerDisplayName.mockReset();
+    mockClearStoredSession.mockReset();
+    mockParseInvitationInput.mockReset();
+    mockParseGroupInvitationPayload.mockReset();
+
+    mockGetGroupId.mockReturnValue("");
+    mockGetGroupMemberIdentity.mockReturnValue("");
+    mockGetStoredGroupAlias.mockReturnValue("");
+    mockGetMessengerDisplayName.mockReturnValue("Ronit");
+    mockSetMemberAlias.mockResolvedValue({
+      data: undefined,
+      error: null,
+    });
+    mockListGroups.mockResolvedValue({
+      data: [makeGroup("group-1")],
+    });
+  });
+
+  it("shows the invitation entry even when workspaces already exist", async () => {
+    renderChatTab();
+
+    await waitFor(() => {
+      expect(mockListGroups).toHaveBeenCalled();
+    });
+
+    expect(
+      screen.getByText(/join workspace with invitation/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the group alias in the workspace picker when available", async () => {
+    mockListGroups.mockResolvedValue({
+      data: [makeGroup("group-1", "Product Team")],
+    });
+
+    renderChatTab();
+
+    expect(
+      await screen.findByRole("option", { name: "Product Team" }),
+    ).toBeInTheDocument();
+  });
+
+  it("uses the locally stored group alias when the refreshed list is still unnamed", async () => {
+    mockGetStoredGroupAlias.mockImplementation((groupId: string) =>
+      groupId === "group-1" ? "Locally Named Workspace" : "",
+    );
+    mockListGroups.mockResolvedValue({
+      data: [makeGroup("group-1")],
+    });
+
+    renderChatTab();
+
+    expect(
+      await screen.findByRole("option", { name: "Locally Named Workspace" }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to a truncated group ID when the workspace alias is missing", async () => {
+    mockListGroups.mockResolvedValue({
+      data: [makeGroup("abcdefghijklmnop")],
+    });
+
+    renderChatTab();
+
+    expect(
+      await screen.findByRole("option", { name: "abcdefghijkl..." }),
+    ).toBeInTheDocument();
+  });
+
+  it("loads the selected workspace member alias into the name field", async () => {
+    mockResolveCurrentMemberIdentity.mockResolvedValue({
+      data: {
+        memberIdentity: "member-1",
+        members: [
+          {
+            identity: "member-1",
+            alias: "Product Ronit",
+            role: "Member",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    renderChatTab();
+
+    await waitFor(() => {
+      expect(mockResolveCurrentMemberIdentity).toHaveBeenCalledWith("group-1", "");
+    });
+
+    expect(screen.getByPlaceholderText(/enter your name/i)).toHaveValue(
+      "Product Ronit",
+    );
+  });
+
+  it("keeps the messenger name when the selected workspace member has no alias", async () => {
+    mockResolveCurrentMemberIdentity.mockResolvedValue({
+      data: {
+        memberIdentity: "member-1",
+        members: [
+          {
+            identity: "member-1",
+            role: "Member",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    renderChatTab();
+
+    await waitFor(() => {
+      expect(mockResolveCurrentMemberIdentity).toHaveBeenCalledWith("group-1", "");
+    });
+
+    expect(screen.getByPlaceholderText(/enter your name/i)).toHaveValue("Ronit");
+  });
+
+  it("joins a workspace from invitation and selects the joined workspace", async () => {
+    const onInvitationSaved = vi.fn();
+    const invitation = {
+      invitation: {
+        inviter_identity: "admin",
+        group_id: "group-2",
+        expiration_height: 999999999,
+        secret_salt: [1, 2, 3],
+        protocol: "near",
+        network: "testnet",
+        contract_id: "contract.testnet",
+      },
+      inviter_signature: "signature",
+    };
+    const joinedInvitation = {
+      invitation,
+      groupAlias: "Joined Workspace",
+    };
+
+    mockListGroups
+      .mockResolvedValueOnce({
+        data: [makeGroup("group-1")],
+      })
+      .mockResolvedValueOnce({
+        data: [makeGroup("group-1"), makeGroup("group-2")],
+      });
+    mockParseInvitationInput.mockReturnValue("decoded-payload");
+    mockParseGroupInvitationPayload.mockReturnValue(joinedInvitation);
+    mockJoinGroup.mockResolvedValue({
+      data: {
+        groupId: "group-2",
+        memberIdentity: "member-2",
+      },
+    });
+
+    renderChatTab({
+      onInvitationSaved,
+    });
+
+    await waitFor(() => {
+      expect(mockListGroups).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        /https:\/\/\.\.\.\?invitation=.*paste encoded/i,
+      ),
+      {
+        target: { value: "invite-link" },
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /use invitation/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockJoinGroup).toHaveBeenCalledWith({
+        invitation,
+        groupAlias: "Joined Workspace",
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockSetGroupMemberIdentity).toHaveBeenCalledWith(
+        "group-2",
+        "member-2",
+      );
+    });
+
+    expect(mockSetStoredGroupAlias).toHaveBeenCalledWith(
+      "group-2",
+      "Joined Workspace",
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("combobox"),
+      ).toHaveValue("group-2");
+    });
+
+    expect(onInvitationSaved).toHaveBeenCalled();
+  });
+
+  it("keeps the joined workspace enterable with its alias when the post-join refresh fails", async () => {
+    const invitation = {
+      invitation: {
+        inviter_identity: "admin",
+        group_id: "group-2",
+        expiration_height: 999999999,
+        secret_salt: [1, 2, 3],
+        protocol: "near",
+        network: "testnet",
+        contract_id: "contract.testnet",
+      },
+      inviter_signature: "signature",
+    };
+    const joinedInvitation = {
+      invitation,
+      groupAlias: "Joined Workspace",
+    };
+
+    mockListGroups
+      .mockResolvedValueOnce({
+        data: [makeGroup("group-1")],
+      })
+      .mockRejectedValueOnce(new Error("refresh failed"));
+    mockParseInvitationInput.mockReturnValue("decoded-payload");
+    mockParseGroupInvitationPayload.mockReturnValue(joinedInvitation);
+    mockJoinGroup.mockResolvedValue({
+      data: {
+        groupId: "group-2",
+        memberIdentity: "member-2",
+      },
+    });
+    mockResolveCurrentMemberIdentity.mockResolvedValue({
+      data: {
+        memberIdentity: "resolved-member-2",
+      },
+    });
+
+    renderChatTab();
+
+    await waitFor(() => {
+      expect(mockListGroups).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        /https:\/\/\.\.\.\?invitation=.*paste encoded/i,
+      ),
+      {
+        target: { value: "invite-link" },
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /use invitation/i }),
+    );
+
+    const joinChatButton = await screen.findByRole("button", {
+      name: /join chat/i,
+    });
+
+    expect(screen.getByRole("combobox")).toHaveValue("group-2");
+    expect(
+      screen.getByRole("option", { name: "Joined Workspace" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(joinChatButton);
+
+    await waitFor(() => {
+      expect(mockResolveCurrentMemberIdentity).toHaveBeenCalledWith(
+        "group-2",
+        "",
+      );
+    });
+
+    expect(mockSetGroupId).toHaveBeenCalledWith("group-2");
+    expect(mockSetMessengerDisplayName).toHaveBeenCalledWith("Ronit");
+    expect(mockSetGroupMemberIdentity).toHaveBeenCalledWith(
+      "group-2",
+      "resolved-member-2",
+    );
+    expect(mockClearStoredSession).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith("/");
+  });
+
+  it("saves the typed name as the resolved member alias before entering the workspace", async () => {
+    mockResolveCurrentMemberIdentity.mockResolvedValue({
+      data: {
+        memberIdentity: "resolved-member-1",
+        members: [
+          {
+            identity: "resolved-member-1",
+            alias: "Existing Alias",
+            role: "Member",
+          },
+        ],
+      },
+      error: null,
+    });
+    mockSetMemberAlias.mockResolvedValue({
+      data: undefined,
+      error: null,
+    });
+
+    renderChatTab();
+
+    await waitFor(() => {
+      expect(mockResolveCurrentMemberIdentity).toHaveBeenCalledWith("group-1", "");
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/enter your name/i), {
+      target: { value: "Updated Alias" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /join chat/i }));
+
+    await waitFor(() => {
+      expect(mockSetMemberAlias).toHaveBeenCalledWith("group-1", "resolved-member-1", {
+        alias: "Updated Alias",
+      });
+    });
+
+    expect(mockSetGroupId).toHaveBeenCalledWith("group-1");
+    expect(mockSetMessengerDisplayName).toHaveBeenCalledWith("Updated Alias");
+    expect(mockSetGroupMemberIdentity).toHaveBeenCalledWith(
+      "group-1",
+      "resolved-member-1",
+    );
+    expect(mockNavigate).toHaveBeenCalledWith("/");
+  });
+});

@@ -1,26 +1,28 @@
 import React, { useState } from "react";
 import styled from "styled-components";
-import type { ActiveChat, ChannelMeta } from "../../types/Common";
+import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import ChannelHeader from "./ChannelHeader";
 import ChannelList from "./ChannelList";
 import { CurbLogo } from "../navbar/CurbNavbar";
 import DMSideSelector from "./DMSideSelector";
-import type { DMChatInfo } from "../../api/clientApi";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 import { scrollbarStyles } from "../../styles/scrollbar";
 
 interface SideSelectorProps {
-  channels: ChannelMeta[];
-  activeChat: ActiveChat;
+  channels: GroupContextChannel[];
+  activeChat: ActiveChat | null;
   onChatSelected: (chat: ActiveChat) => void;
-  onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
+  onDMSelected: (dm: DMContextInfo) => void;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
-  setIsOpenSearchChannel: (open: boolean) => void;
+  setIsOpenSearchChannel: () => void;
   isOpenSearchChannel: boolean;
   chatMembers: Map<string, string>;
+  dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
-  privateDMs: DMChatInfo[];
+  privateDMs: DMContextInfo[];
+  onChannelCreated?: () => void;
 }
 
 const HorizontalSeparatorLine = styled.div<{ $isMobile: boolean }>`
@@ -208,9 +210,7 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
       <>
         <SearchChannels
           isOpenSearchChannel={isOpenSearchChannel}
-          setIsOpenSearchChannel={() =>
-            setIsOpenSearchChannel(!isOpenSearchChannel)
-          }
+          setIsOpenSearchChannel={setIsOpenSearchChannel}
           isCollapsed={isCollapsed}
           onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
         />
@@ -220,31 +220,32 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
           key="channels-header"
           title="Channels"
           isCollapsed={isCollapsed}
+          onChannelCreated={props.onChannelCreated}
         />
         <ChannelList
           channels={channels}
           selectChannel={props.onChatSelected}
           selectedChannelId={
-            props.activeChat.type === "channel"
-              ? props.activeChat.name
-              : props.activeChat.id
+            props.activeChat?.type === "channel"
+              ? props.activeChat.id
+              : ""
           }
           isCollapsed={isCollapsed}
         />
         <HorizontalSeparatorLine $isMobile={true} />
         {isCollapsed && <SectionLabel>DM</SectionLabel>}
         <DMSideSelector
-          chatMembers={props.chatMembers}
+          dmMembers={props.dmMembers}
           onDMSelected={props.onDMSelected}
-          selectChannel={props.onChatSelected}
           selectedDM={
-            props.activeChat.type === "direct_message"
-              ? props.activeChat.id
+            props.activeChat?.type === "direct_message"
+              ? props.activeChat.contextId || props.activeChat.id
               : ""
           }
           createDM={props.createDM}
           privateDMs={props.privateDMs}
           isCollapsed={isCollapsed}
+          onNoActiveChat={props.setIsOpenSearchChannel}
         />
       </>
     );

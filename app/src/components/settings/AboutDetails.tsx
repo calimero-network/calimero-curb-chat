@@ -69,13 +69,11 @@ const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
         <Text>{props.manager}</Text>
       </SettingsItem>
       <SettingsItem $roundedBottom>
-        {props.channelName !== "general" && (
-          <ButtonLeave>
-            <Text $red={true} onClick={props.handleLeaveChannel}>
-              Leave Channel
-            </Text>
-          </ButtonLeave>
-        )}
+        <ButtonLeave>
+          <Text $red={true} onClick={props.handleLeaveChannel}>
+            Leave Channel
+          </Text>
+        </ButtonLeave>
       </SettingsItem>
     </>
   );

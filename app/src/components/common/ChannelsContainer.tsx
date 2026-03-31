@@ -1,8 +1,7 @@
 import React, { memo } from "react";
-import type { ActiveChat, ChannelMeta } from "../../types/Common";
+import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import SideSelector from "../sideSelector/SideSelector";
-import { defaultActiveChat } from "../../mock/mock";
-import type { DMChatInfo } from "../../api/clientApi";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 
 interface ChannelsContainerProps {
@@ -10,13 +9,15 @@ interface ChannelsContainerProps {
   activeChat: ActiveChat | null;
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
-  setIsOpenSearchChannel: (open: boolean) => void;
+  setIsOpenSearchChannel: () => void;
   isOpenSearchChannel: boolean;
-  onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
-  channels: ChannelMeta[];
+  onDMSelected: (dm: DMContextInfo) => void;
+  channels: GroupContextChannel[];
   chatMembers: Map<string, string>;
+  dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
-  privateDMs: DMChatInfo[];
+  privateDMs: DMContextInfo[];
+  onChannelCreated?: () => void;
 }
 
 function ChannelsContainer(props: ChannelsContainerProps) {
@@ -30,14 +31,16 @@ function ChannelsContainer(props: ChannelsContainerProps) {
     onDMSelected,
     channels,
     chatMembers,
+    dmMembers,
     createDM,
     privateDMs,
+    onChannelCreated,
   } = props;
 
   return (
     <SideSelector
       onChatSelected={onChatSelected}
-      activeChat={activeChat || defaultActiveChat}
+      activeChat={activeChat}
       isSidebarOpen={isSidebarOpen}
       onDMSelected={onDMSelected}
       setIsSidebarOpen={setIsSidebarOpen}
@@ -45,8 +48,10 @@ function ChannelsContainer(props: ChannelsContainerProps) {
       isOpenSearchChannel={isOpenSearchChannel}
       channels={channels || []}
       chatMembers={chatMembers}
+      dmMembers={dmMembers}
       createDM={createDM}
       privateDMs={privateDMs}
+      onChannelCreated={onChannelCreated}
     />
   );
 }

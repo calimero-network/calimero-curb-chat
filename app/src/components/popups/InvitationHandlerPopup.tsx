@@ -1,13 +1,28 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { styled } from "styled-components";
-import { apiClient, type ResponseData, setContextId, setExecutorPublicKey } from "@calimero-network/calimero-client";
+import {
+  apiClient,
+  type ResponseData,
+  setContextId,
+  setExecutorPublicKey,
+} from "@calimero-network/calimero-client";
 import type {
   JoinContextResponse,
   NodeIdentity,
   SignedOpenInvitation,
 } from "@calimero-network/calimero-client/lib/api/nodeApi";
 import { Button } from "@calimero-network/mero-ui";
-import { clearInvitationFromStorage, getInvitationFromStorage } from "../../utils/invitation";
+import {
+  clearInvitationFromStorage,
+  getInvitationFromStorage,
+} from "../../utils/invitation";
+import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
+import {
+  setGroupId,
+  setGroupMemberIdentity,
+  setStoredGroupAlias,
+} from "../../constants/config";
+import { parseGroupInvitationPayload } from "../../utils/invitation";
 
 const Overlay = styled.div`
   position: fixed;
@@ -41,24 +56,24 @@ const Title = styled.h2`
   text-align: center;
 `;
 
-const Message = styled.div<{ type?: "success" | "error" | "info" }>`
+const Message = styled.div<{ $type?: "success" | "error" | "info" }>`
   padding: 0.75rem;
   border-radius: 6px;
   font-size: 0.85rem;
   text-align: center;
   margin-bottom: 1rem;
-  color: ${({ type }) =>
-    type === "success"
+  color: ${({ $type }) =>
+    $type === "success"
       ? "#27ae60"
-      : type === "error"
-      ? "#e74c3c"
-      : "#b8b8d1"};
-  background: ${({ type }) =>
-    type === "success"
+      : $type === "error"
+        ? "#e74c3c"
+        : "#b8b8d1"};
+  background: ${({ $type }) =>
+    $type === "success"
       ? "rgba(39, 174, 96, 0.1)"
-      : type === "error"
-      ? "rgba(231, 76, 60, 0.1)"
-      : "rgba(184, 184, 209, 0.1)"};
+      : $type === "error"
+        ? "rgba(231, 76, 60, 0.1)"
+        : "rgba(184, 184, 209, 0.1)"};
 `;
 
 const ButtonGroup = styled.div`
@@ -67,24 +82,207 @@ const ButtonGroup = styled.div`
   margin-top: 1rem;
 `;
 
+type Status =
+  | "joining"
+  | "syncing"
+  | "discovering-contexts"
+  | "syncing-context"
+  | "error";
+
 interface InvitationHandlerPopupProps {
   onSuccess: () => void;
   onError: () => void;
 }
 
-export default function InvitationHandlerPopup({ onSuccess, onError }: InvitationHandlerPopupProps) {
-  const [status, setStatus] = useState<"joining" | "syncing" | "error">("joining");
+/**
+ * Detect whether the stored invitation is a group invitation or a legacy
+ * context invitation.
+ *
+ * Legacy context invitations are JSON objects (SignedOpenInvitation) with
+ * `invitation` and `invitee_signature` fields.
+ *
+ * Group invitations are transparent JSON with `invitation` and
+ * `inviter_signature` fields. Legacy context invitations also use JSON, so we
+ * inspect the payload shape instead of assuming that JSON always means context.
+ */
+function isGroupInvitation(payload: string): boolean {
+  return !!parseGroupInvitationPayload(payload);
+}
+
+export default function InvitationHandlerPopup({
+  onSuccess,
+  onError,
+}: InvitationHandlerPopupProps) {
+  const [status, setStatus] = useState<Status>("joining");
+  const [statusMessage, setStatusMessage] = useState("Processing your invitation...");
   const [errorMessage, setErrorMessage] = useState("");
   const hasAttemptedJoin = useRef(false);
-  // @ts-expect-error - NodeJS.Timeout is not defined in the browser
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const joinContextWithInvitation = useCallback(async () => {
-    // Prevent multiple calls
-    if (hasAttemptedJoin.current) {
-      return;
-    }
+  const joinGroupFlow = useCallback(
+    async (invitationPayload: string) => {
+      const groupApi = new GroupApiDataSource();
+
+      setStatus("joining");
+      setStatusMessage("Joining workspace...");
+
+      const parsedInvitation = parseGroupInvitationPayload(invitationPayload);
+      if (!parsedInvitation) {
+        throw new Error("Invalid workspace invitation");
+      }
+
+      const joinResult = await groupApi.joinGroup({
+        invitation: parsedInvitation.invitation,
+        groupAlias: parsedInvitation.groupAlias,
+      });
+      if (joinResult.error || !joinResult.data) {
+        throw new Error(
+          joinResult.error?.message || "Failed to join workspace",
+        );
+      }
+      const { groupId, memberIdentity } = joinResult.data;
+      setGroupId(groupId);
+      setGroupMemberIdentity(groupId, memberIdentity);
+      if (parsedInvitation.groupAlias?.trim()) {
+        setStoredGroupAlias(groupId, parsedInvitation.groupAlias);
+      }
+
+      setStatus("syncing");
+      setStatusMessage("Syncing workspace data...");
+
+      await groupApi.syncGroup(groupId);
+
+      setStatus("discovering-contexts");
+      setStatusMessage("Loading workspace channels...");
+      const contextsResult = await groupApi.listGroupContexts(groupId);
+      if (contextsResult.error || !contextsResult.data) {
+        throw new Error(
+          contextsResult.error?.message || "Failed to list workspace channels",
+        );
+      }
+
+      const contextIds = contextsResult.data;
+      setStatusMessage(
+        contextIds.length > 0
+          ? "Workspace joined. Choose a channel next."
+          : "Workspace joined. No channels are available yet.",
+      );
+      clearInvitationFromStorage();
+      onSuccess();
+    },
+    [onSuccess],
+  );
+
+  const waitForContextSync = useCallback(
+    (contextId: string) =>
+      new Promise<void>((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 60;
+
+        syncIntervalRef.current = setInterval(async () => {
+          attempts++;
+          if (attempts > maxAttempts) {
+            if (syncIntervalRef.current)
+              clearInterval(syncIntervalRef.current);
+            reject(
+              new Error("Context sync timeout — please try again later"),
+            );
+            return;
+          }
+
+          try {
+            const verifyResponse = await apiClient
+              .node()
+              .getContext(contextId);
+            if (verifyResponse.data) {
+              const isSynced =
+                verifyResponse.data.rootHash !==
+                "11111111111111111111111111111111";
+              if (isSynced) {
+                if (syncIntervalRef.current)
+                  clearInterval(syncIntervalRef.current);
+                clearInvitationFromStorage();
+                onSuccess();
+                resolve();
+              }
+            }
+          } catch (err) {
+            console.error("Error checking sync status:", err);
+          }
+        }, 3000);
+      }).catch((error) => {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Sync failed",
+        );
+        setStatus("error");
+      }),
+    [onSuccess],
+  );
+
+  const joinContextFlow = useCallback(
+    async (invitationPayload: string) => {
+      setStatus("joining");
+      setStatusMessage("Creating identity...");
+
+      const identityResponse: ResponseData<NodeIdentity> = await apiClient
+        .node()
+        .createNewIdentity();
+      if (identityResponse.error || !identityResponse.data) {
+        throw new Error(
+          identityResponse.error?.message ||
+            "Failed to create identity for invitation",
+        );
+      }
+
+      const identityPayload = identityResponse.data as
+        | NodeIdentity
+        | { data?: NodeIdentity };
+      const identityData: NodeIdentity =
+        "data" in identityPayload && identityPayload.data
+          ? identityPayload.data
+          : (identityPayload as NodeIdentity);
+      const executorPk: string = identityData.publicKey;
+
+      setStatusMessage("Joining context...");
+
+      const parsed = JSON.parse(invitationPayload.trim());
+      const signedInvitation: SignedOpenInvitation = parsed.data ?? parsed;
+
+      const joinResponse: ResponseData<JoinContextResponse> = await apiClient
+        .node()
+        .joinContextByOpenInvitation(signedInvitation, executorPk);
+      if (joinResponse.error || !joinResponse.data) {
+        throw new Error(
+          joinResponse.error?.message || "Failed to join context",
+        );
+      }
+
+      const verifyResponse = await apiClient
+        .node()
+        .getContext(joinResponse.data.contextId);
+      if (verifyResponse.error || !verifyResponse.data) {
+        throw new Error("Failed to verify context");
+      }
+
+      localStorage.setItem(
+        "new-context-identity",
+        JSON.stringify(identityData),
+      );
+      setContextId(joinResponse.data.contextId);
+      setExecutorPublicKey(executorPk);
+
+      setStatus("syncing-context");
+      setStatusMessage("Waiting for context to sync...");
+
+      await waitForContextSync(joinResponse.data.contextId);
+    },
+    [waitForContextSync],
+  );
+
+  const processInvitation = useCallback(async () => {
+    if (hasAttemptedJoin.current) return;
     hasAttemptedJoin.current = true;
+
     try {
       const invitationPayload = getInvitationFromStorage();
       if (!invitationPayload) {
@@ -93,133 +291,32 @@ export default function InvitationHandlerPopup({ onSuccess, onError }: Invitatio
         return;
       }
 
-      // Create new identity for this invitation (user already has JWT token from authentication)
-      const identityResponse: ResponseData<NodeIdentity> = await apiClient
-        .node()
-        .createNewIdentity();
-
-      if (identityResponse.error || !identityResponse.data) {
-        setErrorMessage(
-          identityResponse.error?.message || "Failed to create identity for invitation"
-        );
-        setStatus("error");
-        return;
+      if (isGroupInvitation(invitationPayload)) {
+        await joinGroupFlow(invitationPayload);
+      } else {
+        await joinContextFlow(invitationPayload);
       }
-
-      // Server returns { data: { publicKey } } wrapped in withResponseData → identityResponse.data = { data: { publicKey } }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const identityData = (identityResponse.data as any).data ?? identityResponse.data;
-      const executorPublicKey: string = identityData.publicKey;
-
-      // Join context using the invitation.
-      // The stored payload may be wrapped in a { data: ... } envelope —
-      // unwrap it if so, since the node API expects { invitation, inviter_signature } directly.
-      const parsed = JSON.parse(invitationPayload.trim());
-      const signedInvitation: SignedOpenInvitation = parsed.data ?? parsed;
-
-      const joinResponse: ResponseData<JoinContextResponse> = await apiClient
-        .node()
-        .joinContextByOpenInvitation(
-          signedInvitation,
-          executorPublicKey
-        );
-
-      if (joinResponse.error || !joinResponse.data) {
-        setErrorMessage(joinResponse.error?.message || "Failed to join context");
-        setStatus("error");
-        return;
-      }
-
-      // Verify the context
-      const verifyContextResponse = await apiClient
-        .node()
-        .getContext(joinResponse.data.contextId);
-
-      if (verifyContextResponse.error || !verifyContextResponse.data) {
-        setErrorMessage("Failed to verify context");
-        setStatus("error");
-        return;
-      }
-
-      // Store the new context data
-      localStorage.setItem("new-context-identity", JSON.stringify(identityData));
-      setContextId(joinResponse.data.contextId);
-      setExecutorPublicKey(executorPublicKey);
-      
-      // Wait for context to sync before closing
-      setStatus("syncing");
-      await waitForContextSync(joinResponse.data.contextId);
     } catch (error) {
       console.error("Invitation join error:", error);
       setErrorMessage(
-        error instanceof Error ? error.message : "An unexpected error occurred"
+        error instanceof Error ? error.message : "An unexpected error occurred",
       );
       setStatus("error");
     }
-  }, [onSuccess]);
-
-  const waitForContextSync = useCallback(async (contextId: string) => {
-    return new Promise<void>((resolve, reject) => {
-      let attempts = 0;
-      const maxAttempts = 60; // 3 minutes max (60 * 3 seconds)
-
-      syncIntervalRef.current = setInterval(async () => {
-        attempts++;
-
-        if (attempts > maxAttempts) {
-          if (syncIntervalRef.current) {
-            clearInterval(syncIntervalRef.current);
-          }
-          reject(new Error("Context sync timeout - please try again later"));
-          return;
-        }
-
-        try {
-          const verifyResponse = await apiClient
-            .node()
-            .getContext(contextId);
-
-          if (verifyResponse.data) {
-            const isSynced = verifyResponse.data.rootHash !== "11111111111111111111111111111111";
-            
-            if (isSynced) {
-              if (syncIntervalRef.current) {
-                clearInterval(syncIntervalRef.current);
-              }
-              // Clear invitation and close popup - context is now ready
-              clearInvitationFromStorage();
-              onSuccess();
-              resolve();
-            }
-          }
-        } catch (error) {
-          console.error("Error checking sync status:", error);
-        }
-      }, 3000); // Check every 3 seconds
-    }).catch((error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Sync failed");
-      setStatus("error");
-    });
-  }, [onSuccess]);
+  }, [joinGroupFlow, joinContextFlow]);
 
   useEffect(() => {
-    // Automatically join context on mount (user is already authenticated with JWT)
-    joinContextWithInvitation();
-
-    // Cleanup sync interval on unmount
+    processInvitation();
     return () => {
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current);
-      }
+      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
     };
-  }, [joinContextWithInvitation]);
+  }, [processInvitation]);
 
   const handleRetry = () => {
-    // Reset the ref to allow retry
     hasAttemptedJoin.current = false;
     setErrorMessage("");
     setStatus("joining");
-    joinContextWithInvitation();
+    processInvitation();
   };
 
   const handleCancel = () => {
@@ -230,35 +327,32 @@ export default function InvitationHandlerPopup({ onSuccess, onError }: Invitatio
   return (
     <Overlay>
       <PopupContainer>
-        {status === "joining" && (
+        {status !== "error" && (
           <>
-            <Title>Joining the invitation...</Title>
-            <Message type="info">
-              Please wait while we process your invitation.
-            </Message>
-          </>
-        )}
-
-        {status === "syncing" && (
-          <>
-            <Title>Syncing context...</Title>
-            <Message type="info">
-              Please wait while the context state is syncing. This may take a moment.
-            </Message>
+            <Title>
+              {status === "joining"
+                ? "Joining..."
+                : status === "syncing"
+                  ? "Syncing workspace..."
+                  : status === "discovering-contexts"
+                    ? "Loading channels..."
+                    : "Syncing channel..."}
+            </Title>
+            <Message $type="info">{statusMessage}</Message>
           </>
         )}
 
         {status === "error" && (
           <>
-            <Title>Context Join Failed</Title>
-            <Message type="error">{errorMessage}</Message>
+            <Title>Join Failed</Title>
+            <Message $type="error">{errorMessage}</Message>
             <ButtonGroup>
               <Button
                 onClick={handleRetry}
                 variant="primary"
                 style={{ flex: 1 }}
               >
-                Retry Again
+                Retry
               </Button>
               <Button
                 onClick={handleCancel}
@@ -274,4 +368,3 @@ export default function InvitationHandlerPopup({ onSuccess, onError }: Invitatio
     </Overlay>
   );
 }
-
