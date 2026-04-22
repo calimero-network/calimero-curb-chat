@@ -238,12 +238,18 @@ export class GroupApiDataSource implements GroupApi {
     request: CreateGroupRequest,
   ): ApiResponse<CreateGroupResponse> {
     try {
-      const response = await axios.post(`${this.base()}/groups`, request, {
+      const response = await axios.post(`${this.base()}/namespaces`, request, {
         headers: getAuthHeaders(),
       });
-      return response.status === 200
-        ? ok(response.data.data)
-        : httpFail(response.status, response.statusText);
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+      const data = response.data.data;
+      const groupId = data?.namespaceId ?? data?.groupId ?? data?.id;
+      if (!groupId) {
+        return fail(500, "Namespace creation response missing ID");
+      }
+      return ok({ groupId });
     } catch (error) {
       return catchError("createGroup", error);
     }
@@ -294,7 +300,7 @@ export class GroupApiDataSource implements GroupApi {
   ): ApiResponse<CreateInvitationResponse> {
     try {
       const response = await axios.post(
-        `${this.base()}/groups/${groupId}/invite`,
+        `${this.base()}/namespaces/${groupId}/invite`,
         request ?? {},
         { headers: getAuthHeaders() },
       );
@@ -320,17 +326,28 @@ export class GroupApiDataSource implements GroupApi {
     request: JoinGroupRequest,
   ): ApiResponse<JoinGroupResponse> {
     try {
+      // Extract namespace ID from the invitation's group_id (may be string or byte array)
+      const rawGroupId = (request.invitation.invitation as Record<string, unknown>).group_id
+        ?? (request.invitation.invitation as Record<string, unknown>).groupId;
+      const namespaceId = Array.isArray(rawGroupId)
+        ? (rawGroupId as number[]).map(b => b.toString(16).padStart(2, '0')).join('')
+        : String(rawGroupId ?? '');
+
+      if (!namespaceId) {
+        return fail(400, "Could not extract namespace ID from invitation");
+      }
+
       const response = await axios.post(
-        `${this.base()}/groups/join`,
-        {
-          invitation: request.invitation,
-          groupAlias: request.groupAlias,
-        },
+        `${this.base()}/namespaces/${namespaceId}/join`,
+        { invitation: request.invitation },
         { headers: getAuthHeaders() },
       );
-      return response.status === 200
-        ? ok(response.data.data)
-        : httpFail(response.status, response.statusText);
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+      const data = response.data.data;
+      const groupId = data?.namespaceId ?? data?.groupId ?? namespaceId;
+      return ok({ groupId, memberIdentity: data?.memberIdentity ?? '' });
     } catch (error) {
       return catchError("joinGroup", error);
     }
@@ -428,21 +445,24 @@ export class GroupApiDataSource implements GroupApi {
   }
 
   async joinGroupContext(
-    groupId: string,
+    _groupId: string,
     request: JoinGroupContextRequest,
   ): ApiResponse<JoinGroupContextResponse> {
     try {
-      const normalizedRequest: JoinGroupContextRequest = {
-        contextId: normalizeContextId(request.contextId),
-      };
+      const contextId = normalizeContextId(request.contextId);
       const response = await axios.post(
-        `${this.base()}/groups/${groupId}/join-context`,
-        normalizedRequest,
+        `${this.base()}/contexts/${contextId}/join`,
+        {},
         { headers: getAuthHeaders() },
       );
-      return response.status === 200
-        ? ok(response.data.data)
-        : httpFail(response.status, response.statusText);
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+      const data = response.data.data;
+      return ok({
+        contextId: data?.contextId ?? contextId,
+        memberPublicKey: data?.memberPublicKey ?? '',
+      });
     } catch (error) {
       return catchError("joinGroupContext", error);
     }

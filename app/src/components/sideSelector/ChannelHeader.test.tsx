@@ -8,17 +8,20 @@ const {
   mockCreateGroupContext,
   mockGetGroup,
   mockSetContextVisibility,
+  mockSetContextMemberIdentity,
 } = vi.hoisted(() => ({
   mockGetGroupId: vi.fn(),
   mockUseCurrentGroupPermissions: vi.fn(),
   mockCreateGroupContext: vi.fn(),
   mockGetGroup: vi.fn(),
   mockSetContextVisibility: vi.fn(),
+  mockSetContextMemberIdentity: vi.fn(),
 }));
 
 vi.mock("../../constants/config", () => ({
   getGroupId: mockGetGroupId,
   getApplicationId: () => "app-id",
+  setContextMemberIdentity: mockSetContextMemberIdentity,
 }));
 
 vi.mock("../../hooks/useCurrentGroupPermissions", () => ({
@@ -74,6 +77,7 @@ describe("ChannelHeader", () => {
     mockCreateGroupContext.mockReset();
     mockGetGroup.mockReset();
     mockSetContextVisibility.mockReset();
+    mockSetContextMemberIdentity.mockReset();
     mockGetGroupId.mockReturnValue("group-1");
     mockGetGroup.mockResolvedValue({
       data: { defaultVisibility: "open" },

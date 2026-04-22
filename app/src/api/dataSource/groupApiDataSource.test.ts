@@ -29,12 +29,12 @@ describe("GroupApiDataSource", () => {
     mockAxiosPut.mockReset();
   });
 
-  it("passes the optional alias when creating a group", async () => {
+  it("passes the optional alias when creating a namespace (workspace)", async () => {
     mockAxiosPost.mockResolvedValue({
       status: 200,
       data: {
         data: {
-          groupId: "group-1",
+          namespaceId: "group-1",
         },
       },
       statusText: "OK",
@@ -48,7 +48,7 @@ describe("GroupApiDataSource", () => {
     });
 
     expect(mockAxiosPost).toHaveBeenCalledWith(
-      "http://localhost:2428/admin-api/groups",
+      "http://localhost:2428/admin-api/namespaces",
       {
         applicationId: "app-1",
         upgradePolicy: "LazyOnAccess",
@@ -67,6 +67,22 @@ describe("GroupApiDataSource", () => {
       },
       error: null,
     });
+  });
+
+  it("also accepts groupId in namespace creation response for backward compatibility", async () => {
+    mockAxiosPost.mockResolvedValue({
+      status: 200,
+      data: { data: { groupId: "group-2" } },
+      statusText: "OK",
+    });
+
+    const dataSource = new GroupApiDataSource();
+    const response = await dataSource.createGroup({
+      applicationId: "app-1",
+      upgradePolicy: "Automatic",
+    });
+
+    expect(response).toEqual({ data: { groupId: "group-2" }, error: null });
   });
 
   it("returns the invitation group alias when the backend wraps the payload", async () => {
@@ -115,7 +131,7 @@ describe("GroupApiDataSource", () => {
     });
   });
 
-  it("forwards the optional group alias when joining a group", async () => {
+  it("joins a namespace by POSTing to /namespaces/{id}/join with only the invitation in the body", async () => {
     const invitation = {
       invitation: {
         inviter_identity: "admin",
@@ -132,7 +148,7 @@ describe("GroupApiDataSource", () => {
       status: 200,
       data: {
         data: {
-          groupId: "group-1",
+          namespaceId: "group-1",
           memberIdentity: "member-1",
         },
       },
@@ -145,12 +161,10 @@ describe("GroupApiDataSource", () => {
       groupAlias: "Product Team",
     });
 
+    // namespace ID is extracted from invitation.invitation.group_id = "group-1"
     expect(mockAxiosPost).toHaveBeenCalledWith(
-      "http://localhost:2428/admin-api/groups/join",
-      {
-        invitation,
-        groupAlias: "Product Team",
-      },
+      "http://localhost:2428/admin-api/namespaces/group-1/join",
+      { invitation },
       {
         headers: {
           "Content-Type": "application/json",
@@ -163,6 +177,58 @@ describe("GroupApiDataSource", () => {
         groupId: "group-1",
         memberIdentity: "member-1",
       },
+      error: null,
+    });
+  });
+
+  it("converts byte-array group_id in invitation to hex namespace ID in the join URL", async () => {
+    const invitation = {
+      invitation: {
+        inviter_identity: "admin",
+        group_id: [0xab, 0xcd, 0xef],
+        expiration_height: 42,
+        secret_salt: [1, 2, 3],
+        protocol: "near",
+        network: "testnet",
+        contract_id: "contract.testnet",
+      },
+      inviter_signature: "signature",
+    };
+    mockAxiosPost.mockResolvedValue({
+      status: 200,
+      data: { data: { namespaceId: "abcdef", memberIdentity: "member-1" } },
+      statusText: "OK",
+    });
+
+    const dataSource = new GroupApiDataSource();
+    await dataSource.joinGroup({ invitation: invitation as never, groupAlias: "Team" });
+
+    expect(mockAxiosPost).toHaveBeenCalledWith(
+      "http://localhost:2428/admin-api/namespaces/abcdef/join",
+      { invitation },
+      expect.any(Object),
+    );
+  });
+
+  it("joins a context by POSTing to /contexts/{contextId}/join without a group ID in URL", async () => {
+    mockAxiosPost.mockResolvedValue({
+      status: 200,
+      data: { data: { contextId: "ctx-1", memberPublicKey: "pk-1" } },
+      statusText: "OK",
+    });
+
+    const dataSource = new GroupApiDataSource();
+    const response = await dataSource.joinGroupContext("ignored-group-id", {
+      contextId: "ctx-1",
+    });
+
+    expect(mockAxiosPost).toHaveBeenCalledWith(
+      "http://localhost:2428/admin-api/contexts/ctx-1/join",
+      {},
+      expect.any(Object),
+    );
+    expect(response).toEqual({
+      data: { contextId: "ctx-1", memberPublicKey: "pk-1" },
       error: null,
     });
   });

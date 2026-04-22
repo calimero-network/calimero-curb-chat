@@ -3,7 +3,15 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
 import { BrowserRouter } from "react-router-dom";
-import { AppMode, CalimeroProvider, setAppEndpointKey, setAccessToken, setRefreshToken } from "@calimero-network/calimero-client";
+import {
+  AppMode,
+  CalimeroProvider,
+  setAppEndpointKey,
+  setAccessToken,
+  setRefreshToken,
+} from "@calimero-network/calimero-client";
+import { MeroProvider, AppMode as MeroAppMode } from "@calimero-network/mero-react";
+import "@calimero-network/mero-ui/styles.css";
 import { ToastProvider } from "@calimero-network/mero-ui";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { WebSocketProvider } from "./contexts/WebSocketContext.tsx";
@@ -11,27 +19,32 @@ import { log } from "./utils/logger.ts";
 
 import 'react-photo-view/dist/react-photo-view.css';
 
-// Pre-process Tauri SSO hash params BEFORE React mounts.
-// CalimeroProvider reads localStorage on init, so tokens must be there
-// before the first render — not in a useEffect which is always too late.
-(function bootstrapHashParams() {
+// Bridge mero-react storage → calimero-client storage so CalimeroProvider's
+// CalimeroApplication gets the correct node URL and access token at creation time.
+// Runs synchronously before React renders — effects would be too late.
+(function bridgeStorageOnLoad() {
   const hash = window.location.hash.slice(1);
-  if (!hash) return;
-  const p = new URLSearchParams(hash);
-  const nodeUrl     = p.get("node_url");
-  const accessToken  = p.get("access_token");
-  const refreshToken = p.get("refresh_token");
-  if (nodeUrl)      setAppEndpointKey(nodeUrl.trim());
-  if (accessToken)  setAccessToken(accessToken);
-  if (refreshToken) setRefreshToken(refreshToken);
-  // Strip auth tokens from URL immediately so they don't linger in
-  // the address bar, browser history, or get picked up by other scripts.
-  if (accessToken || refreshToken) {
-    p.delete("access_token");
-    p.delete("refresh_token");
-    p.delete("expires_in");
-    const remaining = p.toString();
-    window.history.replaceState(null, "", remaining ? `#${remaining}` : window.location.pathname + window.location.search);
+  if (hash) {
+    // Auth callback return (web auth) or Tauri SSO — hash has the fresh tokens.
+    const p = new URLSearchParams(hash);
+    const accessToken = p.get('access_token');
+    const refreshToken = p.get('refresh_token');
+    const nodeUrl = p.get('node_url');
+    if (nodeUrl) setAppEndpointKey(nodeUrl.trim());
+    if (accessToken) setAccessToken(accessToken);
+    if (refreshToken) setRefreshToken(refreshToken);
+  } else {
+    // Returning authenticated user: bridge mero-react storage keys → calimero storage keys.
+    const nodeUrl = localStorage.getItem('mero:node_url');
+    if (nodeUrl) setAppEndpointKey(nodeUrl);
+    const raw = localStorage.getItem('mero-tokens');
+    if (raw) {
+      try {
+        const d = JSON.parse(raw) as { access_token?: string; refresh_token?: string };
+        if (d.access_token) setAccessToken(d.access_token);
+        if (d.refresh_token) setRefreshToken(d.refresh_token);
+      } catch { /* ignore */ }
+    }
   }
 })();
 
@@ -39,15 +52,9 @@ const CALIMERO_APP_ID_KEY = "calimero-application-id";
 
 function getExplicitApplicationId(): string {
   const fromSearch = new URLSearchParams(window.location.search).get("app-id")?.trim();
-  if (fromSearch) {
-    return fromSearch;
-  }
-
+  if (fromSearch) return fromSearch;
   const fromHash = new URLSearchParams(window.location.hash.slice(1)).get("app-id")?.trim();
-  if (fromHash) {
-    return fromHash;
-  }
-
+  if (fromHash) return fromHash;
   return (import.meta.env.VITE_APPLICATION_ID as string | undefined)?.trim() || "";
 }
 
@@ -61,17 +68,11 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")
-      .then((_registration) => {
-        log.info("ServiceWorker", "Service worker registered successfully");
-      })
-      .catch((error) => {
-        log.error("ServiceWorker", "Service worker registration failed", error);
-      });
+      .then(() => log.info("ServiceWorker", "Service worker registered successfully"))
+      .catch((error) => log.error("ServiceWorker", "Service worker registration failed", error));
   });
 }
 
-// Disable StrictMode in production to avoid double-rendering
-// which can cause 429 errors from CalimeroProvider's auth checks
 const AppWrapper = import.meta.env.DEV ? StrictMode : React.Fragment;
 
 createRoot(document.getElementById("root")!).render(
@@ -81,19 +82,25 @@ createRoot(document.getElementById("root")!).render(
         log.error("App", "Uncaught error in React tree", { error, errorInfo });
       }}
     >
-      <BrowserRouter>
-        <CalimeroProvider
-          packageName={import.meta.env.VITE_APPLICATION_PACKAGE}
-          registryUrl="https://apps.calimero.network"
-          mode={AppMode.MultiContext}
-        >
-          <WebSocketProvider>
-            <ToastProvider>
-              <App />
-            </ToastProvider>
-          </WebSocketProvider>
-        </CalimeroProvider>
-      </BrowserRouter>
+      <MeroProvider
+        mode={MeroAppMode.MultiContext}
+        packageName={import.meta.env.VITE_APPLICATION_PACKAGE}
+        registryUrl="https://apps.calimero.network"
+      >
+        <BrowserRouter>
+          <CalimeroProvider
+            mode={AppMode.MultiContext}
+            packageName={import.meta.env.VITE_APPLICATION_PACKAGE}
+            registryUrl="https://apps.calimero.network"
+          >
+            <WebSocketProvider>
+              <ToastProvider>
+                <App />
+              </ToastProvider>
+            </WebSocketProvider>
+          </CalimeroProvider>
+        </BrowserRouter>
+      </MeroProvider>
     </ErrorBoundary>
   </AppWrapper>,
 );

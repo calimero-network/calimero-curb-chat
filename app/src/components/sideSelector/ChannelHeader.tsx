@@ -3,7 +3,7 @@ import CreateChannelPopup from "../popups/CreateChannelPopup";
 import { isValidChannelName } from "../../utils/validation";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
-import { getApplicationId, getGroupId } from "../../constants/config";
+import { getApplicationId, getGroupId, setContextMemberIdentity } from "../../constants/config";
 import { memo, useCallback, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
@@ -101,6 +101,9 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     }
 
     const contextId = createResp.data.contextId;
+    if (createResp.data.memberPublicKey) {
+      setContextMemberIdentity(contextId, createResp.data.memberPublicKey);
+    }
     const groupApi = new GroupApiDataSource();
     const visibilityMode = getContextVisibilityModeFromOption(
       isPublic ? "public" : "private",

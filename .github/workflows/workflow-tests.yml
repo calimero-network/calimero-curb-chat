@@ -116,6 +116,28 @@ jobs:
           merobox nuke --force || true
           if [ "$success" = false ]; then exit 1; fi
 
+      - name: Run dm-flow workflow
+        working-directory: workflows
+        run: |
+          max_attempts=2
+          attempt=1
+          success=false
+          while [ $attempt -le $max_attempts ]; do
+            if [ $attempt -gt 1 ]; then
+              merobox stop --all || true
+              merobox nuke --force || true
+              sleep 2
+            fi
+            if merobox bootstrap run dm-flow.yml; then
+              success=true
+              break
+            fi
+            attempt=$((attempt + 1))
+          done
+          merobox stop --all || true
+          merobox nuke --force || true
+          if [ "$success" = false ]; then exit 1; fi
+
       - name: Run full-logic-test workflow
         working-directory: workflows
         run: |

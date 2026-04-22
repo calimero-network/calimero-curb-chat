@@ -1,0 +1,117 @@
+.PHONY: help setup install build dev test unit e2e workflows \
+        logic-build app-install app-build app-typecheck app-lint clean
+
+# ── Help ───────────────────────────────────────────────────────────────────────
+
+help:
+	@echo ""
+	@echo "  Mero Chat — available targets"
+	@echo ""
+	@echo "  Setup"
+	@echo "    setup          Check prereqs, build logic, install app deps"
+	@echo "    install        Install frontend dependencies (pnpm)"
+	@echo ""
+	@echo "  Build"
+	@echo "    build          Build Rust WASM logic + frontend"
+	@echo "    logic-build    Compile logic/src → logic/res/curb.wasm"
+	@echo "    app-build      Bundle frontend (dist/)"
+	@echo ""
+	@echo "  Dev"
+	@echo "    dev            Start Vite dev server (http://localhost:5173)"
+	@echo ""
+	@echo "  Quality"
+	@echo "    app-typecheck  Run tsc --noEmit on frontend"
+	@echo "    app-lint       Run ESLint on frontend"
+	@echo ""
+	@echo "  Test"
+	@echo "    test           Run unit tests + e2e tests"
+	@echo "    unit           Vitest unit tests"
+	@echo "    e2e            Playwright e2e tests"
+	@echo "    workflows      merobox workflow tests (requires merobox)"
+	@echo ""
+	@echo "  Other"
+	@echo "    clean          Remove all build artifacts"
+	@echo ""
+
+# ── Setup ──────────────────────────────────────────────────────────────────────
+
+setup:
+	@bash scripts/setup.sh
+
+install: app-install
+
+# ── Build ──────────────────────────────────────────────────────────────────────
+
+logic-build:
+	cd logic && ./build.sh
+
+app-install:
+	cd app && pnpm install
+
+app-build:
+	cd app && pnpm build
+
+build: logic-build app-build
+
+# ── Dev ────────────────────────────────────────────────────────────────────────
+
+dev: app-install
+	cd app && pnpm dev
+
+# ── Quality ────────────────────────────────────────────────────────────────────
+
+app-typecheck:
+	cd app && pnpm exec tsc --noEmit
+
+app-lint:
+	cd app && pnpm lint
+
+# ── Test ───────────────────────────────────────────────────────────────────────
+
+unit:
+	cd app && pnpm test
+
+e2e:
+	cd app && pnpm exec playwright test
+
+test: unit e2e
+
+WORKFLOW_FILES := \
+	workflows/simple-invitation.yml \
+	workflows/simple-open-invitation.yml \
+	workflows/complex-invitations.yml \
+	workflows/dm-flow.yml \
+	workflows/full-logic-test.yml
+
+workflows: logic-build
+	@command -v merobox >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "  merobox not found."; \
+		echo "  Install it first: https://calimero-network.github.io/docs/merobox/install"; \
+		echo ""; \
+		exit 1; \
+	}
+	@for yml in $(WORKFLOW_FILES); do \
+		echo ""; \
+		echo "▶  Running $$yml ..."; \
+		merobox stop --all 2>/dev/null || true; \
+		merobox nuke --force 2>/dev/null || true; \
+		if ! merobox bootstrap run $$yml; then \
+			echo ""; \
+			echo "  ✗  $$yml failed"; \
+			merobox stop --all 2>/dev/null || true; \
+			merobox nuke --force 2>/dev/null || true; \
+			exit 1; \
+		fi; \
+		echo "  ✓  $$yml passed"; \
+	done
+	@merobox stop --all 2>/dev/null || true
+	@merobox nuke --force 2>/dev/null || true
+	@echo ""
+	@echo "  ✓  All workflow tests passed"
+
+# ── Clean ──────────────────────────────────────────────────────────────────────
+
+clean:
+	cd logic && rm -rf res target
+	cd app && rm -rf dist e2e-report playwright-report test-results

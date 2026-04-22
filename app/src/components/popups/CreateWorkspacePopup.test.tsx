@@ -6,6 +6,7 @@ const {
   mockAxiosGet,
   mockCreateGroup,
   mockResolveCurrentMemberIdentity,
+  mockSetDefaultCapabilities,
   mockCreateInvitation,
   mockCreateGroupContext,
   mockSetGroupId,
@@ -15,6 +16,7 @@ const {
   mockAxiosGet: vi.fn(),
   mockCreateGroup: vi.fn(),
   mockResolveCurrentMemberIdentity: vi.fn(),
+  mockSetDefaultCapabilities: vi.fn(),
   mockCreateInvitation: vi.fn(),
   mockCreateGroupContext: vi.fn(),
   mockSetGroupId: vi.fn(),
@@ -58,6 +60,7 @@ vi.mock("../../api/dataSource/groupApiDataSource", () => ({
   GroupApiDataSource: class MockGroupApiDataSource {
     createGroup = mockCreateGroup;
     resolveCurrentMemberIdentity = mockResolveCurrentMemberIdentity;
+    setDefaultCapabilities = mockSetDefaultCapabilities;
     createInvitation = mockCreateInvitation;
   },
 }));
@@ -104,6 +107,7 @@ describe("CreateWorkspacePopup", () => {
     mockAxiosGet.mockReset();
     mockCreateGroup.mockReset();
     mockResolveCurrentMemberIdentity.mockReset();
+    mockSetDefaultCapabilities.mockReset();
     mockCreateInvitation.mockReset();
     mockCreateGroupContext.mockReset();
     mockSetGroupId.mockReset();
@@ -122,6 +126,7 @@ describe("CreateWorkspacePopup", () => {
         groupId: "group-1",
       },
     });
+    mockSetDefaultCapabilities.mockResolvedValue({ data: undefined, error: null });
     mockResolveCurrentMemberIdentity.mockResolvedValue({
       data: {
         memberIdentity: "member-1",

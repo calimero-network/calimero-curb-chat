@@ -21,6 +21,7 @@ import {
   setGroupId,
   setGroupMemberIdentity,
   setStoredGroupAlias,
+  setContextMemberIdentity,
 } from "../../constants/config";
 import { parseGroupInvitationPayload } from "../../utils/invitation";
 
@@ -161,9 +162,28 @@ export default function InvitationHandlerPopup({
         );
       }
 
-      const contextIds = contextsResult.data;
+      const contextEntries = contextsResult.data;
+
+      if (contextEntries.length > 0) {
+        setStatus("syncing-context");
+        setStatusMessage(`Joining ${contextEntries.length} channel(s)...`);
+
+        for (const entry of contextEntries) {
+          try {
+            const joinCtxResult = await groupApi.joinGroupContext(groupId, {
+              contextId: entry.contextId,
+            });
+            if (joinCtxResult.data?.memberPublicKey) {
+              setContextMemberIdentity(entry.contextId, joinCtxResult.data.memberPublicKey);
+            }
+          } catch {
+            // Best-effort: failing to join one context shouldn't block workspace entry
+          }
+        }
+      }
+
       setStatusMessage(
-        contextIds.length > 0
+        contextEntries.length > 0
           ? "Workspace joined. Choose a channel next."
           : "Workspace joined. No channels are available yet.",
       );

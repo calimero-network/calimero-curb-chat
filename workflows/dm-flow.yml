@@ -1,10 +1,9 @@
-name: Simple Open Invitation Workflow
+name: DM Flow Workflow
 description: >
-  Tests the open (public) invitation flow with the v2 logic API: install app,
-  create a Channel context, create one open invitation via invite_open, Node 2
-  joins via join_open (1 open invitation = 1 node), set profiles, send messages,
-  and verify sync.
-force_pull_image: true
+  Tests the DM (direct message) context type with the v2 logic API.
+  A DM context uses context_type "Dm" instead of "Channel".
+  Verifies context creation, profile setup, messaging, and cross-node sync
+  for a two-person DM conversation.
 
 nodes:
   chain_id: testnet-1
@@ -22,11 +21,11 @@ steps:
     outputs:
       app_id: applicationId
 
-  - name: Create Context
+  - name: Create DM Context
     type: create_context
     node: calimero-node-1
     application_id: "{{app_id}}"
-    params: '{"name": "OpenInviteTest", "context_type": "Channel", "description": "", "created_at": 1751952997}'
+    params: '{"name": "Alice-Bob DM", "context_type": "Dm", "description": "", "created_at": 1751952997}'
     outputs:
       context_id: contextId
       member_public_key: memberPublicKey
@@ -41,27 +40,28 @@ steps:
     type: wait
     seconds: 5
 
-  # ── Open Invitation (1 invite = 1 node) ────────────────────────────────────
-  - name: Create Open Invitation
-    type: invite_open
+  # ── Private Invitation ─────────────────────────────────────────────────────
+  - name: Invite Node 2 (Private)
+    type: invite_identity
     node: calimero-node-1
     context_id: "{{context_id}}"
+    grantee_id: "{{public_key_2}}"
     granter_id: "{{member_public_key}}"
-    valid_for_blocks: 1000
+    capability: member
     outputs:
-      open_invitation: invitation
+      invitation_2: invitation
 
-  - name: Assert Open Invitation Created
+  - name: Assert Invitation Created
     type: assert
     statements:
-      - "is_set({{open_invitation}})"
-      - "{{open_invitation}} != ''"
+      - "is_set({{invitation_2}})"
 
-  - name: Join via Open Invitation - Node 2
-    type: join_open
+  - name: Join Context from Node 2
+    type: join_context
     node: calimero-node-2
+    context_id: "{{context_id}}"
     invitee_id: "{{public_key_2}}"
-    invitation: "{{open_invitation}}"
+    invitation: "{{invitation_2}}"
 
   - name: Wait for Context Sync
     type: wait_for_sync
@@ -73,7 +73,33 @@ steps:
     check_interval: 2
     trigger_sync: true
 
+  # ── Verify DM context type ─────────────────────────────────────────────────
+  - name: Get Context Info
+    type: call
+    node: calimero-node-1
+    context_id: "{{context_id}}"
+    executor_public_key: "{{member_public_key}}"
+    method: get_info
+    outputs:
+      dm_info: result
+
+  - name: Assert context_type is Dm
+    type: assert
+    statements:
+      - "contains({{dm_info}}, 'Dm')"
+      - "contains({{dm_info}}, 'Alice-Bob DM')"
+
   # ── Set Profiles ───────────────────────────────────────────────────────────
+  - name: Set Profile - Node 1 (Alice)
+    type: call
+    node: calimero-node-1
+    context_id: "{{context_id}}"
+    executor_public_key: "{{member_public_key}}"
+    method: set_profile
+    args:
+      username: Alice
+      avatar: null
+
   - name: Set Profile - Node 2 (Bob)
     type: call
     node: calimero-node-2
@@ -83,13 +109,6 @@ steps:
     args:
       username: Bob
       avatar: null
-    outputs:
-      set_profile_result: result
-
-  - name: Assert set_profile response
-    type: assert
-    statements:
-      - "contains({{set_profile_result}}, 'Profile set')"
 
   - name: Wait for Profile Sync
     type: wait_for_sync
@@ -101,31 +120,30 @@ steps:
     check_interval: 2
     trigger_sync: true
 
-  # ── Verify Profiles ────────────────────────────────────────────────────────
-  - name: Get Profiles from Node 1
+  - name: Get Profiles from Node 2
     type: call
-    node: calimero-node-1
+    node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{member_public_key}}"
+    executor_public_key: "{{public_key_2}}"
     method: get_profiles
     outputs:
-      profiles_node1: result
+      profiles: result
 
-  - name: Assert Bob's Profile Visible
+  - name: Assert both participants are visible
     type: assert
     statements:
-      - "is_set({{profiles_node1}})"
-      - "contains({{profiles_node1}}, 'Bob')"
+      - "contains({{profiles}}, 'Alice')"
+      - "contains({{profiles}}, 'Bob')"
 
-  # ── Messaging ──────────────────────────────────────────────────────────────
-  - name: Send Message - Alice
+  # ── DM Messaging ──────────────────────────────────────────────────────────
+  - name: Send DM - Alice to Bob
     type: call
     node: calimero-node-1
     context_id: "{{context_id}}"
     executor_public_key: "{{member_public_key}}"
     method: send_message
     args:
-      message: "Hello from Alice!"
+      message: "Hey Bob, this is a DM!"
       mentions: []
       mentions_usernames: []
       parent_message: null
@@ -134,14 +152,14 @@ steps:
       files: null
       images: null
 
-  - name: Send Message - Bob
+  - name: Send DM - Bob to Alice
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
     executor_public_key: "{{public_key_2}}"
     method: send_message
     args:
-      message: "Hey Alice - Bob here!"
+      message: "Hi Alice! Got your message."
       mentions: []
       mentions_usernames: []
       parent_message: null
@@ -160,8 +178,8 @@ steps:
     check_interval: 2
     trigger_sync: true
 
-  # ── Verify Messages ────────────────────────────────────────────────────────
-  - name: Get Messages from Node 1
+  # ── Verify DM messages ─────────────────────────────────────────────────────
+  - name: Get Messages - Node 1
     type: call
     node: calimero-node-1
     context_id: "{{context_id}}"
@@ -175,7 +193,7 @@ steps:
     outputs:
       messages_node1: result
 
-  - name: Get Messages from Node 2
+  - name: Get Messages - Node 2
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
@@ -189,13 +207,14 @@ steps:
     outputs:
       messages_node2: result
 
-  - name: Assert Messages Synced on Both Nodes
+  - name: Assert DM messages synced on both nodes
     type: assert
     statements:
-      - "contains({{messages_node1}}, 'Hello from Alice!')"
-      - "contains({{messages_node1}}, 'Hey Alice - Bob here!')"
-      - "contains({{messages_node2}}, 'Hello from Alice!')"
-      - "contains({{messages_node2}}, 'Hey Alice - Bob here!')"
+      - "contains({{messages_node1}}, 'Hey Bob, this is a DM!')"
+      - "contains({{messages_node1}}, 'Hi Alice! Got your message.')"
+      - "contains({{messages_node2}}, 'Hey Bob, this is a DM!')"
+      - "contains({{messages_node2}}, 'Hi Alice! Got your message.')"
+      - "contains({{messages_node1}}, 'total_count')"
 
 stop_all_nodes: true
 restart: false

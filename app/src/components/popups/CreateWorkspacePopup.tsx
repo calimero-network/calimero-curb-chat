@@ -192,6 +192,9 @@ export default function CreateWorkspacePopup({
       setCreatedGroupId(groupId);
       setGroupId(groupId);
 
+      // Allow all members to create contexts and invite others (0x0B = 0b1011)
+      await groupApi.setDefaultCapabilities(groupId, { defaultCapabilities: 0x0B });
+
       const identityResult = await groupApi.resolveCurrentMemberIdentity(groupId);
       if (identityResult.data?.memberIdentity) {
         setGroupMemberIdentity(groupId, identityResult.data.memberIdentity);

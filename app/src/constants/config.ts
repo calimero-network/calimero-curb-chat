@@ -175,6 +175,31 @@ export function clearGroupMemberIdentity(groupId: string): void {
   writeStoredGroupMemberIdentities(identities);
 }
 
+const CONTEXT_MEMBER_IDENTITIES_KEY = "calimero_context_member_identities";
+
+export function getContextMemberIdentity(contextId: string): string {
+  try {
+    const raw = localStorage.getItem(CONTEXT_MEMBER_IDENTITIES_KEY);
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return typeof parsed[contextId] === "string" ? parsed[contextId] : "";
+  } catch {
+    return "";
+  }
+}
+
+export function setContextMemberIdentity(contextId: string, identity: string): void {
+  if (!contextId || !identity) return;
+  try {
+    const raw = localStorage.getItem(CONTEXT_MEMBER_IDENTITIES_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    parsed[contextId] = identity;
+    localStorage.setItem(CONTEXT_MEMBER_IDENTITIES_KEY, JSON.stringify(parsed));
+  } catch {
+    // Best-effort storage
+  }
+}
+
 /** @deprecated Use getApplicationId() for dynamic app-id (URL/env). */
 export const APPLICATION_ID =
   import.meta.env.VITE_APPLICATION_ID ||

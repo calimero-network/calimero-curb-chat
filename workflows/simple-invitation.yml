@@ -1,7 +1,8 @@
 name: Simple Private Invitation Workflow
 description: >
-  Tests the basic private (regular) invitation flow: install app, create context,
-  invite a second node via invite_identity, join, send messages, and verify sync.
+  Tests the private invitation flow with the v2 logic API: install app,
+  create a Channel context, invite a second node via invite_identity, join,
+  set profiles, send messages, and verify sync.
 force_pull_image: true
 
 nodes:
@@ -24,7 +25,7 @@ steps:
     type: create_context
     node: calimero-node-1
     application_id: "{{app_id}}"
-    params: '{"name": "PrivateInviteTest", "is_dm": false, "default_channels": [{"name": "general"}], "created_at": 1751952997, "owner_username": "Alice"}'
+    params: '{"name": "PrivateInviteTest", "context_type": "Channel", "description": "", "created_at": 1751952997}'
     outputs:
       context_id: contextId
       member_public_key: memberPublicKey
@@ -73,18 +74,25 @@ steps:
     check_interval: 2
     trigger_sync: true
 
-  # ── Join Chat ──────────────────────────────────────────────────────────────
-  - name: Join Chat - Node 2 (Bob)
+  # ── Set Profiles ───────────────────────────────────────────────────────────
+  - name: Set Profile - Node 2 (Bob)
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
     executor_public_key: "{{public_key_2}}"
-    method: join_chat
+    method: set_profile
     args:
       username: Bob
-      is_dm: false
+      avatar: null
+    outputs:
+      set_profile_result: result
 
-  - name: Wait for Join Sync
+  - name: Assert set_profile response
+    type: assert
+    statements:
+      - "contains({{set_profile_result}}, 'Profile set')"
+
+  - name: Wait for Profile Sync
     type: wait_for_sync
     context_id: "{{context_id}}"
     nodes:
@@ -94,22 +102,38 @@ steps:
     check_interval: 2
     trigger_sync: true
 
-  # ── Verify Members ─────────────────────────────────────────────────────────
-  # get_chat_members returns result = {"output": [userId, ...]} (other members)
-  - name: Get Chat Members from Node 1
+  # ── Verify Profiles ────────────────────────────────────────────────────────
+  - name: Get Profiles from Node 1
     type: call
     node: calimero-node-1
     context_id: "{{context_id}}"
     executor_public_key: "{{member_public_key}}"
-    method: get_chat_members
+    method: get_profiles
     outputs:
-      members_node1: result
+      profiles_node1: result
 
-  - name: Assert Both Members Present
+  - name: Assert Bob's Profile Visible from Node 1
     type: assert
     statements:
-      - "is_set({{members_node1}})"
-      - "contains({{members_node1}}, '{{public_key_2}}')"
+      - "is_set({{profiles_node1}})"
+      - "contains({{profiles_node1}}, 'Bob')"
+      - "contains({{profiles_node1}}, '{{public_key_2}}')"
+
+  # ── Context Info ───────────────────────────────────────────────────────────
+  - name: Get Context Info
+    type: call
+    node: calimero-node-1
+    context_id: "{{context_id}}"
+    executor_public_key: "{{member_public_key}}"
+    method: get_info
+    outputs:
+      context_info: result
+
+  - name: Assert Context Info
+    type: assert
+    statements:
+      - "contains({{context_info}}, 'PrivateInviteTest')"
+      - "contains({{context_info}}, 'Channel')"
 
   # ── Messaging ──────────────────────────────────────────────────────────────
   - name: Send Message - Alice
@@ -119,14 +143,14 @@ steps:
     executor_public_key: "{{member_public_key}}"
     method: send_message
     args:
-      group:
-        name: general
       message: "Hello from Alice!"
-      parent_message: null
       mentions: []
       mentions_usernames: []
+      parent_message: null
       timestamp: 1751953001
       sender_username: Alice
+      files: null
+      images: null
 
   - name: Send Message - Bob
     type: call
@@ -135,14 +159,14 @@ steps:
     executor_public_key: "{{public_key_2}}"
     method: send_message
     args:
-      group:
-        name: general
       message: "Hey Alice - Bob here!"
-      parent_message: null
       mentions: []
       mentions_usernames: []
+      parent_message: null
       timestamp: 1751953002
       sender_username: Bob
+      files: null
+      images: null
 
   - name: Wait for Message Sync
     type: wait_for_sync
@@ -162,11 +186,10 @@ steps:
     executor_public_key: "{{member_public_key}}"
     method: get_messages
     args:
-      group:
-        name: general
       parent_message: null
       limit: 10
       offset: 0
+      search_term: null
     outputs:
       messages_node1: result
 
@@ -177,11 +200,10 @@ steps:
     executor_public_key: "{{public_key_2}}"
     method: get_messages
     args:
-      group:
-        name: general
       parent_message: null
       limit: 10
       offset: 0
+      search_term: null
     outputs:
       messages_node2: result
 
@@ -190,6 +212,7 @@ steps:
     statements:
       - "contains({{messages_node1}}, 'Hello from Alice!')"
       - "contains({{messages_node1}}, 'Hey Alice - Bob here!')"
+      - "contains({{messages_node1}}, 'total_count')"
       - "contains({{messages_node2}}, 'Hello from Alice!')"
       - "contains({{messages_node2}}, 'Hey Alice - Bob here!')"
 
