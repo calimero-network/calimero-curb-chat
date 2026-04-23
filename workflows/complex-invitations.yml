@@ -21,10 +21,36 @@ steps:
     outputs:
       app_id: applicationId
 
+  - name: Install Application on Node 2
+    type: install_application
+    node: calimero-node-2
+    path: "../logic/res/curb.wasm"
+    dev: true
+
+  - name: Install Application on Node 3
+    type: install_application
+    node: calimero-node-3
+    path: "../logic/res/curb.wasm"
+    dev: true
+
+  - name: Install Application on Node 4
+    type: install_application
+    node: calimero-node-4
+    path: "../logic/res/curb.wasm"
+    dev: true
+
+  - name: Create Namespace
+    type: create_namespace
+    node: calimero-node-1
+    application_id: "{{app_id}}"
+    outputs:
+      namespace_id: namespaceId
+
   - name: Create Context
     type: create_context
     node: calimero-node-1
     application_id: "{{app_id}}"
+    group_id: "{{namespace_id}}"
     params: '{"name": "ComplexInviteTest", "context_type": "Channel", "description": "", "created_at": 1751952997}'
     outputs:
       context_id: contextId
@@ -56,63 +82,49 @@ steps:
   - name: Invite Node 2 (Private)
     type: invite_identity
     node: calimero-node-1
-    context_id: "{{context_id}}"
-    grantee_id: "{{public_key_2}}"
-    granter_id: "{{member_public_key}}"
-    capability: member
+    namespace_id: "{{namespace_id}}"
     outputs:
       invitation_2: invitation
 
   - name: Join Context from Node 2
-    type: join_context
+    type: join_namespace
     node: calimero-node-2
-    context_id: "{{context_id}}"
-    invitee_id: "{{public_key_2}}"
+    namespace_id: "{{namespace_id}}"
     invitation: "{{invitation_2}}"
 
-  # ── Open invitation (1 invite = 1 node) ─────────────────────────────────────
+  # ── Open invitation (1 invite per node) ─────────────────────────────────────
   - name: Create Open Invitation for Node 3
     type: invite_open
     node: calimero-node-1
-    context_id: "{{context_id}}"
-    granter_id: "{{member_public_key}}"
-    valid_for_blocks: 1000
+    namespace_id: "{{namespace_id}}"
     outputs:
       open_invitation_3: invitation
 
   - name: Join via Open Invitation - Node 3
-    type: join_open
+    type: join_namespace
     node: calimero-node-3
-    invitee_id: "{{public_key_3}}"
+    namespace_id: "{{namespace_id}}"
     invitation: "{{open_invitation_3}}"
-    outputs:
-      joined_context_id_3: contextId
-      joined_member_key_3: memberPublicKey
 
   - name: Create Open Invitation for Node 4
     type: invite_open
     node: calimero-node-1
-    context_id: "{{context_id}}"
-    granter_id: "{{member_public_key}}"
-    valid_for_blocks: 1000
+    namespace_id: "{{namespace_id}}"
     outputs:
       open_invitation_4: invitation
 
   - name: Join via Open Invitation - Node 4
-    type: join_open
+    type: join_namespace
     node: calimero-node-4
-    invitee_id: "{{public_key_4}}"
+    namespace_id: "{{namespace_id}}"
     invitation: "{{open_invitation_4}}"
-    outputs:
-      joined_context_id_4: contextId
-      joined_member_key_4: memberPublicKey
 
   - name: Assert All Joins Succeeded
     type: assert
     statements:
       - "is_set({{invitation_2}})"
-      - "is_set({{joined_context_id_3}})"
-      - "is_set({{joined_context_id_4}})"
+      - "is_set({{open_invitation_3}})"
+      - "is_set({{open_invitation_4}})"
 
   - name: Wait for All Nodes to Sync After Joins
     type: wait_for_sync

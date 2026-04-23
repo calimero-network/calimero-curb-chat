@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 import path from "path";
 import fs from "fs";
 
+const __dirname = import.meta.dirname;
 const AUTH_FILE = path.join(__dirname, "e2e/.auth/state.json");
 
 // Load app/.env.integration into process.env so integration test workers can

@@ -109,7 +109,7 @@ test.describe("Authentication with live node", () => {
   test("workspace list shows the integration test workspace", async ({
     page,
   }) => {
-    const env = requireEnv();
+    const _env = requireEnv();
     await setupAuth(page);
     await page.goto("/login");
     await expect(page.getByText("Welcome to Calimero Chat")).toBeVisible({

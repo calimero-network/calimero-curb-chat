@@ -1458,9 +1458,8 @@ export class ClientApiDataSource implements ClientApi {
 
   async getUsername(props: GetUsernameProps): ApiResponse<string> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response = await getJsonRpcClient().execute<
-        any,
+        Record<string, never>,
         { identity: string; username: string; avatar?: string }[]
       >(
         {

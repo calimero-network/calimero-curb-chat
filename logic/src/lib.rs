@@ -4,7 +4,8 @@ use calimero_sdk::serde::{Deserialize, Serialize};
 use calimero_sdk::{app, env};
 use calimero_storage::collections::crdt_meta::MergeError;
 use calimero_storage::collections::{
-    LwwRegister, Mergeable as MergeableTrait, UnorderedMap, UnorderedSet, Vector,
+    AuthoredMap, AuthoredVector, LwwRegister, Mergeable as MergeableTrait, UnorderedMap,
+    UnorderedSet, Vector,
 };
 use types::id;
 mod types;
@@ -408,10 +409,10 @@ pub struct MeroChat {
     context_type: LwwRegister<ContextType>,
     description: LwwRegister<String>,
     created_at: LwwRegister<u64>,
-    messages: Vector<Message>,
-    threads: UnorderedMap<MessageId, Vector<Message>>,
+    messages: AuthoredVector<Message>,
+    threads: UnorderedMap<MessageId, AuthoredVector<Message>>,
     reactions: UnorderedMap<MessageId, UnorderedMap<String, UnorderedSet<String>>>,
-    profiles: UnorderedMap<UserId, StoredProfile>,
+    profiles: AuthoredMap<UserId, StoredProfile>,
 }
 
 #[app::logic]
@@ -430,10 +431,10 @@ impl MeroChat {
             context_type: LwwRegister::new(context_type),
             description: LwwRegister::new(description),
             created_at: LwwRegister::new(created_at),
-            messages: Vector::new(),
+            messages: AuthoredVector::new(),
             threads: UnorderedMap::new(),
             reactions: UnorderedMap::new(),
-            profiles: UnorderedMap::new(),
+            profiles: AuthoredMap::new(),
         }
     }
 
@@ -479,7 +480,11 @@ impl MeroChat {
             username: LwwRegister::new(username),
             avatar: avatar.map(LwwRegister::new),
         };
-        let _ = self.profiles.insert(executor_id, profile);
+        if self.profiles.contains(&executor_id).unwrap_or(false) {
+            let _ = self.profiles.update(&executor_id, profile);
+        } else {
+            let _ = self.profiles.insert(executor_id, profile);
+        }
 
         app::emit!(Event::ProfileUpdated(executor_id.to_string()));
         Ok("Profile set".to_string())
@@ -587,7 +592,7 @@ impl MeroChat {
         if let Some(parent_id) = parent_message {
             let mut thread_messages = match self.threads.get(&parent_id) {
                 Ok(Some(messages)) => messages,
-                _ => Vector::new(),
+                _ => AuthoredVector::new(),
             };
             let _ = thread_messages.push(msg.clone());
             let _ = self.threads.insert(parent_id, thread_messages);
@@ -645,7 +650,7 @@ impl MeroChat {
 
     fn collect_messages_with_reactions(
         &self,
-        messages: &Vector<Message>,
+        messages: &AuthoredVector<Message>,
         search_term: Option<&str>,
         include_threads: bool,
     ) -> Vec<MessageWithReactions> {
@@ -854,7 +859,7 @@ impl MeroChat {
     }
 
     fn find_and_edit(
-        messages: &mut Vector<Message>,
+        messages: &mut AuthoredVector<Message>,
         message_id: &str,
         new_text: &str,
         timestamp: u64,
@@ -922,7 +927,7 @@ impl MeroChat {
     }
 
     fn find_and_delete(
-        messages: &mut Vector<Message>,
+        messages: &mut AuthoredVector<Message>,
         message_id: &str,
         executor_id: &UserId,
     ) -> Result<(), String> {

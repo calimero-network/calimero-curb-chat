@@ -22,10 +22,24 @@ steps:
     outputs:
       app_id: applicationId
 
+  - name: Install Application on Node 2
+    type: install_application
+    node: calimero-node-2
+    path: "../logic/res/curb.wasm"
+    dev: true
+
+  - name: Create Namespace
+    type: create_namespace
+    node: calimero-node-1
+    application_id: "{{app_id}}"
+    outputs:
+      namespace_id: namespaceId
+
   - name: Create Context
     type: create_context
     node: calimero-node-1
     application_id: "{{app_id}}"
+    group_id: "{{namespace_id}}"
     params: '{"name": "OpenInviteTest", "context_type": "Channel", "description": "", "created_at": 1751952997}'
     outputs:
       context_id: contextId
@@ -41,13 +55,11 @@ steps:
     type: wait
     seconds: 5
 
-  # ── Open Invitation (1 invite = 1 node) ────────────────────────────────────
+  # ── Open Invitation ────────────────────────────────────────────────────────
   - name: Create Open Invitation
     type: invite_open
     node: calimero-node-1
-    context_id: "{{context_id}}"
-    granter_id: "{{member_public_key}}"
-    valid_for_blocks: 1000
+    namespace_id: "{{namespace_id}}"
     outputs:
       open_invitation: invitation
 
@@ -58,9 +70,9 @@ steps:
       - "{{open_invitation}} != ''"
 
   - name: Join via Open Invitation - Node 2
-    type: join_open
+    type: join_namespace
     node: calimero-node-2
-    invitee_id: "{{public_key_2}}"
+    namespace_id: "{{namespace_id}}"
     invitation: "{{open_invitation}}"
 
   - name: Wait for Context Sync

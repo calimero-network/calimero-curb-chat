@@ -327,8 +327,8 @@ export class GroupApiDataSource implements GroupApi {
   ): ApiResponse<JoinGroupResponse> {
     try {
       // Extract namespace ID from the invitation's group_id (may be string or byte array)
-      const rawGroupId = (request.invitation.invitation as Record<string, unknown>).group_id
-        ?? (request.invitation.invitation as Record<string, unknown>).groupId;
+      const inv = request.invitation.invitation as unknown as Record<string, unknown>;
+      const rawGroupId = inv.group_id ?? inv.groupId;
       const namespaceId = Array.isArray(rawGroupId)
         ? (rawGroupId as number[]).map(b => b.toString(16).padStart(2, '0')).join('')
         : String(rawGroupId ?? '');

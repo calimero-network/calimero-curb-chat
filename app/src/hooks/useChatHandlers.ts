@@ -19,7 +19,6 @@ import { bytesParser } from "../utils/bytesParser";
 // Simplified interface - accept refs directly instead of creating them internally
 interface ChatHandlersRefs {
   mainMessages: React.MutableRefObject<{
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     checkForNewMessages: (
       chat: ActiveChat,
       isDM: boolean,

@@ -21,10 +21,24 @@ steps:
     outputs:
       app_id: applicationId
 
+  - name: Install Application on Node 2
+    type: install_application
+    node: calimero-node-2
+    path: "../logic/res/curb.wasm"
+    dev: true
+
+  - name: Create Namespace
+    type: create_namespace
+    node: calimero-node-1
+    application_id: "{{app_id}}"
+    outputs:
+      namespace_id: namespaceId
+
   - name: Create DM Context
     type: create_context
     node: calimero-node-1
     application_id: "{{app_id}}"
+    group_id: "{{namespace_id}}"
     params: '{"name": "Alice-Bob DM", "context_type": "Dm", "description": "", "created_at": 1751952997}'
     outputs:
       context_id: contextId
@@ -44,10 +58,7 @@ steps:
   - name: Invite Node 2 (Private)
     type: invite_identity
     node: calimero-node-1
-    context_id: "{{context_id}}"
-    grantee_id: "{{public_key_2}}"
-    granter_id: "{{member_public_key}}"
-    capability: member
+    namespace_id: "{{namespace_id}}"
     outputs:
       invitation_2: invitation
 
@@ -57,10 +68,9 @@ steps:
       - "is_set({{invitation_2}})"
 
   - name: Join Context from Node 2
-    type: join_context
+    type: join_namespace
     node: calimero-node-2
-    context_id: "{{context_id}}"
-    invitee_id: "{{public_key_2}}"
+    namespace_id: "{{namespace_id}}"
     invitation: "{{invitation_2}}"
 
   - name: Wait for Context Sync
@@ -143,7 +153,7 @@ steps:
     executor_public_key: "{{member_public_key}}"
     method: send_message
     args:
-      message: "Hey Bob, this is a DM!"
+      message: "Hey Bob this is a DM!"
       mentions: []
       mentions_usernames: []
       parent_message: null
@@ -210,9 +220,9 @@ steps:
   - name: Assert DM messages synced on both nodes
     type: assert
     statements:
-      - "contains({{messages_node1}}, 'Hey Bob, this is a DM!')"
+      - "contains({{messages_node1}}, 'Hey Bob this is a DM!')"
       - "contains({{messages_node1}}, 'Hi Alice! Got your message.')"
-      - "contains({{messages_node2}}, 'Hey Bob, this is a DM!')"
+      - "contains({{messages_node2}}, 'Hey Bob this is a DM!')"
       - "contains({{messages_node2}}, 'Hi Alice! Got your message.')"
       - "contains({{messages_node1}}, 'total_count')"
 

@@ -12,8 +12,8 @@ import { injectMeroAuthTokens, clearAuth } from "./helpers/auth";
 const MOCK_NODE_URL = "http://localhost:2428";
 const MOCK_ACCESS_TOKEN = "eyJhbGciOiJFZERTQSJ9.mock.signature";
 
-// A JWT whose `exp` is in the past (Unix epoch 1)
-const EXPIRED_JWT = (() => {
+// A JWT whose `exp` is in the past (Unix epoch 1) — kept for future expiry tests
+const _EXPIRED_JWT = (() => {
   const header = btoa(JSON.stringify({ alg: "EdDSA" }));
   const payload = btoa(JSON.stringify({ exp: 1, sub: "test-user" }));
   return `${header}.${payload}.fakesig`;
@@ -222,7 +222,7 @@ test.describe("Invitation URL parameter", () => {
       { timeout: 10_000 },
     );
 
-    const saved = await page.evaluate(() =>
+    const _saved = await page.evaluate(() =>
       localStorage.getItem("pending-invitation"),
     );
 
@@ -260,9 +260,9 @@ test.describe("clearAuth helper", () => {
     expect(before).not.toBeNull();
 
     await clearAuth(page);
-    await page.evaluate(() => window.location.reload());
-    await page.waitForLoadState("networkidle");
 
+    // Check immediately — addInitScript re-injects tokens on reload/navigation,
+    // so we verify clearAuth worked in the current page context.
     const after = await page.evaluate(() => localStorage.getItem("mero-tokens"));
     expect(after).toBeNull();
   });

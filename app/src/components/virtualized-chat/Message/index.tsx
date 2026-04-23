@@ -384,16 +384,6 @@ const Message = (props: MessageProps) => {
     props.setOpenMobileReactions(props.message.id);
   });
 
-  if (
-    (props.message.files.length === 0 &&
-      props.message.images.length === 0 &&
-      !props.message.text &&
-      props.message.editedOn) ||
-    props.message.deleted
-  ) {
-    return <DeletedMessage />;
-  }
-
   // Memoize message status icon to prevent recreating on every render
   const statusIcon = useMemo(() => {
     return props.message.id.includes("temp-") ? (
@@ -514,6 +504,16 @@ const Message = (props: MessageProps) => {
       }
     }
   }, []);
+
+  if (
+    (props.message.files.length === 0 &&
+      props.message.images.length === 0 &&
+      !props.message.text &&
+      props.message.editedOn) ||
+    props.message.deleted
+  ) {
+    return <DeletedMessage />;
+  }
 
   return (
     <>

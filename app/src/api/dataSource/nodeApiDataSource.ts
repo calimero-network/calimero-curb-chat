@@ -315,7 +315,7 @@ export class ContextApiDataSource implements NodeApi {
 
         // Map the API response to our ContextInfo interface
         // API uses 'id' but our interface expects 'contextId'
-        const contexts = rawContexts.map((ctx: any) => ({
+        const contexts = rawContexts.map((ctx: { id: string; applicationId: string; lastUpdate?: number; rootHash?: string }) => ({
           contextId: ctx.id,
           applicationId: ctx.applicationId,
           lastUpdate: ctx.lastUpdate || 0,

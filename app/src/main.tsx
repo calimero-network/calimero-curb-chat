@@ -48,6 +48,34 @@ import 'react-photo-view/dist/react-photo-view.css';
   }
 })();
 
+// Extract ?invitation= from URL before React mounts — React Router's <Navigate>
+// runs its useEffect before parent component effects (children fire first), so
+// the URL is already changed to /login before App.tsx can read it.
+(function extractInvitationOnLoad() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("invitation");
+    if (!raw) return;
+    let decoded: string;
+    try {
+      const base64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = base64.length % 4;
+      const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
+      decoded = decodeURIComponent(escape(atob(padded)));
+    } catch {
+      try { decoded = decodeURIComponent(raw); } catch { return; }
+    }
+    if (decoded) localStorage.setItem("curb-invitation-payload", decoded);
+    params.delete("invitation");
+    const qs = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname + (qs ? "?" + qs : "") + window.location.hash,
+    );
+  } catch { /* ignore */ }
+})();
+
 const CALIMERO_APP_ID_KEY = "calimero-application-id";
 
 function getExplicitApplicationId(): string {

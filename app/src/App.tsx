@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useMero } from "@calimero-network/mero-react";
 import { useEffect, lazy, Suspense } from "react";
 import { LoadingSpinner } from "./components/LoadingSpinner";
@@ -26,7 +26,6 @@ function ToastDisplay() {
 
 function App() {
   const { isAuthenticated, isLoading, logout } = useMero();
-  const navigate = useNavigate();
   const location = useLocation();
 
   // Clean up invitation URL parameter and save to storage

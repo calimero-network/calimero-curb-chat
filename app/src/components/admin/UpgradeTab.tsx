@@ -194,7 +194,7 @@ interface UpgradeTabProps {
 
 export default function UpgradeTab({
   groupId,
-  group,
+  group: _group,
   upgradeStatus,
   actionLoading,
   onTriggerUpgrade,
