@@ -6,6 +6,10 @@ export function getMessengerDisplayName(): string {
   return (StorageHelper.getItem(MESSENGER_NAME_KEY) || "").trim();
 }
 
+export function clearMessengerDisplayName(): void {
+  StorageHelper.removeItem(MESSENGER_NAME_KEY);
+}
+
 export function setMessengerDisplayName(name: string): void {
   const trimmedName = name.trim();
   if (!trimmedName) {

@@ -23,6 +23,7 @@ interface SideSelectorProps {
   createDM: (value: string) => Promise<CreateContextResult>;
   privateDMs: DMContextInfo[];
   onChannelCreated?: () => void;
+  onChannelSelected?: (chat: ActiveChat) => void;
 }
 
 const HorizontalSeparatorLine = styled.div<{ $isMobile: boolean }>`
@@ -221,6 +222,7 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
           title="Channels"
           isCollapsed={isCollapsed}
           onChannelCreated={props.onChannelCreated}
+          onChannelSelected={props.onChannelSelected}
         />
         <ChannelList
           channels={channels}

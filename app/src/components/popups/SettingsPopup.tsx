@@ -3,7 +3,7 @@ import { styled, keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
 import BaseModal from "../common/popups/BaseModal";
 import TabbedInterface from "../contextOperations/TabbedInterface";
-import { useCalimero } from "@calimero-network/calimero-client";
+import { useMero } from "@calimero-network/mero-react";
 import {
   clearStoredSession,
   clearSessionActivity,
@@ -162,7 +162,7 @@ export default function SettingsPopup({
   setIsOpen,
   toggle,
 }: SettingsPopupProps) {
-  const { logout } = useCalimero();
+  const { logout } = useMero();
   const navigate = useNavigate();
   const isOwner = sessionStorage.getItem("curb_is_context_owner") === "true";
 
@@ -170,15 +170,17 @@ export default function SettingsPopup({
     clearStoredSession();
     clearSessionActivity();
     clearWorkspaceSelection();
-    navigate("/login");
     setIsOpen(false);
+    navigate("/login");
   };
 
   const handleLogout = () => {
     clearStoredSession();
     clearSessionActivity();
+    clearWorkspaceSelection();
     logout();
     setIsOpen(false);
+    navigate("/login");
   };
 
   const tabs = isOwner

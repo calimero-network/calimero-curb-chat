@@ -79,7 +79,43 @@ export default defineConfig({
         "**/workspace.spec.ts",
         "**/auth.spec.ts",
         "**/integration.spec.ts",
+        "**/rpc.spec.ts",
+        "**/rpc-admin.spec.ts",
+        "**/rpc-logic.spec.ts",
       ],
+    },
+    // RPC tests — direct HTTP calls to a live merod node. No browser.
+    // Requires app/.env.integration (written by scripts/dev-node.sh).
+    // Gracefully skips every test if the env file is absent.
+    {
+      name: "rpc",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: { cookies: [], origins: [] },
+      },
+      timeout: 60_000,
+      testMatch: ["**/rpc.spec.ts"],
+    },
+    // RPC admin tests — REST admin API calls to a live merod node. No browser.
+    {
+      name: "rpc-admin",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: { cookies: [], origins: [] },
+      },
+      timeout: 60_000,
+      testMatch: ["**/rpc-admin.spec.ts"],
+    },
+    // logic-js WASM RPC tests — full feature set (channels, DMs, reactions, etc.)
+    // Requires setup-nodes.sh (writes app/.env.integration with 2-node credentials).
+    {
+      name: "rpc-logic",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: { cookies: [], origins: [] },
+      },
+      timeout: 90_000,
+      testMatch: ["**/rpc-logic.spec.ts"],
     },
   ],
   webServer: process.env.SKIP_DEV_SERVER

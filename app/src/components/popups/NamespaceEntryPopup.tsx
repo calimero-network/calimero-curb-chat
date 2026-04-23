@@ -1,0 +1,810 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { styled, keyframes } from "styled-components";
+import { Button, Input } from "@calimero-network/mero-ui";
+import { getAppEndpointKey, getAuthConfig } from "@calimero-network/calimero-client";
+import axios from "axios";
+import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
+import type { GroupSummary } from "../../api/groupApi";
+import {
+  getApplicationId,
+  getGroupId,
+  setGroupId,
+  getGroupMemberIdentity,
+  setGroupMemberIdentity,
+  getStoredGroupAlias,
+  setStoredGroupAlias,
+  setContextMemberIdentity,
+} from "../../constants/config";
+import { getMessengerDisplayName, setMessengerDisplayName } from "../../utils/messengerName";
+import { clearStoredSession } from "../../utils/session";
+import {
+  extractInvitationFromUrl,
+  getInvitationFromStorage,
+  saveInvitationToStorage,
+  clearInvitationFromStorage,
+  parseGroupInvitationPayload,
+} from "../../utils/invitation";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Step =
+  | "loading"
+  | "select"         // multiple namespaces, user picks
+  | "checking"       // resolving identity for selected namespace
+  | "enter-name"     // namespace ok, need username
+  | "joining"        // submitting username
+  | "invite-join"    // processing an invitation (join + sync + join contexts)
+  | "no-workspace"   // no namespaces: offer create or paste invitation code
+  | "create"         // show create workspace form
+  | "creating"       // creating namespace
+  | "error";
+
+// ─── Styled components ────────────────────────────────────────────────────────
+
+const Overlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  backdrop-filter: blur(12px);
+`;
+
+const spin = keyframes`
+  to { transform: rotate(360deg); }
+`;
+
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
+const Box = styled.div`
+  background: #111113;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6);
+  animation: ${fadeIn} 0.22s ease both;
+`;
+
+const Header = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const Title = styled.h2`
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.02em;
+`;
+
+const Sub = styled.p`
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.82rem;
+  margin: 0;
+  line-height: 1.55;
+`;
+
+const Field = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+`;
+
+const Label = styled.label`
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+`;
+
+const Select = styled.select`
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0.7rem 2.5rem 0.7rem 0.9rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b8b8d1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  width: 100%;
+  transition: border-color 0.15s;
+
+  &:focus {
+    outline: none;
+    border-color: rgba(165, 255, 17, 0.35);
+    box-shadow: 0 0 0 3px rgba(165, 255, 17, 0.08);
+  }
+
+  option {
+    background: #18181c;
+    color: #e8e8f0;
+  }
+`;
+
+const Err = styled.div`
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.18);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
+`;
+
+const Info = styled.div`
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.8rem;
+  text-align: center;
+  margin-bottom: 1rem;
+`;
+
+const Spinner = styled.div`
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(165, 255, 17, 0.15);
+  border-top-color: #a5ff11;
+  border-radius: 50%;
+  animation: ${spin} 0.7s linear infinite;
+  margin: 0 auto 1rem;
+`;
+
+const Row = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+`;
+
+const Divider = styled.div`
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 1rem 0;
+`;
+
+const LogoutBtn = styled.button`
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 1rem;
+  width: 100%;
+  text-align: center;
+  transition: color 0.15s;
+
+  &:hover { color: rgba(255, 255, 255, 0.5); }
+`;
+
+const CodeTextarea = styled.textarea`
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-family: monospace;
+  resize: vertical;
+  min-height: 72px;
+  transition: border-color 0.15s;
+
+  &::placeholder { color: rgba(255, 255, 255, 0.2); }
+  &:focus {
+    outline: none;
+    border-color: rgba(165, 255, 17, 0.35);
+    box-shadow: 0 0 0 3px rgba(165, 255, 17, 0.08);
+  }
+`;
+
+const OrDivider = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 0.75rem;
+
+  &::before, &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+  }
+`;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const DEFAULT_ENDPOINT = "http://localhost:2428";
+
+function authHeaders(): Record<string, string> {
+  const cfg = getAuthConfig();
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (cfg?.jwtToken) h.Authorization = `Bearer ${cfg.jwtToken}`;
+  return h;
+}
+
+async function resolveAppId(preferred: string): Promise<string> {
+  const base = getAppEndpointKey() || DEFAULT_ENDPOINT;
+  const res = await axios.get(`${base}/admin-api/applications`, { headers: authHeaders() });
+  const apps: unknown[] = res.data?.data?.apps ?? [];
+  const ids = apps
+    .map((a) => {
+      if (!a || typeof a !== "object") return "";
+      const t = a as { id?: string; applicationId?: string };
+      return t.id ?? t.applicationId ?? "";
+    })
+    .filter(Boolean);
+  if (!ids.length) throw new Error("No applications installed on this node.");
+  return ids.includes(preferred) ? preferred : ids[0];
+}
+
+function nsLabel(g: GroupSummary): string {
+  return g.alias?.trim() || `${g.groupId.slice(0, 10)}…`;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+interface Props {
+  isAuthenticated: boolean;
+  isConfigSet: boolean;
+  onLogout: () => void;
+}
+
+export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLogout }: Props) {
+  const navigate = useNavigate();
+  const api = useRef(new GroupApiDataSource());
+
+  const [step, setStep] = useState<Step>("loading");
+  const [namespaces, setNamespaces] = useState<GroupSummary[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [nameInput, setNameInput] = useState(getMessengerDisplayName());
+  const [nsNameInput, setNsNameInput] = useState("");
+  const [inviteStatus, setInviteStatus] = useState("");
+  const [inviteCodeInput, setInviteCodeInput] = useState("");
+  const [error, setError] = useState("");
+
+  // Auto-join all contexts in a namespace (fire-and-forget)
+  const autoJoinContexts = useCallback(async (namespaceId: string) => {
+    try {
+      const ctxRes = await api.current.listGroupContexts(namespaceId);
+      if (!ctxRes.data) return;
+      for (const ctx of ctxRes.data) {
+        try {
+          const joinRes = await api.current.joinGroupContext(namespaceId, { contextId: ctx.contextId });
+          if (joinRes.data?.memberPublicKey) {
+            setContextMemberIdentity(ctx.contextId, joinRes.data.memberPublicKey);
+          }
+        } catch { /* already a member or restricted — ignore */ }
+      }
+    } catch { /* non-fatal */ }
+  }, []);
+
+  // Final step: commit selection, join all contexts, then navigate to chat
+  const enterChat = useCallback(async (namespaceId: string, username: string, memberIdentity: string) => {
+    setGroupId(namespaceId);
+    setMessengerDisplayName(username);
+    if (memberIdentity) setGroupMemberIdentity(namespaceId, memberIdentity);
+    clearStoredSession();
+    setStep("joining");
+    await autoJoinContexts(namespaceId);
+    navigate("/");
+  }, [autoJoinContexts, navigate]);
+
+  // Check whether this node already has identity + username for a namespace
+  const checkNamespace = useCallback(async (namespaceId: string) => {
+    setStep("checking");
+    setError("");
+
+    const storedIdentity = getGroupMemberIdentity(namespaceId);
+    const storedName = getMessengerDisplayName();
+
+    // Fast path: we have a display name — re-use it (username is global, not per-workspace)
+    if (storedName) {
+      void enterChat(namespaceId, storedName, storedIdentity);
+      return;
+    }
+
+    try {
+      const res = await api.current.resolveCurrentMemberIdentity(namespaceId, storedIdentity);
+      if (res.data?.memberIdentity) {
+        setGroupMemberIdentity(namespaceId, res.data.memberIdentity);
+
+        const serverAlias = res.data.members
+          ?.find((m) => m.identity === res.data!.memberIdentity)
+          ?.alias?.trim();
+        const displayName = serverAlias || storedName;
+
+        if (displayName) {
+          // Node already has a username — auto-enter
+          enterChat(namespaceId, displayName, res.data.memberIdentity);
+          return;
+        }
+      }
+    } catch {
+      // Identity lookup failed — still allow entering with a new name
+    }
+
+    setStep("enter-name");
+  }, [enterChat]);
+
+  // Process a pending invitation (join namespace → sync → join all contexts)
+  const processInvitation = useCallback(async (payload: string, afterJoin?: string) => {
+    setStep("invite-join");
+    setError("");
+
+    const parsed = parseGroupInvitationPayload(payload);
+    if (!parsed) {
+      setError("Invalid invitation payload.");
+      setStep("error");
+      return;
+    }
+
+    try {
+      setInviteStatus("Joining namespace…");
+      const joinRes = await api.current.joinGroup({
+        invitation: parsed.invitation,
+        groupAlias: parsed.groupAlias,
+      });
+      if (joinRes.error || !joinRes.data) {
+        throw new Error(joinRes.error?.message || "Failed to join namespace");
+      }
+
+      const { groupId, memberIdentity } = joinRes.data;
+      setGroupMemberIdentity(groupId, memberIdentity);
+      if (parsed.groupAlias?.trim()) setStoredGroupAlias(groupId, parsed.groupAlias.trim());
+
+      setInviteStatus("Syncing…");
+      await api.current.syncGroup(groupId).catch(() => {});
+
+      setInviteStatus("Joining channels…");
+      const ctxRes = await api.current.listGroupContexts(groupId);
+      if (ctxRes.data) {
+        for (const ctx of ctxRes.data) {
+          try {
+            const joinCtx = await api.current.joinGroupContext(groupId, { contextId: ctx.contextId });
+            if (joinCtx.data?.memberPublicKey) {
+              setContextMemberIdentity(ctx.contextId, joinCtx.data.memberPublicKey);
+            }
+          } catch { /* non-fatal */ }
+        }
+      }
+
+      clearInvitationFromStorage();
+
+      // After joining, show the enter-name step for this namespace
+      setSelectedId(groupId);
+      setNamespaces((prev) => {
+        if (prev.find((g) => g.groupId === groupId)) return prev;
+        return [...prev, {
+          groupId,
+          alias: parsed.groupAlias?.trim() || afterJoin,
+          appKey: "",
+          targetApplicationId: "",
+          upgradePolicy: "Automatic",
+          createdAt: Math.floor(Date.now() / 1000),
+        }];
+      });
+
+      // If we already have a username, go straight in
+      const existingName = getMessengerDisplayName();
+      if (existingName) {
+        enterChat(groupId, existingName, memberIdentity);
+        return;
+      }
+
+      setStep("enter-name");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to process invitation");
+      setStep("error");
+    }
+  }, [enterChat]);
+
+  // Initial load
+  const loadNamespaces = useCallback(async () => {
+    if (!getAppEndpointKey()) return;
+
+    setStep("loading");
+    setError("");
+
+    // Save invitation from URL to storage before anything else
+    const urlInvite = extractInvitationFromUrl();
+    if (urlInvite) saveInvitationToStorage(urlInvite);
+
+    let groups: GroupSummary[] = [];
+    try {
+      const res = await api.current.listGroups();
+      groups = (res.data ?? []).map((g) => ({
+        ...g,
+        alias: g.alias?.trim() || getStoredGroupAlias(g.groupId) || undefined,
+      }));
+    } catch {
+      setError("Could not reach node. Is merod running?");
+      setStep("error");
+      return;
+    }
+
+    setNamespaces(groups);
+
+    // Check for a pending invitation
+    const pendingInvite = getInvitationFromStorage();
+
+    if (groups.length === 0) {
+      if (pendingInvite) {
+        // No namespace yet but we have an invitation — join via it
+        void processInvitation(pendingInvite);
+        return;
+      }
+      setStep("no-workspace");
+      return;
+    }
+
+    // If there's an invitation for a namespace we're not in yet, process it
+    if (pendingInvite) {
+      const parsed = parseGroupInvitationPayload(pendingInvite);
+      if (parsed) {
+        const inv = parsed.invitation.invitation as unknown as Record<string, unknown>;
+        const rawId = inv.group_id ?? inv.groupId;
+        const invNsId = Array.isArray(rawId)
+          ? (rawId as number[]).map((b) => b.toString(16).padStart(2, "0")).join("")
+          : String(rawId ?? "");
+        if (invNsId && !groups.find((g) => g.groupId === invNsId)) {
+          void processInvitation(pendingInvite);
+          return;
+        }
+      }
+      clearInvitationFromStorage();
+    }
+
+    const storedId = getGroupId();
+    const preferred = groups.find((g) => g.groupId === storedId) ?? groups[0];
+    setSelectedId(preferred.groupId);
+    setStep("select");
+  }, [checkNamespace, processInvitation]);
+
+  useEffect(() => {
+    if (isAuthenticated || isConfigSet) {
+      void loadNamespaces();
+    }
+  }, [loadNamespaces, isAuthenticated, isConfigSet]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
+  const handleSelectContinue = () => {
+    if (selectedId) void checkNamespace(selectedId);
+  };
+
+  const handleJoin = useCallback(async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed || !selectedId) return;
+
+    setStep("joining");
+    setError("");
+
+    try {
+      const storedIdentity = getGroupMemberIdentity(selectedId);
+      const res = await api.current.resolveCurrentMemberIdentity(selectedId, storedIdentity);
+      const memberIdentity = res.data?.memberIdentity ?? storedIdentity;
+
+      if (memberIdentity) {
+        await api.current.setMemberAlias(selectedId, memberIdentity, { alias: trimmed }).catch(() => {});
+      }
+
+      enterChat(selectedId, trimmed, memberIdentity);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to join chat");
+      setStep("enter-name");
+    }
+  }, [nameInput, selectedId, enterChat]);
+
+  const handleCreate = useCallback(async () => {
+    const trimmedNs = nsNameInput.trim();
+    if (!trimmedNs) return;
+
+    setStep("creating");
+    setError("");
+
+    try {
+      const appId = await resolveAppId(getApplicationId());
+      const createRes = await api.current.createGroup({
+        applicationId: appId,
+        upgradePolicy: "LazyOnAccess",
+        alias: trimmedNs,
+      });
+      if (createRes.error || !createRes.data) {
+        throw new Error(createRes.error?.message || "Failed to create namespace");
+      }
+
+      const { groupId } = createRes.data;
+
+      await api.current.setDefaultCapabilities(groupId, { defaultCapabilities: 0x0b }).catch(() => {});
+
+      // Create initial "general" channel so the namespace has something to chat in
+      try {
+        const base = getAppEndpointKey() || DEFAULT_ENDPOINT;
+        const ctxRes = await axios.post<{ data: { contextId: string; memberPublicKey: string } }>(
+          `${base}/admin-api/contexts`,
+          { applicationId: appId, groupId, alias: "general" },
+          { headers: authHeaders() },
+        );
+        const ctxData = ctxRes.data?.data;
+        if (ctxData?.contextId && ctxData?.memberPublicKey) {
+          setContextMemberIdentity(ctxData.contextId, ctxData.memberPublicKey);
+        }
+      } catch { /* non-fatal — user can create channels from the app */ }
+
+      const idRes = await api.current.resolveCurrentMemberIdentity(groupId);
+      if (idRes.data?.memberIdentity) {
+        setGroupMemberIdentity(groupId, idRes.data.memberIdentity);
+      }
+
+      setNamespaces([{
+        groupId,
+        alias: trimmedNs,
+        appKey: "",
+        targetApplicationId: "",
+        upgradePolicy: "LazyOnAccess",
+        createdAt: Math.floor(Date.now() / 1000),
+      }]);
+      setSelectedId(groupId);
+
+      const existingName = getMessengerDisplayName();
+      if (existingName) {
+        enterChat(groupId, existingName, idRes.data?.memberIdentity ?? "");
+        return;
+      }
+
+      setStep("enter-name");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create namespace");
+      setStep("create");
+    }
+  }, [nsNameInput, enterChat]);
+
+  const handleInviteCode = useCallback(async () => {
+    const code = inviteCodeInput.trim();
+    if (!code) return;
+    setInviteCodeInput("");
+    await processInvitation(code);
+  }, [inviteCodeInput, processInvitation]);
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  const selectedNs = namespaces.find((g) => g.groupId === selectedId);
+
+  return (
+    <Overlay>
+      <Box>
+        {/* Loading */}
+        {(step === "loading" || step === "checking") && (
+          <>
+            <Spinner />
+            <Info>{step === "loading" ? "Connecting to node…" : "Checking identity…"}</Info>
+          </>
+        )}
+
+        {/* Invite join in progress */}
+        {step === "invite-join" && (
+          <>
+            <Spinner />
+            <Info>{inviteStatus || "Processing invitation…"}</Info>
+          </>
+        )}
+
+        {/* Joining */}
+        {step === "joining" && (
+          <>
+            <Spinner />
+            <Info>Entering chat…</Info>
+          </>
+        )}
+
+        {/* Creating namespace */}
+        {step === "creating" && (
+          <>
+            <Spinner />
+            <Info>Creating your server…</Info>
+          </>
+        )}
+
+        {/* Select namespace */}
+        {step === "select" && (
+          <>
+            <Header>
+              <Title>Welcome to MeroChat</Title>
+              <Sub>Select the server you want to join.</Sub>
+            </Header>
+            {error && <Err>{error}</Err>}
+            <Field>
+              <Label>Server</Label>
+              <Select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+                {namespaces.map((g) => (
+                  <option key={g.groupId} value={g.groupId}>{nsLabel(g)}</option>
+                ))}
+              </Select>
+            </Field>
+            <Button
+              type="button"
+              variant="primary"
+              style={{ width: "100%" }}
+              onClick={handleSelectContinue}
+              disabled={!selectedId}
+            >
+              Continue
+            </Button>
+            <Divider />
+            <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
+          </>
+        )}
+
+        {/* Enter name */}
+        {step === "enter-name" && (
+          <>
+            <Header>
+              <Title>
+                {selectedNs ? `Join ${nsLabel(selectedNs)}` : "Join chat"}
+              </Title>
+              <Sub>Choose a display name to use in this server.</Sub>
+            </Header>
+            {error && <Err>{error}</Err>}
+            <Field>
+              <Label>Your name</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Alice"
+                value={nameInput}
+                onChange={(e) => { setNameInput(e.target.value); setError(""); }}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") void handleJoin(); }}
+              />
+            </Field>
+            <Button
+              type="button"
+              variant="primary"
+              style={{ width: "100%" }}
+              onClick={() => void handleJoin()}
+              disabled={!nameInput.trim()}
+            >
+              Join chat
+            </Button>
+            {namespaces.length > 1 && (
+              <Button
+                type="button"
+                variant="secondary"
+                style={{ width: "100%", marginTop: "0.5rem" }}
+                onClick={() => setStep("select")}
+              >
+                ← Back
+              </Button>
+            )}
+            <Divider />
+            <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
+          </>
+        )}
+
+        {/* No workspace: offer create or join via invitation code */}
+        {step === "no-workspace" && (
+          <>
+            <Header>
+              <Title>Welcome to MeroChat</Title>
+              <Sub>No servers found on this node. Create one or join an existing server with an invitation code.</Sub>
+            </Header>
+            {error && <Err>{error}</Err>}
+            <Button
+              type="button"
+              variant="primary"
+              style={{ width: "100%" }}
+              onClick={() => { setError(""); setStep("create"); }}
+            >
+              Create workspace
+            </Button>
+            <OrDivider>or</OrDivider>
+            <Field>
+              <Label>Invitation code</Label>
+              <CodeTextarea
+                placeholder="Paste your invitation code here…"
+                value={inviteCodeInput}
+                onChange={(e) => { setInviteCodeInput(e.target.value); setError(""); }}
+              />
+            </Field>
+            <Button
+              type="button"
+              variant="secondary"
+              style={{ width: "100%" }}
+              onClick={() => void handleInviteCode()}
+              disabled={!inviteCodeInput.trim()}
+            >
+              Join with code
+            </Button>
+            <Divider />
+            <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
+          </>
+        )}
+
+        {/* Create namespace */}
+        {step === "create" && (
+          <>
+            <Header>
+              <Title>Create workspace</Title>
+              <Sub>Give your server a name to get started.</Sub>
+            </Header>
+            {error && <Err>{error}</Err>}
+            <Field>
+              <Label>Server name</Label>
+              <Input
+                type="text"
+                placeholder="e.g. My Team"
+                value={nsNameInput}
+                onChange={(e) => { setNsNameInput(e.target.value); setError(""); }}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") void handleCreate(); }}
+              />
+            </Field>
+            <Button
+              type="button"
+              variant="primary"
+              style={{ width: "100%" }}
+              onClick={() => void handleCreate()}
+              disabled={!nsNameInput.trim()}
+            >
+              Create server
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              style={{ width: "100%", marginTop: "0.5rem" }}
+              onClick={() => { setError(""); setStep("no-workspace"); }}
+            >
+              ← Back
+            </Button>
+            <Divider />
+            <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
+          </>
+        )}
+
+        {/* Error */}
+        {step === "error" && (
+          <>
+            <Header>
+              <Title>Something went wrong</Title>
+            </Header>
+            <Err>{error}</Err>
+            <Row>
+              <Button
+                type="button"
+                variant="primary"
+                style={{ flex: 1 }}
+                onClick={() => void loadNamespaces()}
+              >
+                Retry
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                style={{ flex: 1 }}
+                onClick={onLogout}
+              >
+                Disconnect
+              </Button>
+            </Row>
+          </>
+        )}
+      </Box>
+    </Overlay>
+  );
+}

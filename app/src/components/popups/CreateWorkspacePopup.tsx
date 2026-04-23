@@ -12,10 +12,6 @@ import {
   setGroupId,
   setGroupMemberIdentity,
 } from "../../constants/config";
-import {
-  serializeGroupInvitationPayload,
-} from "../../utils/invitation";
-import GroupInviteModal from "./GroupInviteModal";
 
 const Overlay = styled.div`
   position: fixed;
@@ -111,7 +107,7 @@ const ButtonGroup = styled.div`
   margin-top: 1rem;
 `;
 
-type Step = "form" | "creating" | "invite" | "error";
+type Step = "form" | "creating" | "error";
 
 interface CreateWorkspacePopupProps {
   onSuccess: (groupId: string) => void;
@@ -164,12 +160,9 @@ export default function CreateWorkspacePopup({
   const [step, setStep] = useState<Step>("form");
   const [errorMessage, setErrorMessage] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
-  const [invitePayload, setInvitePayload] = useState("");
-  const [createdGroupId, setCreatedGroupId] = useState("");
   const trimmedWorkspaceName = workspaceName.trim();
   const canCreateWorkspace = trimmedWorkspaceName.length > 0;
-
-  const stepsCompleted = step === "form" ? 0 : step === "creating" ? 1 : step === "invite" ? 3 : 0;
+  const stepsCompleted = step === "form" ? 0 : step === "creating" ? 1 : 0;
 
   const createWorkspace = useCallback(async () => {
     setStep("creating");
@@ -200,19 +193,8 @@ export default function CreateWorkspacePopup({
         setGroupMemberIdentity(groupId, identityResult.data.memberIdentity);
       }
 
-      const inviteResult = await groupApi.createInvitation(groupId);
-      if (inviteResult.error || !inviteResult.data) {
-        throw new Error(
-          inviteResult.error?.message || "Failed to create invitation",
-        );
-      }
-      setInvitePayload(
-        serializeGroupInvitationPayload({
-          invitation: inviteResult.data.invitation,
-          groupAlias: inviteResult.data.groupAlias ?? trimmedWorkspaceName,
-        }),
-      );
-      setStep("invite");
+      onSuccess(groupId);
+      return;
     } catch (error) {
       console.error("Create workspace failed:", error);
       setErrorMessage(
@@ -221,24 +203,6 @@ export default function CreateWorkspacePopup({
       setStep("error");
     }
   }, [trimmedWorkspaceName]);
-
-  const handleDone = () => {
-    onSuccess(createdGroupId);
-  };
-
-  if (step === "invite") {
-    return (
-      <GroupInviteModal
-        groupId={createdGroupId}
-        isOpen
-        onClose={handleDone}
-        initialInvitationPayload={invitePayload}
-        title="Workspace created!"
-        subtitle="Your workspace is ready. Share an invitation now and create your first channel after you enter."
-        successMessage="Share this workspace invitation with the people you want to invite."
-      />
-    );
-  }
 
   return (
     <Overlay>
@@ -251,17 +215,17 @@ export default function CreateWorkspacePopup({
 
         {step === "form" && (
           <>
-            <Title>Create Workspace</Title>
+            <Title>Create Namespace</Title>
             <Subtitle>
-              Create a workspace now, then add channels after you enter the
-              workspace. You can also invite members right away.
+              Give your namespace a name. You can create channels and invite
+              members once you enter.
             </Subtitle>
             <InputGroup>
-              <Label htmlFor="workspaceName">Workspace name</Label>
+              <Label htmlFor="workspaceName">Namespace name</Label>
               <Input
                 id="workspaceName"
                 type="text"
-                placeholder="Enter a workspace name"
+                placeholder="Enter a name"
                 value={workspaceName}
                 onChange={(event) => setWorkspaceName(event.target.value)}
                 autoFocus
@@ -274,7 +238,7 @@ export default function CreateWorkspacePopup({
                 style={{ flex: 1 }}
                 disabled={!canCreateWorkspace}
               >
-                Create workspace
+                Create
               </Button>
               <Button onClick={onCancel} variant="secondary" style={{ flex: 1 }}>
                 Cancel
@@ -285,10 +249,9 @@ export default function CreateWorkspacePopup({
 
         {step === "creating" && (
           <>
-            <Title>Creating workspace...</Title>
+            <Title>Creating namespace…</Title>
             <Message $type="info">
-              Setting up your workspace and invitation. You can create your
-              first channel after you enter.
+              Setting up your namespace. You'll be taken in automatically.
             </Message>
           </>
         )}

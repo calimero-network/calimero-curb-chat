@@ -6,12 +6,13 @@ import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { getApplicationId, getGroupId, setContextMemberIdentity } from "../../constants/config";
 import { memo, useCallback, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
-import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { log } from "../../utils/logger";
 import {
   getChannelVisibilityOption,
   getContextVisibilityModeFromOption,
 } from "../../utils/channelVisibility";
+import { buildChannelEntryChat } from "../../utils/channelEntry";
+import type { ActiveChat } from "../../types/Common";
 
 const Container = styled.div<{ $isCollapsed?: boolean }>`
   display: flex;
@@ -58,6 +59,7 @@ interface ChannelHeaderProps {
   title: string;
   isCollapsed?: boolean;
   onChannelCreated?: () => void;
+  onChannelSelected?: (chat: ActiveChat) => void;
 }
 
 const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
@@ -65,15 +67,13 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const [inputValue, setInputValue] = usePersistentState("createChannelInputValue", "");
   const [defaultVisibility, setDefaultVisibility] = useState<"public" | "private">("public");
   const [isLoadingDefaultVisibility, setIsLoadingDefaultVisibility] = useState(false);
-  const permissions = useCurrentGroupPermissions(getGroupId());
-  const canCreateChannel = permissions.isAdmin || permissions.canCreateContext;
+  const groupId = getGroupId();
 
   const createChannel = async (
     channelName: string,
     isPublic: boolean,
     _isReadOnly: boolean,
   ) => {
-    const groupId = getGroupId();
     if (!groupId) {
       log.error("ChannelHeader", "No groupId configured — cannot create channel");
       return;
@@ -123,11 +123,17 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
 
     setInputValue("");
     setIsOpen(false);
+
+    const memberKey = createResp.data.memberPublicKey ?? "";
+    if (memberKey) {
+      props.onChannelSelected?.(
+        buildChannelEntryChat({ contextId, name: channelName, contextIdentity: memberKey }),
+      );
+    }
     props.onChannelCreated?.();
   };
 
   const prepareCreateChannelModal = useCallback(async () => {
-    const groupId = getGroupId();
     if (!groupId || isLoadingDefaultVisibility) {
       return;
     }
@@ -156,7 +162,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   return (
     <Container $isCollapsed={props.isCollapsed}>
       {!props.isCollapsed && <TextBold>{props.title}</TextBold>}
-      {canCreateChannel && (
+      {groupId && (
         <CreateChannelPopup
           title={"Create new Channel"}
           inputValue={inputValue}

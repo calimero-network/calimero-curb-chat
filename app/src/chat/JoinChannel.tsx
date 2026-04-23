@@ -3,7 +3,8 @@ import type { ActiveChat } from "../types/Common";
 import Loader from "../components/loader/Loader";
 import { styled } from "styled-components";
 import type { ChannelInfo } from "../api/clientApi";
-import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
+import { GroupApiDataSource } from "../api/dataSource/groupApiDataSource";
+import { getGroupId } from "../constants/config";
 import { timestampToDate } from "../utils/time";
 import { Button } from "@calimero-network/mero-ui";
 
@@ -98,9 +99,12 @@ export default function JoinChannel({
   const [loading, setLoading] = useState(false);
   const joinChannel = useCallback(async () => {
     setLoading(true);
-    await new ClientApiDataSource().joinChannel({
-      channel: { name: activeChat.name },
-    });
+    const groupId = getGroupId();
+    if (groupId && activeChat.contextId) {
+      await new GroupApiDataSource().joinGroupContext(groupId, {
+        contextId: activeChat.contextId,
+      });
+    }
     setLoading(false);
     onJoinedChat();
   }, [activeChat, onJoinedChat]);

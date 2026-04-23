@@ -960,3 +960,76 @@ impl MeroChat {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{encode_blob_id_base58, parse_blob_id_base58, BLOB_ID_SIZE};
+
+    #[test]
+    fn blob_id_roundtrip_typical() {
+        let original: [u8; BLOB_ID_SIZE] = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+            0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+            0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+        ];
+        let encoded = encode_blob_id_base58(&original);
+        let decoded = parse_blob_id_base58(&encoded).expect("roundtrip should succeed");
+        assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn blob_id_roundtrip_all_zeros() {
+        let zeros = [0u8; BLOB_ID_SIZE];
+        let encoded = encode_blob_id_base58(&zeros);
+        let decoded = parse_blob_id_base58(&encoded).expect("all-zeros roundtrip");
+        assert_eq!(zeros, decoded);
+    }
+
+    #[test]
+    fn blob_id_roundtrip_all_max() {
+        let ones = [0xffu8; BLOB_ID_SIZE];
+        let encoded = encode_blob_id_base58(&ones);
+        let decoded = parse_blob_id_base58(&encoded).expect("all-0xFF roundtrip");
+        assert_eq!(ones, decoded);
+    }
+
+    #[test]
+    fn blob_id_encoded_is_non_empty_string() {
+        let bytes = [0x42u8; BLOB_ID_SIZE];
+        let encoded = encode_blob_id_base58(&bytes);
+        assert!(!encoded.is_empty());
+        // Base58 output should only contain valid base58 characters (no 0, O, I, l)
+        assert!(!encoded.contains('0'));
+        assert!(!encoded.contains('O'));
+        assert!(!encoded.contains('I'));
+        assert!(!encoded.contains('l'));
+    }
+
+    #[test]
+    fn parse_blob_id_invalid_base58_chars() {
+        let result = parse_blob_id_base58("not-valid-base58!!!!-/-");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_blob_id_wrong_byte_length() {
+        // Valid base58 but encodes fewer than 32 bytes
+        let short = bs58::encode(vec![1u8, 2, 3, 4]).into_string();
+        let result = parse_blob_id_base58(&short);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Invalid blob ID length"), "got: {err}");
+    }
+
+    #[test]
+    fn parse_blob_id_empty_string() {
+        let result = parse_blob_id_base58("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn blob_id_size_constant_matches_32() {
+        assert_eq!(BLOB_ID_SIZE, 32);
+    }
+}

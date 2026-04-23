@@ -175,6 +175,7 @@ function AppContainer({
           createDM={createDM}
           privateDMs={privateDMs}
           onChannelCreated={onChannelCreated}
+          onChannelSelected={updateSelectedActiveChat}
         />
         {!isSidebarOpen && (
           <Wrapper>

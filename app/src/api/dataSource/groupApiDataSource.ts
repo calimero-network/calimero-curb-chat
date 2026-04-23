@@ -270,12 +270,59 @@ export class GroupApiDataSource implements GroupApi {
 
   async listGroups(): ApiResponse<GroupSummary[]> {
     try {
-      const response = await axios.get(`${this.base()}/groups`, {
-        headers: getAuthHeaders(),
-      });
-      return response.status === 200
-        ? ok(response.data.data)
-        : httpFail(response.status, response.statusText);
+      // /namespaces is the correct endpoint (matches POST /namespaces in createGroup).
+      // Fall back to /groups for older merod versions.
+      let response;
+      try {
+        response = await axios.get(`${this.base()}/namespaces`, {
+          headers: getAuthHeaders(),
+        });
+      } catch (firstError) {
+        if (
+          axios.isAxiosError(firstError) &&
+          (firstError.response?.status === 404 || firstError.response?.status === 405)
+        ) {
+          response = await axios.get(`${this.base()}/groups`, {
+            headers: getAuthHeaders(),
+          });
+        } else {
+          throw firstError;
+        }
+      }
+
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+
+      // Normalise: server may nest under .namespaces / .groups, and use namespaceId vs groupId
+      const raw: unknown[] = Array.isArray(response.data.data)
+        ? response.data.data
+        : Array.isArray(response.data.data?.namespaces)
+          ? response.data.data.namespaces
+          : Array.isArray(response.data.data?.groups)
+            ? response.data.data.groups
+            : [];
+
+      const groups: GroupSummary[] = raw
+        .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+        .map((item) => ({
+          groupId: String(item.groupId ?? item.namespaceId ?? item.id ?? ""),
+          alias: typeof item.alias === "string" ? item.alias : undefined,
+          appKey: String(item.appKey ?? item.app_key ?? ""),
+          targetApplicationId: String(
+            item.targetApplicationId ?? item.target_application_id ?? "",
+          ),
+          upgradePolicy: (item.upgradePolicy ??
+            item.upgrade_policy ??
+            "Automatic") as GroupSummary["upgradePolicy"],
+          createdAt:
+            typeof item.createdAt === "number"
+              ? item.createdAt
+              : Math.floor(Date.now() / 1000),
+        }))
+        .filter((g) => g.groupId.length > 0);
+
+      return ok(groups);
     } catch (error) {
       return catchError("listGroups", error);
     }
@@ -372,15 +419,17 @@ export class GroupApiDataSource implements GroupApi {
     storedMemberIdentity = "",
   ): ApiResponse<{ memberIdentity: string; members: GroupMember[] }> {
     const membersResponse = await this.listMembers(groupId);
+
+    // If the members endpoint fails but we already have a stored identity for this
+    // namespace, use it — avoids blocking workspace entry on merod versions that
+    // return 405 for GET /admin-api/groups/{id}/members.
     if (membersResponse.error || !membersResponse.data) {
+      if (storedMemberIdentity) {
+        return ok({ memberIdentity: storedMemberIdentity, members: [] });
+      }
       return {
         data: null,
-        error:
-          membersResponse.error ??
-          {
-            code: 500,
-            message: "Failed to list workspace members",
-          },
+        error: membersResponse.error ?? { code: 500, message: "Failed to list namespace members" },
       };
     }
 
@@ -392,7 +441,7 @@ export class GroupApiDataSource implements GroupApi {
     if (!resolution.memberIdentity) {
       return fail(
         404,
-        "Could not resolve this node's workspace identity. Rejoin this workspace from an invitation on this device or select a workspace already joined here.",
+        "Could not resolve identity for this namespace. Make sure you joined it on this device.",
       );
     }
 

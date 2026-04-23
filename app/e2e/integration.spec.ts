@@ -101,7 +101,7 @@ test.describe("Authentication with live node", () => {
     await page.goto("/login");
 
     // The workspace selector heading is the first thing that appears after auth
-    await expect(page.getByText("Welcome to Calimero Chat")).toBeVisible({
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
       timeout: 20_000,
     });
   });
@@ -112,7 +112,7 @@ test.describe("Authentication with live node", () => {
     const _env = requireEnv();
     await setupAuth(page);
     await page.goto("/login");
-    await expect(page.getByText("Welcome to Calimero Chat")).toBeVisible({
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
       timeout: 20_000,
     });
 
@@ -128,7 +128,7 @@ test.describe("Authentication with live node", () => {
     requireEnv();
     await setupAuth(page);
     await page.goto("/login");
-    await expect(page.getByText("Welcome to Calimero Chat")).toBeVisible({
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
       timeout: 20_000,
     });
 

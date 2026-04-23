@@ -644,6 +644,12 @@ export default function MessageInput({
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to send message";
+        // "no mesh peers for namespace" means the message was stored locally but
+        // P2P sync found no connected peers — expected with a single node.
+        // Don't surface this as an error to the user.
+        if (/mesh|no.*peer|peer.*sync/i.test(message)) {
+          return;
+        }
         addToast({
           title: "Message error",
           message,

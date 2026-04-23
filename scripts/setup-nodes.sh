@@ -143,21 +143,18 @@ rpc_call() {
 start_node_merod() {
   local name=$1 home=$2 port=$3 p2p_port=$4
 
-  if node_is_running "$port"; then
-    yellow "$name already running on port $port"
-    bootstrap_auth "$port" "$name"
-    register_node "$name" "$home"
-    return
-  fi
+  # Always start clean — kill anything on the target port (could be a stale
+  # dev-node or a previous failed CI run) and wipe the home directory.
+  stop_node_merod "$name"
+  pkill -f "merod.*--server-port ${port}" 2>/dev/null || true
+  rm -rf "$home"
 
-  if [ ! -d "$home" ]; then
-    step "Initialising $name at $home"
-    merod --node "$name" --home "$home" init \
-      --server-host 127.0.0.1 \
-      --server-port "$port" \
-      --swarm-port  "$p2p_port" \
-      --auth-mode embedded
-  fi
+  step "Initialising $name at $home"
+  merod --node "$name" --home "$home" init \
+    --server-host 127.0.0.1 \
+    --server-port "$port" \
+    --swarm-port  "$p2p_port" \
+    --auth-mode embedded
 
   step "Starting $name"
   merod --node "$name" --home "$home" run > "/tmp/curb-merod-${name}.log" 2>&1 &
@@ -166,7 +163,8 @@ start_node_merod() {
   green "$name running  (pid $!  logs: /tmp/curb-merod-${name}.log)"
 
   bootstrap_auth "$port" "$name"
-  register_node "$name" "$home"
+  # meroctl registration is best-effort; we use REST API for all operations
+  register_node "$name" "$home" 2>/dev/null || true
 }
 
 stop_node_merod() {
@@ -198,8 +196,11 @@ if $STOP; then
   step "Stopping nodes"
   stop_node_merod "node-1"
   stop_node_merod "node-2"
-  command -v merobox &>/dev/null && { merobox stop --all 2>/dev/null || true; merobox nuke --force 2>/dev/null || true; }
-  command -v meroctl &>/dev/null && { meroctl node remove node-1 2>/dev/null || true; meroctl node remove node-2 2>/dev/null || true; }
+  # Only call merobox if we are actually in merobox mode (avoids Docker dependency)
+  if $USE_MEROBOX && command -v merobox &>/dev/null; then
+    merobox stop --all 2>/dev/null || true
+    merobox nuke --force 2>/dev/null || true
+  fi
   if $CLEAN; then
     step "Removing node home directories"
     rm -rf "$NODE_1_HOME" "$NODE_2_HOME"
@@ -218,7 +219,7 @@ if $USE_MEROBOX; then
   check_cmd meroctl
 else
   check_cmd merod
-  check_cmd meroctl
+  # meroctl is optional in merod mode — all app/namespace ops use REST API
 fi
 check_cmd jq
 check_cmd curl
@@ -260,136 +261,188 @@ else
   start_node_merod "node-2" "$NODE_2_HOME" "$NODE_2_PORT" "$NODE_2_P2P_PORT"
   ACCESS_TOKEN_2="$NODE_ACCESS_TOKEN"; REFRESH_TOKEN_2="$NODE_REFRESH_TOKEN"
 
-  # ── Install app on both nodes ──────────────────────────────────────────────
+  # ── Install app via REST (no meroctl needed) ──────────────────────────────
 
   step "Installing curb app on node-1"
-  APP_ID=$(meroctl --node node-1 --output-format json app install --path "$WASM_PATH" 2>/dev/null \
-    | jq -r 'if type=="object" then (.applicationId // .data.applicationId // empty) else empty end')
+  APP_RES=$(curl -sf -X POST "${NODE_1_URL}/admin-api/install-dev-application" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_1}" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n --arg p "$WASM_PATH" '{path: $p, metadata: [], package: null, version: null}')" \
+    2>/dev/null) || APP_RES="{}"
+  APP_ID=$(echo "$APP_RES" | jq -r '.data.applicationId // empty' 2>/dev/null || true)
+
   if [ -z "$APP_ID" ]; then
-    yellow "App may already be installed — fetching existing ID"
-    APP_ID=$(meroctl --node node-1 --output-format json app ls \
-      | jq -r '.apps[0].id // .data.apps[0].id // .data.applications[0].id // empty')
+    yellow "Fetching existing app ID from node-1"
+    APP_ID=$(curl -sf "${NODE_1_URL}/admin-api/applications" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null \
+      | jq -r '.data.apps[0].id // .data.applications[0].id // empty' 2>/dev/null || true)
   fi
-  [ -n "$APP_ID" ] || { red "ERROR: could not get APP_ID"; exit 1; }
+  [ -n "$APP_ID" ] || { red "ERROR: could not install or find app on node-1"; exit 1; }
   green "APP_ID: $APP_ID"
 
   step "Installing curb app on node-2"
-  meroctl --node node-2 app install --path "$WASM_PATH" >/dev/null 2>&1 || yellow "App already on node-2"
+  curl -sf -X POST "${NODE_2_URL}/admin-api/install-dev-application" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n --arg p "$WASM_PATH" '{path: $p, metadata: [], package: null, version: null}')" \
+    2>/dev/null | jq -r '.data.applicationId // "already installed"' 2>/dev/null \
+    && green "App installed on node-2" || yellow "App install on node-2 failed (non-fatal)"
 
-  # ── Create namespace (group / workspace) on node-1 ────────────────────────
+  # ── Create namespace (group / workspace) via REST ─────────────────────────
 
   step "Creating namespace on node-1"
-  NS_ID=$(meroctl --node node-1 --output-format json namespace create \
-    --application-id "$APP_ID" \
-    | jq -r '.namespaceId // .data.namespaceId // empty')
+  NS_RES=$(curl -sf -X POST "${NODE_1_URL}/admin-api/namespaces" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_1}" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n --arg a "$APP_ID" '{applicationId: $a, upgradePolicy: "LazyOnAccess"}')" \
+    2>/dev/null) || NS_RES="{}"
+  NS_ID=$(echo "$NS_RES" | jq -r '.data.namespaceId // .data.groupId // .data.id // empty' 2>/dev/null || true)
+
   if [ -z "$NS_ID" ]; then
-    yellow "Namespace may already exist — listing"
-    NS_ID=$(meroctl --node node-1 --output-format json namespace ls \
-      | jq -r '.namespaces[0].id // .data[0].namespace_id // empty')
+    yellow "Fetching existing namespace from node-1"
+    NS_ID=$(curl -sf "${NODE_1_URL}/admin-api/groups" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null \
+      | jq -r '(.data // .) | if type=="array" then .[0].groupId else (.groups[0].groupId // .items[0].groupId) end' \
+      2>/dev/null || true)
   fi
-  [ -n "$NS_ID" ] || { red "ERROR: could not get NS_ID"; exit 1; }
+  [ -n "$NS_ID" ] || { red "ERROR: could not create or find namespace on node-1"; exit 1; }
   green "NS_ID (GROUP_ID): $NS_ID"
 
   GROUP_ID="$NS_ID"
 
-  # ── Create context (channel) on node-1 ────────────────────────────────────
+  # ── Create #general channel on node-1 (linked to namespace) ─────────────────
 
-  step "Creating integration context on node-1"
-  INIT_ARGS='{"name":"Integration Test","context_type":"Channel","description":"Playwright e2e context","created_at":1751952997}'
+  step "Creating #general channel on node-1"
+
+  # Build init params as UTF-8 byte array for the WASM init function
+  INIT_JSON='{"name":"general","context_type":"Channel","description":"","created_at":1751952997}'
+  INIT_BYTES=$(printf '%s' "$INIT_JSON" | python3 -c \
+    "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')" 2>/dev/null || echo "[]")
 
   CTX_RES=$(curl -sf -X POST "${NODE_1_URL}/admin-api/contexts" \
     -H "Authorization: Bearer ${ACCESS_TOKEN_1}" \
     -H "Content-Type: application/json" \
     -d "$(jq -n \
           --arg appId "$APP_ID" \
-          --argjson init "$INIT_ARGS" \
-          '{applicationId: $appId, initArgs: ($init | tostring)}')" 2>/dev/null) || CTX_RES="{}"
+          --arg groupId "$GROUP_ID" \
+          --argjson initParams "$INIT_BYTES" \
+          '{applicationId: $appId, protocol: "near", groupId: $groupId, alias: "general", initializationParams: $initParams}')" \
+    2>/dev/null) || CTX_RES="{}"
 
-  CONTEXT_ID=$(echo "$CTX_RES" | jq -r '.data.contextId // .data.id // empty' 2>/dev/null)
-  MEMBER_KEY_1=$(echo "$CTX_RES" | jq -r '.data.memberPublicKey // .data.member_public_key // empty' 2>/dev/null)
+  CONTEXT_ID=$(echo "$CTX_RES" | jq -r '.data.contextId // .data.id // empty' 2>/dev/null || true)
+  MEMBER_KEY_1=$(echo "$CTX_RES" | jq -r '.data.memberPublicKey // .data.member_public_key // empty' 2>/dev/null || true)
 
   if [ -z "$CONTEXT_ID" ]; then
-    yellow "Context may already exist — listing"
-    CONTEXT_ID=$(meroctl --node node-1 --output-format json context ls \
-      | jq -r '.contexts[0].id // .data.contexts[0].id // empty')
+    yellow "Listing existing contexts in namespace"
+    CONTEXT_ID=$(curl -sf "${NODE_1_URL}/admin-api/groups/${GROUP_ID}/contexts" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null \
+      | jq -r '(.data // .) | if type=="array" then .[0].contextId // .[0].id else empty end' 2>/dev/null || true)
   fi
   [ -n "$CONTEXT_ID" ] || { red "ERROR: could not get CONTEXT_ID"; exit 1; }
   green "CONTEXT_ID: $CONTEXT_ID"
 
+  # Set channel visibility to public (open)
+  curl -sf -X PUT "${NODE_1_URL}/admin-api/groups/${GROUP_ID}/contexts/${CONTEXT_ID}/visibility" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_1}" -H "Content-Type: application/json" \
+    -d '{"mode":"open"}' &>/dev/null \
+    && green "Channel visibility set to public" \
+    || yellow "Could not set channel visibility (non-fatal)"
+
   if [ -z "$MEMBER_KEY_1" ]; then
     MEMBER_KEY_1=$(curl -sf "${NODE_1_URL}/admin-api/contexts/${CONTEXT_ID}/identities-owned" \
       -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null \
-      | jq -r '(.data // .) | if type=="array" then .[0] else (.identities[0] // .items[0]) end' 2>/dev/null)
+      | jq -r '(.data // .) | if type=="array" then .[0] else (.identities[0] // .items[0]) end' 2>/dev/null || true)
   fi
   [ -n "$MEMBER_KEY_1" ] || { red "ERROR: could not get MEMBER_KEY_1"; exit 1; }
   green "MEMBER_KEY_1 (node-1 identity): $MEMBER_KEY_1"
 
-  # ── Create identity for node-2 ────────────────────────────────────────────
+  # ── Create namespace invitation and have node-2 join ─────────────────────
 
-  step "Creating identity on node-2"
-  IDENT_RES=$(curl -sf -X POST "${NODE_2_URL}/admin-api/identities" \
+  step "Inviting node-2 to namespace"
+  INVITE_RES=$(curl -sf -X POST "${NODE_1_URL}/admin-api/namespaces/${GROUP_ID}/invite" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_1}" \
+    -H "Content-Type: application/json" \
+    -d '{}' 2>/dev/null) || INVITE_RES="{}"
+
+  INVITE_DATA=$(echo "$INVITE_RES" | jq '.data // empty' 2>/dev/null)
+  [ -n "$INVITE_DATA" ] && [ "$INVITE_DATA" != "null" ] \
+    || { red "ERROR: namespace invitation is empty"; echo "$INVITE_RES" >&2; exit 1; }
+  green "Namespace invitation generated"
+
+  step "Node-2 joining namespace"
+  curl -sf -X POST "${NODE_2_URL}/admin-api/namespaces/${GROUP_ID}/join" \
     -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
-    -H "Content-Type: application/json" -d "{}" 2>/dev/null) || IDENT_RES="{}"
+    -H "Content-Type: application/json" \
+    -d "$(jq -n --argjson inv "$INVITE_DATA" '{invitation: $inv}')" >/dev/null 2>&1 \
+    && green "Node-2 joined namespace" \
+    || yellow "Node-2 namespace join failed (may already be a member)"
 
-  MEMBER_KEY_2=$(echo "$IDENT_RES" | jq -r '.data.publicKey // .data.public_key // empty' 2>/dev/null)
+  # ── Sync namespace to node-2 ──────────────────────────────────────────────
 
+  step "Syncing namespace to node-2"
+  curl -sf -X POST "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/sync" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
+    -H "Content-Type: application/json" -d '{}' &>/dev/null \
+    && green "Sync triggered" || yellow "Sync failed (non-fatal)"
+
+  # ── Node-2 joins all contexts in the namespace ────────────────────────────
+
+  step "Node-2 joining namespace contexts"
+  CTXS_LIST=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/contexts" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null \
+    | jq -r '(.data // .) | if type=="array" then .[].contextId // .[].id else empty end' 2>/dev/null || true)
+
+  MEMBER_KEY_2=""
+  for ctx_id in $CTXS_LIST; do
+    JOIN_CTX=$(curl -sf -X POST "${NODE_2_URL}/admin-api/contexts/${ctx_id}/join" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
+      -H "Content-Type: application/json" -d '{}' 2>/dev/null) || JOIN_CTX="{}"
+    mk=$(echo "$JOIN_CTX" | jq -r '.data.memberPublicKey // .data.member_public_key // empty' 2>/dev/null || true)
+    [ -n "$mk" ] && [ "$ctx_id" = "$CONTEXT_ID" ] && MEMBER_KEY_2="$mk"
+    green "Node-2 joined context ${ctx_id}"
+  done
+
+  # Fall back: fetch identity-owned for the general context
   if [ -z "$MEMBER_KEY_2" ]; then
-    yellow "Fetching existing identity on node-2"
-    MEMBER_KEY_2=$(curl -sf "${NODE_2_URL}/admin-api/identities" \
+    MEMBER_KEY_2=$(curl -sf "${NODE_2_URL}/admin-api/contexts/${CONTEXT_ID}/identities-owned" \
       -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null \
-      | jq -r '(.data // .) | if type=="array" then .[0].publicKey // .[0].public_key else (.identities[0].publicKey // empty) end' 2>/dev/null)
+      | jq -r '(.data // .) | if type=="array" then .[0] else (.identities[0] // .items[0]) end' 2>/dev/null || true)
   fi
   [ -n "$MEMBER_KEY_2" ] || { red "ERROR: could not get MEMBER_KEY_2"; exit 1; }
   green "MEMBER_KEY_2 (node-2 identity): $MEMBER_KEY_2"
 
-  # ── Invite node-2 into context ────────────────────────────────────────────
+  # ── Wait for context to be accessible on node-2 ───────────────────────────
 
-  step "Inviting node-2 into context"
-  INVITE_RES=$(curl -sf -X POST "${NODE_1_URL}/admin-api/contexts/${CONTEXT_ID}/invite" \
-    -H "Authorization: Bearer ${ACCESS_TOKEN_1}" \
-    -H "Content-Type: application/json" \
-    -d "$(jq -n \
-          --arg granteeId "$MEMBER_KEY_2" \
-          --arg granterId "$MEMBER_KEY_1" \
-          '{granteeId: $granteeId, granterId: $granterId, capability: "member"}')" 2>/dev/null)
-
-  INVITATION=$(echo "$INVITE_RES" | jq '.data.invitation // .data // empty' 2>/dev/null)
-  [ "$INVITATION" != "null" ] && [ -n "$INVITATION" ] || { red "ERROR: invitation is empty"; echo "$INVITE_RES" >&2; exit 1; }
-  green "Invitation generated"
-
-  # ── Node-2 joins context ───────────────────────────────────────────────────
-
-  step "Node-2 joining context"
-  curl -sf -X POST "${NODE_2_URL}/admin-api/contexts/${CONTEXT_ID}/join" \
-    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
-    -H "Content-Type: application/json" \
-    -d "$(jq -n \
-          --arg ctxId "$CONTEXT_ID" \
-          --arg identId "$MEMBER_KEY_2" \
-          --argjson invite "$INVITATION" \
-          '{contextId: $ctxId, inviteeId: $identId, invitation: $invite}')" >/dev/null
-  green "Node-2 joined context"
-
-  # ── Wait for context to sync to node-2 ────────────────────────────────────
-
-  step "Waiting for context sync to node-2"
+  step "Waiting for context to be accessible on node-2"
   for i in $(seq 1 30); do
-    CTXS_2=$(curl -sf "${NODE_2_URL}/admin-api/contexts" \
+    CTXS_2=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/contexts" \
       -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null) || CTXS_2="{}"
     if echo "$CTXS_2" | jq -e \
         --arg id "$CONTEXT_ID" \
-        '(.data // .) | if type=="array" then .[] | select(.id==$id or .contextId==$id) else empty end' \
+        '(.data // .) | if type=="array" then .[] | select(.contextId==$id or .id==$id) else empty end' \
         >/dev/null 2>&1; then
-      green "Context synced to node-2 (attempt $i)"
+      green "Context accessible on node-2 (attempt $i)"
       break
     fi
-    if [ "$i" -eq 30 ]; then yellow "WARNING: context may not have synced to node-2 within 60s"; fi
+    if [ "$i" -eq 30 ]; then yellow "WARNING: context may not be visible on node-2 yet"; fi
     sleep 2
   done
 
-  # ── Set profiles ──────────────────────────────────────────────────────────
+  # ── Set member aliases (nicknames) and app-level profiles ─────────────────
 
-  step "Setting profiles (Alice / Bob)"
+  step "Setting member aliases and profiles (Alice / Bob)"
+
+  # Namespace-level alias (shown in workspace member list)
+  NS_MEMBER_1=$(curl -sf "${NODE_1_URL}/admin-api/groups/${GROUP_ID}/members" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null \
+    | jq -r '(.data // .) | if type=="array" then .[0].identity else empty end' 2>/dev/null || true)
+  if [ -n "$NS_MEMBER_1" ]; then
+    curl -sf -X PUT "${NODE_1_URL}/admin-api/groups/${GROUP_ID}/members/${NS_MEMBER_1}/alias" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN_1}" -H "Content-Type: application/json" \
+      -d '{"alias":"Alice"}' &>/dev/null && green "Alice alias set on namespace" || true
+  fi
+
+  # App-level profile via WASM RPC (used for message sender display)
   rpc_call "$NODE_1_URL" "$ACCESS_TOKEN_1" "$CONTEXT_ID" "$MEMBER_KEY_1" \
     "set_profile" '{"username":"Alice","avatar":null}'
   rpc_call "$NODE_2_URL" "$ACCESS_TOKEN_2" "$CONTEXT_ID" "$MEMBER_KEY_2" \
@@ -451,6 +504,15 @@ if $USE_MEROBOX; then
     elif type=="object" then (.identities[0] // .items[0])
     else empty end' 2>/dev/null || echo "")
   [ -n "$MEMBER_KEY" ] && green "MEMBER_KEY: $MEMBER_KEY" || yellow "WARNING: could not discover MEMBER_KEY"
+
+  IDENT_RES3=$(curl -sf "${NODE_2_URL}/admin-api/contexts/${CONTEXT_ID}/identities-owned" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null) || IDENT_RES3="{}"
+  MEMBER_KEY_2=$(echo "$IDENT_RES3" | jq -r '
+    (.data // .) |
+    if type=="array" then .[0]
+    elif type=="object" then (.identities[0] // .items[0])
+    else empty end' 2>/dev/null || echo "")
+  [ -n "$MEMBER_KEY_2" ] && green "MEMBER_KEY_2: $MEMBER_KEY_2" || yellow "WARNING: could not discover MEMBER_KEY_2"
 fi
 
 # ── Write app/.env.integration ────────────────────────────────────────────────
@@ -473,6 +535,7 @@ E2E_REFRESH_TOKEN_2=${REFRESH_TOKEN_2}
 E2E_GROUP_ID=${GROUP_ID:-}
 E2E_CONTEXT_ID=${CONTEXT_ID:-}
 E2E_MEMBER_KEY=${MEMBER_KEY:-}
+E2E_MEMBER_KEY_2=${MEMBER_KEY_2:-}
 EOF
 
 green "Written: $ENV_OUT"

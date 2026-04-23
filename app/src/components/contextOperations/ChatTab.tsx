@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ChangeEvent, type FormEvent } from "react";
+import { useState, useEffect, useCallback, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { styled } from "styled-components";
 import { getAppEndpointKey } from "@calimero-network/calimero-client";
@@ -7,16 +7,11 @@ import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import type { GroupMember, GroupSummary } from "../../api/groupApi";
 import { clearStoredSession } from "../../utils/session";
 import {
-  parseGroupInvitationPayload,
-  parseInvitationInput,
-} from "../../utils/invitation";
-import {
   getGroupMemberIdentity,
   getGroupId,
   getStoredGroupAlias,
   setGroupId,
   setGroupMemberIdentity,
-  setStoredGroupAlias,
 } from "../../constants/config";
 import {
   getMessengerDisplayName,
@@ -113,21 +108,7 @@ const Message = styled.div<{ type?: "success" | "error" | "info" }>`
 interface ChatTabProps {
   isAuthenticated: boolean;
   isConfigSet: boolean;
-  onInvitationSaved?: () => void;
-}
-
-function buildJoinedWorkspaceFallback(
-  groupId: string,
-  alias?: string,
-): GroupSummary {
-  return {
-    groupId,
-    alias,
-    appKey: "",
-    targetApplicationId: "",
-    upgradePolicy: "Automatic",
-    createdAt: Math.floor(Date.now() / 1000),
-  };
+  _onInvitationSaved?: () => void;
 }
 
 function getWorkspaceLabel(group: GroupSummary): string {
@@ -143,7 +124,6 @@ function getMemberAlias(members: GroupMember[], memberIdentity: string): string 
 export default function ChatTab({
   isAuthenticated,
   isConfigSet,
-  onInvitationSaved,
 }: ChatTabProps) {
   const navigate = useNavigate();
   const [availableGroups, setAvailableGroups] = useState<GroupSummary[]>([]);
@@ -152,11 +132,7 @@ export default function ChatTab({
   const [fetchingGroups, setFetchingGroups] = useState(false);
   const [openingWorkspace, setOpeningWorkspace] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [invitationInput, setInvitationInput] = useState("");
-  const [invitationError, setInvitationError] = useState("");
-  const [submittingInvitation, setSubmittingInvitation] = useState(false);
-  const hasWorkspaces = availableGroups.length > 0;
+  const hasNamespaces = availableGroups.length > 0;
 
   const resolveWorkspaceMember = useCallback(async (groupId: string) => {
     const identityResponse = await new GroupApiDataSource().resolveCurrentMemberIdentity(
@@ -166,7 +142,7 @@ export default function ChatTab({
 
     if (identityResponse.error || !identityResponse.data) {
       throw new Error(
-        identityResponse.error?.message || "Failed to resolve workspace identity",
+        identityResponse.error?.message || "Failed to resolve namespace identity",
       );
     }
 
@@ -180,9 +156,7 @@ export default function ChatTab({
   }, []);
 
   const fetchGroups = useCallback(async () => {
-    if (!getAppEndpointKey()) {
-      return;
-    }
+    if (!getAppEndpointKey()) return;
 
     setFetchingGroups(true);
     setError("");
@@ -190,20 +164,19 @@ export default function ChatTab({
     try {
       const response = await new GroupApiDataSource().listGroups();
       if (response.data && response.data.length > 0) {
-        const groupsWithStoredAliases = response.data.map((group) => ({
+        const groups = response.data.map((group) => ({
           ...group,
           alias: group.alias?.trim() || getStoredGroupAlias(group.groupId) || undefined,
         }));
-        setAvailableGroups(groupsWithStoredAliases);
+        setAvailableGroups(groups);
         const storedGroupId = getGroupId();
-        const preferredGroup =
-          groupsWithStoredAliases.find((group) => group.groupId === storedGroupId) ??
-          groupsWithStoredAliases[0];
-        setSelectedGroupId(preferredGroup.groupId);
+        const preferred =
+          groups.find((g) => g.groupId === storedGroupId) ?? groups[0];
+        setSelectedGroupId(preferred.groupId);
       } else if (response.error) {
         setAvailableGroups([]);
         setSelectedGroupId("");
-        setError(response.error.message || "Failed to fetch workspaces");
+        setError(response.error.message || "Failed to load namespaces");
       } else {
         setAvailableGroups([]);
         setSelectedGroupId("");
@@ -211,7 +184,7 @@ export default function ChatTab({
     } catch {
       setAvailableGroups([]);
       setSelectedGroupId("");
-      setError("Failed to fetch workspaces from node");
+      setError("Could not reach node — is it running?");
     } finally {
       setFetchingGroups(false);
     }
@@ -224,70 +197,68 @@ export default function ChatTab({
   }, [fetchGroups, isAuthenticated, isConfigSet]);
 
   useEffect(() => {
-    if (!selectedGroupId) {
-      return;
-    }
+    if (!selectedGroupId) return;
 
     let cancelled = false;
 
     void (async () => {
       try {
-        const { memberIdentity, memberAlias } = await resolveWorkspaceMember(
-          selectedGroupId,
-        );
-
-        if (cancelled) {
-          return;
-        }
-
+        const { memberIdentity, memberAlias } = await resolveWorkspaceMember(selectedGroupId);
+        if (cancelled) return;
         setGroupMemberIdentity(selectedGroupId, memberIdentity);
         setMessengerName(memberAlias || getMessengerDisplayName());
       } catch {
-        if (!cancelled) {
-          setMessengerName(getMessengerDisplayName());
-        }
+        if (!cancelled) setMessengerName(getMessengerDisplayName());
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [resolveWorkspaceMember, selectedGroupId]);
+
+  // Auto-enter when there is exactly one namespace and a name is already stored.
+  useEffect(() => {
+    if (
+      availableGroups.length === 1 &&
+      !fetchingGroups &&
+      messengerName.trim() &&
+      selectedGroupId &&
+      !openingWorkspace
+    ) {
+      void openWorkspace(selectedGroupId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableGroups, fetchingGroups]);
 
   const openWorkspace = useCallback(
     async (groupId: string) => {
-      const trimmedMessengerName = messengerName.trim();
-
-      if (!groupId || !trimmedMessengerName) {
-        return;
-      }
+      const trimmedName = messengerName.trim();
+      if (!groupId || !trimmedName) return;
 
       setOpeningWorkspace(true);
       setError("");
-      setSuccess("");
 
       try {
         const groupApi = new GroupApiDataSource();
         const { memberIdentity } = await resolveWorkspaceMember(groupId);
-        const aliasResponse = await groupApi.setMemberAlias(groupId, memberIdentity, {
-          alias: trimmedMessengerName,
-        });
-        if (aliasResponse.error) {
-          throw new Error(aliasResponse.error.message || "Failed to save workspace alias");
+
+        try {
+          const aliasResponse = await groupApi.setMemberAlias(groupId, memberIdentity, {
+            alias: trimmedName,
+          });
+          if (aliasResponse.error) {
+            console.warn("setMemberAlias failed (non-fatal):", aliasResponse.error.message);
+          }
+        } catch {
+          console.warn("setMemberAlias threw (non-fatal)");
         }
 
         setGroupId(groupId);
-        setMessengerDisplayName(trimmedMessengerName);
+        setMessengerDisplayName(trimmedName);
         setGroupMemberIdentity(groupId, memberIdentity);
         clearStoredSession();
-        setSuccess("Workspace selected. Opening Browse Channels...");
         navigate("/");
-      } catch (workspaceError) {
-        setError(
-          workspaceError instanceof Error
-            ? workspaceError.message
-            : "Failed to open workspace",
-        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to enter namespace");
       } finally {
         setOpeningWorkspace(false);
       }
@@ -295,211 +266,77 @@ export default function ChatTab({
     [messengerName, navigate, resolveWorkspaceMember],
   );
 
-  const handleWorkspaceChange = async (
-    event: ChangeEvent<HTMLSelectElement>,
-  ) => {
-    const groupId = event.target.value;
-    setSelectedGroupId(groupId);
-    setSuccess(groupId ? "Workspace selected. Press Join chat to continue." : "");
+  const handleNamespaceChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedGroupId(event.target.value);
     setError("");
   };
 
-  const handleUseInvitation = (event: FormEvent) => {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
-    setInvitationError("");
-    setSubmittingInvitation(true);
-
-    const payload = parseInvitationInput(invitationInput);
-    if (!payload) {
-      setInvitationError(
-        "Invalid invitation. Paste a full invite URL or the encoded invitation.",
-      );
-      setSubmittingInvitation(false);
-      return;
-    }
-
-    void (async () => {
-      try {
-        const parsedInvitation = parseGroupInvitationPayload(payload);
-        if (!parsedInvitation) {
-          setInvitationError("This invitation is not a workspace invitation.");
-          return;
-        }
-
-        const joinResponse = await new GroupApiDataSource().joinGroup({
-          invitation: parsedInvitation.invitation,
-          groupAlias: parsedInvitation.groupAlias,
-        });
-        if (joinResponse.error || !joinResponse.data) {
-          setInvitationError(
-            joinResponse.error?.message || "Failed to join workspace",
-          );
-          return;
-        }
-
-        setGroupMemberIdentity(
-          joinResponse.data.groupId,
-          joinResponse.data.memberIdentity,
-        );
-        setInvitationInput("");
-        const previousGroups = availableGroups;
-        const joinedGroupAlias = parsedInvitation.groupAlias?.trim() || undefined;
-        if (joinedGroupAlias) {
-          setStoredGroupAlias(joinResponse.data.groupId, joinedGroupAlias);
-        }
-        await fetchGroups();
-        setAvailableGroups((currentGroups) => {
-          const groupsToKeep =
-            currentGroups.length > 0 ? currentGroups : previousGroups;
-          const existingGroup = groupsToKeep.find(
-            (group) => group.groupId === joinResponse.data.groupId,
-          );
-
-          if (existingGroup) {
-            if (existingGroup.alias?.trim() || !joinedGroupAlias) {
-              return groupsToKeep;
-            }
-
-            return groupsToKeep.map((group) =>
-              group.groupId === joinResponse.data.groupId
-                ? { ...group, alias: joinedGroupAlias }
-                : group,
-            );
-          }
-
-          return [
-            ...groupsToKeep,
-            buildJoinedWorkspaceFallback(
-              joinResponse.data.groupId,
-              joinedGroupAlias,
-            ),
-          ];
-        });
-        setSelectedGroupId(joinResponse.data.groupId);
-        setError("");
-        onInvitationSaved?.();
-        setSuccess("Workspace joined. Press Join chat to enter this workspace.");
-      } catch {
-        setInvitationError("Failed to join workspace from invitation.");
-      } finally {
-        setSubmittingInvitation(false);
-      }
-    })();
-  };
-
-  if (!getAppEndpointKey()) {
-    return null;
-  }
+  if (!getAppEndpointKey()) return null;
 
   return (
     <TabContent>
       <Form onSubmit={(event) => event.preventDefault()}>
-        <InputGroup>
-          <Label>Workspace</Label>
-          <Select
-            id="workspaceSelect"
-            value={selectedGroupId}
-            onChange={(event) => {
-              void handleWorkspaceChange(event);
-            }}
-            disabled={fetchingGroups || openingWorkspace || availableGroups.length === 0}
-          >
-            <option value="">
-              {fetchingGroups
-                ? "Loading workspaces..."
-                : availableGroups.length === 0
-                  ? "No workspaces available"
-                  : "Select a workspace..."}
-            </option>
-            {availableGroups.map((group) => (
-              <option key={group.groupId} value={group.groupId}>
-                {getWorkspaceLabel(group)}
-              </option>
-            ))}
-          </Select>
-          <Note>
-            {openingWorkspace
-              ? "Opening workspace..."
-              : hasWorkspaces
-                ? "Select a workspace, create one, or paste an invitation to join another workspace. Channel identity is resolved later when you join a channel."
-                : "Create a new workspace or join one with an invitation."}
-          </Note>
-        </InputGroup>
+        {hasNamespaces && (
+          <InputGroup>
+            <Label>Namespace</Label>
+            <Select
+              id="namespaceSelect"
+              value={selectedGroupId}
+              onChange={handleNamespaceChange}
+              disabled={fetchingGroups || openingWorkspace}
+            >
+              {availableGroups.length > 1 && (
+                <option value="">Select a namespace…</option>
+              )}
+              {availableGroups.map((group) => (
+                <option key={group.groupId} value={group.groupId}>
+                  {getWorkspaceLabel(group)}
+                </option>
+              ))}
+            </Select>
+          </InputGroup>
+        )}
 
-        <InputGroup>
-          <Label>Your name</Label>
-          <Input
-            id="messengerNameInput"
-            type="text"
-            placeholder="Enter your name"
-            value={messengerName}
-            onChange={(event) => {
-              setMessengerName(event.target.value);
-              setError("");
-            }}
-            disabled={openingWorkspace}
-          />
-          <Note>
-            This name will be used across the app and auto-applied in every
-            channel or DM you join.
+        {!hasNamespaces && !fetchingGroups && (
+          <Note style={{ textAlign: "center", marginBottom: "0.5rem" }}>
+            No namespaces found on this node. Create one to get started.
           </Note>
-        </InputGroup>
+        )}
 
-        {hasWorkspaces && (
+        {fetchingGroups && (
+          <Note style={{ textAlign: "center" }}>Loading…</Note>
+        )}
+
+        {hasNamespaces && (
+          <InputGroup>
+            <Label>Your name</Label>
+            <Input
+              id="messengerNameInput"
+              type="text"
+              placeholder="Enter your name"
+              value={messengerName}
+              onChange={(event) => {
+                setMessengerName(event.target.value);
+                setError("");
+              }}
+              disabled={openingWorkspace}
+            />
+          </InputGroup>
+        )}
+
+        {hasNamespaces && (
           <Button
             type="button"
             variant="primary"
             style={{ width: "100%", marginTop: "0.5rem" }}
-            onClick={() => {
-              void openWorkspace(selectedGroupId);
-            }}
-            disabled={
-              !selectedGroupId ||
-              !messengerName.trim() ||
-              fetchingGroups ||
-              openingWorkspace
-            }
+            onClick={() => { void openWorkspace(selectedGroupId); }}
+            disabled={!selectedGroupId || !messengerName.trim() || fetchingGroups || openingWorkspace}
           >
-            {openingWorkspace ? "Joining..." : "Join chat"}
+            {openingWorkspace ? "Entering…" : "Enter"}
           </Button>
         )}
 
-        <InputGroup>
-          <Label>Join workspace with invitation</Label>
-          <Note>
-            {hasWorkspaces
-              ? "Paste a workspace invite link or invitation payload to join another workspace."
-              : "Paste a workspace invite link or invitation payload."}
-          </Note>
-          <Input
-            id="invitationInput"
-            type="text"
-            placeholder="https://...?invitation=... or calimero://curb/join?invitation=... or paste encoded"
-            value={invitationInput}
-            onChange={(event) => {
-              setInvitationInput(event.target.value);
-              setInvitationError("");
-            }}
-            disabled={submittingInvitation}
-          />
-          <Button
-            type="button"
-            variant="primary"
-            style={{ width: "100%", marginTop: "0.5rem" }}
-            onClick={handleUseInvitation}
-            disabled={submittingInvitation || !invitationInput.trim()}
-          >
-            {submittingInvitation ? "Using invitation..." : "Use invitation"}
-          </Button>
-          {invitationError && (
-            <Message type="error">{invitationError}</Message>
-          )}
-        </InputGroup>
-
         {error && <Message type="error">{error}</Message>}
-        {success && <Message type="success">{success}</Message>}
       </Form>
     </TabContent>
   );

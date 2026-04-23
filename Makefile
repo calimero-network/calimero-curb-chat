@@ -1,5 +1,5 @@
-.PHONY: help setup install build dev test unit e2e workflows \
-        logic-build app-install app-build app-typecheck app-lint clean
+.PHONY: help setup install build dev dev-node test unit e2e workflows ci ci-stop \
+        logic-build logic-js-build app-install app-build app-typecheck app-lint clean
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 
@@ -9,6 +9,7 @@ help:
 	@echo ""
 	@echo "  Setup"
 	@echo "    setup          Check prereqs, build logic, install app deps"
+	@echo "    dev-node       Start a single local merod node for dev"
 	@echo "    install        Install frontend dependencies (pnpm)"
 	@echo ""
 	@echo "  Build"
@@ -27,6 +28,8 @@ help:
 	@echo "    test           Run unit tests + e2e tests"
 	@echo "    unit           Vitest unit tests"
 	@echo "    e2e            Playwright e2e tests"
+	@echo "    ci             Build WASM, start 2 nodes, run all RPC tests, stop nodes"
+	@echo "    ci-stop        Stop nodes started by 'make ci' or setup-nodes.sh"
 	@echo "    workflows      merobox workflow tests (requires merobox)"
 	@echo ""
 	@echo "  Other"
@@ -38,12 +41,18 @@ help:
 setup:
 	@bash scripts/setup.sh
 
+dev-node:
+	@bash scripts/dev-node.sh
+
 install: app-install
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 
 logic-build:
 	cd logic && ./build.sh
+
+logic-js-build:
+	cd logic-js && bash build.sh
 
 app-install:
 	cd app && pnpm install
@@ -75,6 +84,17 @@ e2e:
 	cd app && pnpm exec playwright test
 
 test: unit e2e
+
+# Build WASM, spin up 2 nodes, run all RPC+admin tests, tear down.
+# Nodes are stopped even if tests fail (trap EXIT in ci.sh).
+ci:
+	@bash scripts/ci.sh
+
+ci-no-build:
+	@bash scripts/ci.sh --no-build
+
+ci-stop:
+	@bash scripts/setup-nodes.sh --stop
 
 WORKFLOW_FILES := \
 	workflows/simple-invitation.yml \

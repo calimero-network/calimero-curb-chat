@@ -126,14 +126,14 @@ test.describe("Authenticated state", () => {
     page,
   }) => {
     await page.goto("/login");
-    await expect(page.getByText("Welcome to Calimero Chat")).toBeVisible({
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
       timeout: 10_000,
     });
   });
 
   test("Logout button is present when authenticated", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByText("Welcome to Calimero Chat")).toBeVisible({
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.getByRole("button", { name: /logout/i })).toBeVisible();
@@ -141,7 +141,7 @@ test.describe("Authenticated state", () => {
 
   test("Logout clears auth tokens from localStorage", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByText("Welcome to Calimero Chat")).toBeVisible({
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
       timeout: 10_000,
     });
 
@@ -172,7 +172,7 @@ test.describe("Session expiry", () => {
     });
     await mockNodeApi(page);
     await page.goto("/login");
-    await expect(page.getByText("Welcome to Calimero Chat")).toBeVisible({
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
       timeout: 10_000,
     });
 
