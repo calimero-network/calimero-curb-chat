@@ -126,10 +126,6 @@ test.describe("group contexts", () => {
     expect(found).toBeTruthy();
   });
 
-  test.skip("PUT visibility endpoint not available in this node version", async () => {
-    // The /admin-api/groups/:id/contexts/:ctx/visibility endpoint returns 404.
-    // Skip until the node API exposes it.
-  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,11 +188,3 @@ test.describe("context list", () => {
 // Auth token refresh
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("auth", () => {
-  test.beforeAll(requireEnv);
-
-  test.skip("POST /auth/token/refresh not available in this node version", async () => {
-    // /auth/token/refresh returns 404. Token refresh is not exposed as a standalone
-    // endpoint in this version — skip until the node API adds it.
-  });
-});
