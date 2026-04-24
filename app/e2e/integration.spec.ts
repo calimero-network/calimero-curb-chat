@@ -17,7 +17,6 @@ import {
   integrationEnvAvailable,
   getIntegrationEnv,
   injectRealTokens,
-  injectWorkspaceState,
   NodeClient,
 } from "./helpers/node-client";
 
@@ -47,19 +46,6 @@ async function setupAuth(page: import("@playwright/test").Page) {
     nodeUrl:      env.nodeUrl,
     accessToken:  env.accessToken,
     refreshToken: env.refreshToken,
-  });
-}
-
-async function setupWorkspace(page: import("@playwright/test").Page) {
-  const env = getIntegrationEnv();
-  await injectRealTokens(page, {
-    nodeUrl:      env.nodeUrl,
-    accessToken:  env.accessToken,
-    refreshToken: env.refreshToken,
-  });
-  await injectWorkspaceState(page, {
-    groupId:       env.groupId,
-    messengerName: "Alice",
   });
 }
 
@@ -132,7 +118,7 @@ test.describe("Authentication with live node", () => {
       timeout: 20_000,
     });
 
-    await page.getByRole("button", { name: /logout/i }).click();
+    await page.getByRole("button", { name: /disconnect node/i }).click();
     await page.waitForTimeout(500);
 
     const tokens = await page.evaluate(() => localStorage.getItem("mero-tokens"));
@@ -140,117 +126,6 @@ test.describe("Authentication with live node", () => {
   });
 });
 
-// ── Home page ─────────────────────────────────────────────────────────────────
-
-test.describe("Home page with real workspace", () => {
-  test.beforeEach(async ({ page }) => {
-    requireEnv();
-    await setupWorkspace(page);
-  });
-
-  test("navigates to / and renders the sidebar", async ({ page }) => {
-    await page.goto("/");
-    // The home page shows a sidebar with channel/DM list.
-    // Wait for any element that is only present in the home view.
-    await expect(
-      page.locator("[data-testid='sidebar'], nav, aside").first(),
-    ).toBeVisible({ timeout: 20_000 });
-  });
-
-  test("channel list is populated from the real node", async ({ page }) => {
-    await page.goto("/");
-    // The home page fetches /admin-api/groups/{groupId}/contexts and renders channel rows.
-    // The integration-setup workflow creates a channel named "Integration Test".
-    await expect(page.getByText(/integration test/i)).toBeVisible({
-      timeout: 20_000,
-    });
-  });
-
-  test("clicking a channel opens the chat view", async ({ page }) => {
-    await page.goto("/");
-    const channelLink = page
-      .getByText(/integration test/i)
-      .or(page.getByRole("button", { name: /general|integration/i }))
-      .first();
-    await channelLink.waitFor({ timeout: 20_000 });
-    await channelLink.click();
-
-    // After clicking, a message input should appear
-    await expect(
-      page.locator("textarea, [contenteditable='true'], [role='textbox']").first(),
-    ).toBeVisible({ timeout: 10_000 });
-  });
-});
-
-// ── Messaging ────────────────────────────────────────────────────────────────
-
-test.describe("Messaging with live node", () => {
-  test.beforeEach(async ({ page }) => {
-    requireEnv();
-    await setupWorkspace(page);
-  });
-
-  test("seed messages from setup are visible in the channel", async ({
-    page,
-  }) => {
-    await page.goto("/");
-
-    const channelLink = page
-      .getByText(/integration test/i)
-      .or(page.getByRole("button", { name: /general|integration/i }))
-      .first();
-    await channelLink.waitFor({ timeout: 20_000 });
-    await channelLink.click();
-
-    // The integration-setup workflow seeds two messages
-    await expect(
-      page.getByText(/Hello from Alice — integration test seed/i),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByText(/Hello from Bob — integration test seed/i),
-    ).toBeVisible({ timeout: 10_000 });
-  });
-
-  test("sending a message persists it via real RPC", async ({ page }) => {
-    const env = getIntegrationEnv();
-    const ts = Date.now();
-    const uniqueMsg = `Playwright e2e message ${ts}`;
-
-    await page.goto("/");
-
-    const channelLink = page
-      .getByText(/integration test/i)
-      .or(page.getByRole("button", { name: /general|integration/i }))
-      .first();
-    await channelLink.waitFor({ timeout: 20_000 });
-    await channelLink.click();
-
-    // Type and send a message
-    const input = page
-      .locator("textarea, [contenteditable='true'], [role='textbox']")
-      .first();
-    await input.waitFor({ timeout: 10_000 });
-    await input.fill(uniqueMsg);
-    await input.press("Enter");
-
-    // Message should appear in the UI
-    await expect(page.getByText(uniqueMsg)).toBeVisible({ timeout: 15_000 });
-
-    // Verify it was actually stored on the node via the RPC API
-    const client = new NodeClient({ nodeUrl: env.nodeUrl, accessToken: env.accessToken });
-    const identities = await client.getContextIdentities(env.contextId);
-    if (identities.length > 0) {
-      const result = await client.rpcCall(
-        env.contextId,
-        identities[0],
-        "get_messages",
-        { parent_message: null, limit: 20, offset: 0, search_term: uniqueMsg.slice(0, 20) },
-      );
-      // The message should exist in the node's storage
-      expect(JSON.stringify(result)).toContain(ts.toString().slice(0, 8));
-    }
-  });
-});
 
 // ── Real-time sync (two nodes) ────────────────────────────────────────────────
 

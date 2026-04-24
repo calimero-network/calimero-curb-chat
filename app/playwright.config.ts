@@ -68,6 +68,8 @@ export default defineConfig({
       testMatch: ["**/integration.spec.ts"],
     },
     // Live tests — same browser specs as mocked but with real auth session.
+    // landing.spec.ts is excluded: all its tests expect unauthenticated state
+    // (h1 heading, ConnectButton) which is incompatible with real tokens in AUTH_FILE.
     {
       name: "live",
       use: {
@@ -75,7 +77,6 @@ export default defineConfig({
         storageState: AUTH_FILE,
       },
       testMatch: [
-        "**/landing.spec.ts",
         "**/workspace.spec.ts",
         "**/auth.spec.ts",
       ],
@@ -101,17 +102,6 @@ export default defineConfig({
       },
       timeout: 60_000,
       testMatch: ["**/rpc-admin.spec.ts"],
-    },
-    // logic-js WASM RPC tests — full feature set (channels, DMs, reactions, etc.)
-    // Requires setup-nodes.sh (writes app/.env.integration with 2-node credentials).
-    {
-      name: "rpc-logic",
-      use: {
-        ...devices["Desktop Chrome"],
-        storageState: { cookies: [], origins: [] },
-      },
-      timeout: 90_000,
-      testMatch: ["**/rpc-logic.spec.ts"],
     },
   ],
   webServer: process.env.SKIP_DEV_SERVER

@@ -120,10 +120,16 @@ export class NodeClient {
 
   async listContexts(): Promise<ContextEntry[]> {
     const data = await this.get<ContextEntry[] | { contexts?: ContextEntry[]; items?: ContextEntry[] }>("/contexts");
-    if (Array.isArray(data)) return data;
-    return (data as { contexts?: ContextEntry[] }).contexts
-      ?? (data as { items?: ContextEntry[] }).items
-      ?? [];
+    const raw = Array.isArray(data)
+      ? data
+      : ((data as { contexts?: ContextEntry[] }).contexts
+        ?? (data as { items?: ContextEntry[] }).items
+        ?? []);
+    // Normalize id → contextId in case the node returns {id} instead of {contextId}
+    return raw.map((c) => ({
+      ...c,
+      contextId: c.contextId ?? (c as unknown as { id?: string }).id ?? "",
+    }));
   }
 
   async getContextIdentities(contextId: string): Promise<string[]> {
@@ -134,18 +140,36 @@ export class NodeClient {
     return (data as { identities?: string[] }).identities ?? [];
   }
 
-  /** Make a JSON-RPC call to a context method via the node execute endpoint. */
+  /** Make a JSON-RPC call to a context method via the node's /jsonrpc endpoint. */
   async rpcCall(
     contextId: string,
     executorPublicKey: string,
     method: string,
     args: Record<string, unknown> = {},
   ): Promise<RpcResult> {
-    return this.post<RpcResult>(`/contexts/${contextId}/execute`, {
-      method,
-      args_json: JSON.stringify(args),
-      executor_public_key: executorPublicKey,
+    const payload = {
+      jsonrpc: "2.0",
+      id: Math.floor(Math.random() * 1_000_000),
+      method: "execute",
+      params: {
+        contextId,
+        method,
+        argsJson: args,
+        executorPublicKey,
+      },
+    };
+    const res = await fetch(`${this.opts.nodeUrl}/jsonrpc`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify(payload),
     });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`POST /jsonrpc → ${res.status}: ${text}`);
+    }
+    const body = await res.json() as { result?: RpcResult; error?: unknown };
+    if (body.error) throw new Error(JSON.stringify(body.error));
+    return body.result ?? {};
   }
 }
 

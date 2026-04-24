@@ -18,7 +18,11 @@
     "test": "vitest run",
     "preview": "vite preview",
     "prettier": "prettier --check 'src/**/*.{js,jsx,ts,tsx,json}'",
-    "prettier:write": "prettier --write 'src/**/*.{js,jsx,ts,tsx,json}'"
+    "prettier:write": "prettier --write 'src/**/*.{js,jsx,ts,tsx,json}'",
+    "e2e": "playwright test --project=mocked",
+    "e2e:live": "../scripts/setup-nodes.sh --restart && playwright test --project=mocked --project=live; ../scripts/setup-nodes.sh --stop",
+    "e2e:nodes": "../scripts/setup-nodes.sh --restart && playwright test --project=rpc --project=rpc-admin --project=integration; ../scripts/setup-nodes.sh --stop",
+    "e2e:all": "../scripts/setup-nodes.sh --restart && playwright test; ../scripts/setup-nodes.sh --stop"
   },
   "dependencies": {
     "@braintree/sanitize-url": "^7.1.1",

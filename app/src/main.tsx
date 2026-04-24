@@ -10,6 +10,7 @@ import {
   setAccessToken,
   setRefreshToken,
 } from "@calimero-network/calimero-client";
+import bs58 from "bs58";
 import { MeroProvider, AppMode as MeroAppMode } from "@calimero-network/mero-react";
 import "@calimero-network/mero-ui/styles.css";
 import { ToastProvider } from "@calimero-network/mero-ui";
@@ -56,15 +57,31 @@ import 'react-photo-view/dist/react-photo-view.css';
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("invitation");
     if (!raw) return;
-    let decoded: string;
-    try {
-      const base64 = raw.replace(/-/g, "+").replace(/_/g, "/");
-      const pad = base64.length % 4;
-      const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
-      decoded = decodeURIComponent(escape(atob(padded)));
-    } catch {
-      try { decoded = decodeURIComponent(raw); } catch { return; }
+    const trimmed = raw.trim();
+    let decoded: string | undefined;
+
+    // Try base58 first (new format)
+    if (/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/.test(trimmed)) {
+      try {
+        decoded = new TextDecoder().decode(bs58.decode(trimmed));
+      } catch { /* fall through */ }
     }
+
+    // Legacy: base64url
+    if (!decoded && /^[A-Za-z0-9_-]+$/.test(trimmed)) {
+      try {
+        const base64 = trimmed.replace(/-/g, "+").replace(/_/g, "/");
+        const pad = base64.length % 4;
+        const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
+        decoded = decodeURIComponent(escape(atob(padded)));
+      } catch { /* fall through */ }
+    }
+
+    // Legacy: percent-encoded JSON
+    if (!decoded) {
+      try { decoded = decodeURIComponent(trimmed); } catch { return; }
+    }
+
     if (decoded) localStorage.setItem("curb-invitation-payload", decoded);
     params.delete("invitation");
     const qs = params.toString();

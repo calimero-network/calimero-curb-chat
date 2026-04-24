@@ -72,6 +72,17 @@ async function mockNodeApi(page: import("@playwright/test").Page) {
 // ── Unauthenticated state ─────────────────────────────────────────────────────
 
 test.describe("Unauthenticated state", () => {
+  // In the live project, AUTH_FILE injects real tokens into the browser context.
+  // Clear them via addInitScript so these unauthenticated tests behave identically
+  // in both mocked and live projects.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      ["mero:node_url", "mero-tokens", "app-url", "access-token", "refresh-token"].forEach(
+        (k) => localStorage.removeItem(k),
+      );
+    });
+  });
+
   test("/ redirects to /login", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
@@ -208,27 +219,35 @@ test.describe("Session expiry", () => {
 // ── Invitation URL handling ───────────────────────────────────────────────────
 
 test.describe("Invitation URL parameter", () => {
+  // Clear auth tokens so the app loads in unauthenticated state — real tokens
+  // (live project) can cause auth-triggered navigations that clear localStorage
+  // before the test can read it.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      ["mero:node_url", "mero-tokens", "app-url", "access-token", "refresh-token"].forEach(
+        (k) => localStorage.removeItem(k),
+      );
+    });
+  });
+
   test("?invitation= parameter is saved to localStorage and removed from URL", async ({
     page,
   }) => {
-    const INVITATION_PAYLOAD = "base64encodedInvitationPayloadHere";
+    // base58-encoded '{"invitation":{"test":"data"},"inviterSignature":"test-sig"}'
+    const BASE58_PAYLOAD = "Npc3sGjF3dgRqEWTAd99AGgu7EA54vdyUyVoaamw3G9GLDJnnA8gxfGbU9yTyW4YCpFMjTpXXo8iC8L2ZJ";
+    const DECODED_JSON = '{"invitation":{"test":"data"},"inviterSignature":"test-sig"}';
 
-    await page.goto(`/?invitation=${INVITATION_PAYLOAD}`);
+    await page.goto(`/?invitation=${BASE58_PAYLOAD}`);
 
-    // App.tsx strips the param from the URL and stores it
+    // main.tsx strips the param from the URL before React mounts
     await page.waitForFunction(
       () => !window.location.search.includes("invitation"),
       { timeout: 10_000 },
     );
 
-    const _saved = await page.evaluate(() =>
-      localStorage.getItem("pending-invitation"),
-    );
-
-    // The key name might vary; check the URL was cleaned regardless
     await expect(page).not.toHaveURL(/invitation=/);
 
-    // Invitation must have been persisted somewhere in localStorage
+    // Invitation must be persisted as decoded JSON in localStorage
     const allKeys = await page.evaluate(() => Object.keys(localStorage));
     const invitationKey = allKeys.find(
       (k) =>
@@ -236,12 +255,40 @@ test.describe("Invitation URL parameter", () => {
         k.toLowerCase().includes("invite"),
     );
     expect(invitationKey).toBeTruthy();
-    // The saved value includes the invitation payload
     const savedValue = await page.evaluate(
       (k) => localStorage.getItem(k),
       invitationKey!,
     );
-    expect(savedValue).toContain(INVITATION_PAYLOAD);
+    // The stored value should be the decoded JSON, not the raw base58 string
+    expect(savedValue).toBe(DECODED_JSON);
+  });
+
+  test("legacy base64url invitation is still accepted", async ({ page }) => {
+    // base64url of '{"invitation":{"legacy":"true"},"inviterSignature":"old"}'
+    const B64URL_PAYLOAD = "eyJpbnZpdGF0aW9uIjp7ImxlZ2FjeSI6InRydWUifSwiaW52aXRlclNpZ25hdHVyZSI6Im9sZCJ9";
+    const LEGACY_JSON = '{"invitation":{"legacy":"true"},"inviterSignature":"old"}';
+
+    await page.goto(`/?invitation=${B64URL_PAYLOAD}`);
+
+    await page.waitForFunction(
+      () => !window.location.search.includes("invitation"),
+      { timeout: 10_000 },
+    );
+
+    await expect(page).not.toHaveURL(/invitation=/);
+
+    const allKeys = await page.evaluate(() => Object.keys(localStorage));
+    const invitationKey = allKeys.find(
+      (k) =>
+        k.toLowerCase().includes("invitation") ||
+        k.toLowerCase().includes("invite"),
+    );
+    expect(invitationKey).toBeTruthy();
+    const savedValue = await page.evaluate(
+      (k) => localStorage.getItem(k),
+      invitationKey!,
+    );
+    expect(savedValue).toBe(LEGACY_JSON);
   });
 });
 

@@ -32,8 +32,11 @@ function isTokenExpired(raw: string): boolean {
   try {
     const token = JSON.parse(raw) as string;
     const payload = token.split(".")[1];
+    // JWT uses base64url (- and _ instead of + and /), must convert before decode
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "==".slice(0, (4 - (base64.length % 4)) % 4);
     const decoded = JSON.parse(
-      Buffer.from(payload, "base64").toString("utf-8"),
+      Buffer.from(padded, "base64").toString("utf-8"),
     ) as { exp?: number };
     return !decoded.exp || decoded.exp * 1000 < Date.now();
   } catch {
@@ -75,7 +78,6 @@ export default async function globalSetup(_config: FullConfig) {
   const skipReasons = [
     process.env.SKIP_DEV_SERVER && "SKIP_DEV_SERVER",
     process.env.INTEGRATION_MODE && "INTEGRATION_MODE",
-    !process.env.LIVE_AUTH && "LIVE_AUTH not set",
   ].filter(Boolean);
 
   if (skipReasons.length) {

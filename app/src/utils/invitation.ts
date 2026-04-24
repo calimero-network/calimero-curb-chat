@@ -1,3 +1,4 @@
+import bs58 from "bs58";
 import type { SignedGroupOpenInvitation } from "../api/groupApi";
 
 /**
@@ -90,19 +91,32 @@ export function parseGroupInvitationPayload(
   }
 }
 
-/** Base64url encode (URL-safe base64, no padding). Shorter and cleaner than percent-encoded JSON. */
+const BASE58_ALPHABET = /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/;
+
+/** Base58 encode a JSON payload string. Compact and copy-friendly (no +/= chars). */
 export function encodeInvitationPayload(payload: string): string {
-  const base64 = btoa(unescape(encodeURIComponent(payload)));
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return bs58.encode(new TextEncoder().encode(payload));
 }
 
 /**
- * Decode invitation payload from base64url (or legacy percent-encoded JSON).
- * Returns the raw JSON payload string, or null on failure.
+ * Decode an invitation payload. Tries base58 first, then legacy base64url, then
+ * percent-encoded JSON, so old invitations still work.
+ * Returns the raw JSON string, or null on failure.
  */
 export function decodeInvitationPayload(encoded: string): string | null {
   if (!encoded || typeof encoded !== "string") return null;
   const trimmed = encoded.trim();
+
+  // Try base58
+  if (BASE58_ALPHABET.test(trimmed)) {
+    try {
+      return new TextDecoder().decode(bs58.decode(trimmed));
+    } catch {
+      // fall through
+    }
+  }
+
+  // Legacy: base64url
   if (/^[A-Za-z0-9_-]+$/.test(trimmed)) {
     try {
       const base64 = trimmed.replace(/-/g, "+").replace(/_/g, "/");
@@ -110,9 +124,11 @@ export function decodeInvitationPayload(encoded: string): string | null {
       const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
       return decodeURIComponent(escape(atob(padded)));
     } catch {
-      // fall through to legacy
+      // fall through
     }
   }
+
+  // Legacy: percent-encoded JSON
   try {
     return decodeURIComponent(trimmed);
   } catch {

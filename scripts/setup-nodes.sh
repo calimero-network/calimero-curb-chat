@@ -6,6 +6,7 @@
 #   ./scripts/setup-nodes.sh --merobox    # use merobox to manage nodes instead
 #   ./scripts/setup-nodes.sh --stop       # kill running nodes, remove env file
 #   ./scripts/setup-nodes.sh --clean      # --stop + delete node home directories
+#   ./scripts/setup-nodes.sh --restart    # --clean then start fresh (used by pnpm e2e:*)
 #   ./scripts/setup-nodes.sh --help
 #
 # Credentials (override via env):
@@ -38,12 +39,14 @@ ENV_OUT="$REPO_ROOT/app/.env.integration"
 USE_MEROBOX=false
 STOP=false
 CLEAN=false
+RESTART=false
 
 for arg in "$@"; do
   case "$arg" in
-    --merobox)  USE_MEROBOX=true ;;
-    --stop)     STOP=true ;;
-    --clean)    CLEAN=true; STOP=true ;;
+    --merobox)   USE_MEROBOX=true ;;
+    --stop)      STOP=true ;;
+    --clean)     CLEAN=true; STOP=true ;;
+    --restart)   CLEAN=true; STOP=true; RESTART=true ;;
     --help|-h)
       sed -n '3,12p' "${BASH_SOURCE[0]}"
       exit 0
@@ -208,8 +211,11 @@ if $STOP; then
     yellow "Removed $NODE_1_HOME  $NODE_2_HOME"
   fi
   rm -f "$ENV_OUT" && yellow "Removed $ENV_OUT"
-  green "Done."
-  exit 0
+  if ! $RESTART; then
+    green "Done."
+    exit 0
+  fi
+  green "Clean done — starting fresh nodes…"
 fi
 
 # ── Prerequisites ─────────────────────────────────────────────────────────────
