@@ -20,7 +20,6 @@ import {
   envAvailable,
   twoNodeEnvAvailable,
   getEnv,
-  RpcCallError,
 } from "./helpers/rpc-client";
 
 // ── Skip entire suite if node not configured ─────────────────────────────────

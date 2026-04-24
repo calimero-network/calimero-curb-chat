@@ -182,20 +182,6 @@ function ChatContainer({
     membersListRef.current = membersList;
   }, [membersList]);
 
-  const computeReaction = useCallback(
-    (message: CurbMessage, reaction: string, username: string) => {
-      const accounts = message.reactions?.[reaction] ?? [];
-      let update;
-      if (accounts.includes(username)) {
-        update = accounts.filter((a: string) => a !== username);
-      } else {
-        update = [...accounts, username];
-      }
-      return { reactions: { ...message.reactions, [reaction]: update } };
-    },
-    []
-  );
-
   const handleReaction = useCallback(
     async (message: CurbMessage, reaction: string, isThread: boolean) => {
       const isDM = activeChatRef.current?.type === "direct_message";
@@ -238,7 +224,7 @@ function ChatContainer({
         log.error("ChatContainer", "Error updating reaction", error);
       }
     },
-    [computeReaction]
+    []
   );
 
   const getIconFromCache = useCallback(

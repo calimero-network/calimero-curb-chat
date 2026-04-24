@@ -14,7 +14,6 @@
 import { test, expect } from "@playwright/test";
 import {
   adminGet,
-  adminPost,
   envAvailable,
   getEnv,
 } from "./helpers/rpc-client";
