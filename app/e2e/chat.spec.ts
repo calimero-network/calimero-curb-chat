@@ -45,6 +45,9 @@ async function setupApp(page: Page) {
       const serialized = JSON.stringify(identities);
       localStorage.setItem("calimero_group_member_identities", serialized);
       sessionStorage.setItem("calimero_group_member_identities", serialized);
+      // calimero-client's getExecutorPublicKey() reads "context-identity" (JSON-encoded).
+      // Without this, editable/deletable on messages sent by this user evaluates to false.
+      localStorage.setItem("context-identity", JSON.stringify(memberKey));
       // Keep session alive
       localStorage.setItem("sessionLastActivity", Date.now().toString());
     },
@@ -79,17 +82,46 @@ async function waitForMessage(page: Page, text: string) {
   ).toBeVisible({ timeout: 10_000 });
 }
 
+/**
+ * Returns the ActionsContainer (actions-container-*) that belongs to the
+ * MessageContainer wrapping the given message text.
+ *
+ * DOM depth from msg-content: msg-content → MessageText → MessageContentContainer → MessageContainer
+ * ActionsContainer is a direct child of MessageContainer.
+ */
+function getMessageActionsBar(page: Page, text: string) {
+  return page
+    .locator(".msg-content")
+    .filter({ hasText: text })
+    .first()
+    .locator("xpath=../../..")        // → MessageContainer
+    .locator('[id^="actions-container-"]')
+    .first();
+}
+
 async function hoverMessage(page: Page, text: string) {
-  // Hovering the message text triggers MessageContainer:hover → reveals ActionsContainer
-  await page.locator(".msg-content").filter({ hasText: text }).first().hover();
+  // Hover the MessageContainer directly — the CSS rule is MessageContainer:hover → ActionsContainer visible.
+  // Hovering a deep child sometimes doesn't reliably trigger :hover on the ancestor in Playwright.
+  await page
+    .locator(".msg-content")
+    .filter({ hasText: text })
+    .first()
+    .locator("xpath=../../..")        // → MessageContainer
+    .hover();
 }
 
 async function openActionsMenu(page: Page, text: string) {
   await hoverMessage(page, text);
-  // The actions bar appears; click the three-dots button (last EmojiContainer span)
-  // Layout: ✅(0) 👍(1) 😀(2) | EmojiPicker(3) Thread(4) ThreeDots(5)
-  const actionsBar = page.locator('[id^="actions-container-"]').first();
-  await actionsBar.locator("span").nth(5).click({ timeout: 5_000 });
+  const actionsBar = getMessageActionsBar(page, text);
+  // Wait for CSS :hover to make the bar visible before clicking.
+  // Use a regular (non-forced) click so Playwright moves the mouse INTO the actionsBar;
+  // force: true dispatches synthetically without moving the mouse, leaving it outside the bar
+  // which immediately fires onMouseLeave and closes the just-opened dropdown.
+  await actionsBar.waitFor({ state: "visible", timeout: 5_000 });
+  // Reaction icons (✅👍😀) render an inner <span>emoji</span>, so .locator("span") sees 9 spans:
+  // nth(0)=✅outer nth(1)=✅inner nth(2)=👍outer nth(3)=👍inner nth(4)=😀outer nth(5)=😀inner
+  // nth(6)=EmojiWink nth(7)=Thread/ChatText nth(8)=ThreeDots  (last 3 use SVG, no inner span)
+  await actionsBar.locator("span").nth(8).click({ timeout: 5_000 });
 }
 
 // ── Send & receive ────────────────────────────────────────────────────────────
@@ -152,7 +184,7 @@ test.describe("Chat UI — message actions bar", () => {
     await waitForMessage(page, marker);
     await hoverMessage(page, marker);
     await expect(
-      page.locator('[id^="actions-container-"]').first(),
+      getMessageActionsBar(page, marker),
     ).toBeVisible({ timeout: 5_000 });
   });
 
@@ -259,14 +291,14 @@ test.describe("Chat UI — reactions", () => {
     await waitForMessage(page, marker);
     await hoverMessage(page, marker);
 
-    // 👍 is the second EmojiContainer (index 1)
-    const actionsBar = page.locator('[id^="actions-container-"]').first();
-    await actionsBar.locator("span").nth(1).click({ timeout: 5_000 });
+    const actionsBar = getMessageActionsBar(page, marker);
+    await actionsBar.getByText("👍").first().click({ force: true, timeout: 5_000 });
 
     // The 👍 emoji should appear as a reaction badge below the message
+    // Badge text is "👍1" (emoji + count); actionsBar button is just "👍" — this is unambiguous
     await expect(
       page.locator(".msg-content").filter({ hasText: marker })
-        .locator("..").locator("..").getByText("👍"),
+        .locator("xpath=../../..").getByText("👍1"),
     ).toBeVisible({ timeout: 5_000 });
   });
 
@@ -277,19 +309,22 @@ test.describe("Chat UI — reactions", () => {
 
     // Add ✅ reaction
     await hoverMessage(page, marker);
-    const actionsBar = page.locator('[id^="actions-container-"]').first();
-    await actionsBar.locator("span").nth(0).click({ timeout: 5_000 });
+    const actionsBar = getMessageActionsBar(page, marker);
+    await actionsBar.getByText("✅").first().click({ force: true, timeout: 5_000 });
+    // Badge text is "✅1" (emoji + count); actionsBar button is just "✅" — this is unambiguous
     await expect(
       page.locator(".msg-content").filter({ hasText: marker })
-        .locator("..").locator("..").getByText("✅"),
+        .locator("xpath=../../..").getByText("✅1"),
     ).toBeVisible({ timeout: 5_000 });
 
-    // Click ✅ again to remove it
-    await hoverMessage(page, marker);
-    await actionsBar.locator("span").nth(0).click({ timeout: 5_000 });
+    // Click the reaction badge itself to remove — badge is visible and its onClick calls handleReaction
+    // which checks if user already reacted and sets isAdding=false (removes)
+    await page.locator(".msg-content").filter({ hasText: marker })
+      .locator("xpath=../../..").getByText("✅1")
+      .click();
     await expect(
       page.locator(".msg-content").filter({ hasText: marker })
-        .locator("..").locator("..").getByText("✅"),
+        .locator("xpath=../../..").getByText("✅1"),
     ).not.toBeVisible({ timeout: 5_000 });
   });
 });
@@ -312,8 +347,7 @@ test.describe("Chat UI — thread replies", () => {
     await hoverMessage(page, marker);
 
     // Thread button is index 4 (after ✅ 👍 😀 EmojiPicker)
-    const actionsBar = page.locator('[id^="actions-container-"]').first();
-    await actionsBar.locator("span").nth(4).click({ timeout: 5_000 });
+    await getMessageActionsBar(page, marker).locator("span").nth(7).click({ force: true, timeout: 5_000 });
 
     // A second .ProseMirror should appear in the thread panel
     await expect(page.locator(".ProseMirror").nth(1)).toBeVisible({ timeout: 10_000 });
@@ -327,8 +361,7 @@ test.describe("Chat UI — thread replies", () => {
     await waitForMessage(page, parent);
     await hoverMessage(page, parent);
 
-    const actionsBar = page.locator('[id^="actions-container-"]').first();
-    await actionsBar.locator("span").nth(4).click({ timeout: 5_000 });
+    await getMessageActionsBar(page, parent).locator("span").nth(7).click({ force: true, timeout: 5_000 });
 
     const threadEditor = page.locator(".ProseMirror").nth(1);
     await threadEditor.waitFor({ timeout: 10_000 });
@@ -351,8 +384,7 @@ test.describe("Chat UI — thread replies", () => {
     await waitForMessage(page, parent);
     await hoverMessage(page, parent);
 
-    const actionsBar = page.locator('[id^="actions-container-"]').first();
-    await actionsBar.locator("span").nth(4).click({ timeout: 5_000 });
+    await getMessageActionsBar(page, parent).locator("span").nth(7).click({ force: true, timeout: 5_000 });
 
     const threadEditor = page.locator(".ProseMirror").nth(1);
     await threadEditor.waitFor({ timeout: 10_000 });

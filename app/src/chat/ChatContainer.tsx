@@ -214,9 +214,16 @@ function ChatContainer({
           is_dm: isDM,
           dm_identity: activeChatRef.current?.contextIdentity,
         });
-        if (response.data) {
-          const updateFunction = (message: CurbMessage) =>
-            computeReaction(message, reaction, username);
+        if (response.data || !response.error) {
+          // Use isAdding (captured at call time) so the update is idempotent
+          // regardless of whether a WebSocket update arrived first.
+          const updateFunction = (msg: CurbMessage) => {
+            const msgAccounts = msg.reactions?.[reaction] ?? [];
+            const updatedAccounts = isAdding
+              ? (msgAccounts.includes(username) ? msgAccounts : [...msgAccounts, username])
+              : msgAccounts.filter((a: string) => a !== username);
+            return { reactions: { ...msg.reactions, [reaction]: updatedAccounts } };
+          };
           if (isThread) {
             setUpdatedThreadMessages([
               { id: message.id, descriptor: { updateFunction } },
