@@ -68,31 +68,60 @@ function isSessionComplete(): boolean {
 }
 
 export default async function globalSetup(_config: FullConfig) {
-  // Integration tests inject tokens per-test via injectRealTokens; they do not
-  // use the saved auth state, so skip the browser auth flow entirely.
-  if (process.env.INTEGRATION_MODE) {
-    console.log("[global-setup] INTEGRATION_MODE — skipping browser auth.");
+  // Only attempt auth when LIVE_AUTH=1 is explicitly set.
+  // - rpc/rpc-admin: headless, no auth state needed (SKIP_DEV_SERVER=1)
+  // - mocked: browser, but injects mock tokens per-test
+  // - live: set LIVE_AUTH=1 → injects real tokens from env into auth state
+  const skipReasons = [
+    process.env.SKIP_DEV_SERVER && "SKIP_DEV_SERVER",
+    process.env.INTEGRATION_MODE && "INTEGRATION_MODE",
+    !process.env.LIVE_AUTH && "LIVE_AUTH not set",
+  ].filter(Boolean);
+
+  if (skipReasons.length) {
+    console.log(`[global-setup] Skipping auth (${skipReasons.join(", ")}) — writing empty auth state.`);
     const emptyState = { cookies: [], origins: [] };
     fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
     fs.writeFileSync(AUTH_FILE, JSON.stringify(emptyState));
     return;
   }
 
-  // If no node URL is configured this setup cannot automate the auth flow.
-  // Write an empty-but-valid state file so Playwright doesn't fail trying to
-  // load it, and let individual tests use the token-injection helpers instead.
   if (!NODE_URL) {
-    console.log(
-      "[global-setup] E2E_NODE_URL not set — skipping live auth flow.",
-    );
-    console.log(
-      "[global-setup] Tests that need auth will use the injectMeroAuthTokens helper.",
-    );
+    console.log("[global-setup] E2E_NODE_URL not set — writing empty auth state.");
     const emptyState = { cookies: [], origins: [] };
     fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
     fs.writeFileSync(AUTH_FILE, JSON.stringify(emptyState));
     return;
   }
+
+  // Fast path: inject tokens from .env.integration directly into the saved auth
+  // state — no browser dance needed. The mero-react app reads these localStorage
+  // keys on load (see main.tsx bridgeStorageOnLoad).
+  const accessToken  = process.env.E2E_ACCESS_TOKEN  ?? "";
+  const refreshToken = process.env.E2E_REFRESH_TOKEN ?? "";
+  if (accessToken && !isTokenExpired(JSON.stringify(accessToken))) {
+    console.log("[global-setup] Injecting tokens from env into auth state (no browser flow).");
+    const state = {
+      cookies: [],
+      origins: [
+        {
+          origin: APP_URL,
+          localStorage: [
+            { name: "mero:node_url", value: NODE_URL },
+            { name: "mero-tokens",   value: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }) },
+            { name: "app-url",       value: NODE_URL },
+            { name: "access-token",  value: JSON.stringify(accessToken) },
+          ],
+        },
+      ],
+    };
+    fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
+    fs.writeFileSync(AUTH_FILE, JSON.stringify(state));
+    console.log(`[global-setup] Auth state written → ${AUTH_FILE}`);
+    return;
+  }
+
+  console.log("[global-setup] No valid token in env — falling back to browser auth flow.");
 
   if (isSessionComplete()) {
     console.log("[global-setup] Reusing cached auth session.");

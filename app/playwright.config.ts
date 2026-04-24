@@ -67,21 +67,17 @@ export default defineConfig({
       timeout: 90_000,
       testMatch: ["**/integration.spec.ts"],
     },
-    // Live tests — load the auth session saved by global-setup.
+    // Live tests — same browser specs as mocked but with real auth session.
     {
       name: "live",
       use: {
         ...devices["Desktop Chrome"],
         storageState: AUTH_FILE,
       },
-      testIgnore: [
+      testMatch: [
         "**/landing.spec.ts",
         "**/workspace.spec.ts",
         "**/auth.spec.ts",
-        "**/integration.spec.ts",
-        "**/rpc.spec.ts",
-        "**/rpc-admin.spec.ts",
-        "**/rpc-logic.spec.ts",
       ],
     },
     // RPC tests — direct HTTP calls to a live merod node. No browser.

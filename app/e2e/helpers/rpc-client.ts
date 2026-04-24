@@ -23,6 +23,22 @@ export interface RpcResult<T = unknown> {
 let _idCounter = Math.floor(Math.random() * 1_000_000);
 function nextId() { return ++_idCounter; }
 
+// Node encodes WASM error strings as UTF-8 byte arrays inside the error data field:
+// "the method call returned an error: [34, 77, ...]"
+// Decode the byte array back to the original error string.
+function decodeNodeError(data: string): string {
+  const match = data.match(/\[(\d+(?:,\s*\d+)*)\]/);
+  if (match) {
+    try {
+      const bytes = JSON.parse(`[${match[1]}]`) as number[];
+      const str = new TextDecoder().decode(new Uint8Array(bytes));
+      // WASM serialises the string as JSON (with surrounding quotes) — strip them
+      return JSON.parse(str) as string;
+    } catch { /* fall through */ }
+  }
+  return data;
+}
+
 export class RpcClient {
   constructor(private readonly opts: RpcClientOptions) {}
 
@@ -61,8 +77,8 @@ export class RpcClient {
 
     if (body.error) {
       const e = body.error;
-      const msg = (e as RpcError).data ?? (e as { message?: string }).message ?? JSON.stringify(e);
-      throw new RpcCallError(method, msg);
+      const raw = (e as RpcError).data ?? (e as { message?: string }).message ?? JSON.stringify(e);
+      throw new RpcCallError(method, decodeNodeError(raw));
     }
 
     if (body.result?.error) {

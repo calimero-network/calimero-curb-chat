@@ -127,14 +127,15 @@ register_node() {
 
 rpc_call() {
   local url=$1 token=$2 ctx_id=$3 executor=$4 method=$5 args_json=$6
-  curl -sf -X POST "${url}/admin-api/contexts/${ctx_id}/execute" \
+  curl -sf -X POST "${url}/jsonrpc" \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
     -d "$(jq -n \
-          --arg m  "$method" \
-          --arg a  "$args_json" \
-          --arg e  "$executor" \
-          '{method: $m, args_json: $a, executor_public_key: $e}')" \
+          --arg ctx "$ctx_id" \
+          --arg m   "$method" \
+          --argjson a "$args_json" \
+          --arg e   "$executor" \
+          '{"jsonrpc":"2.0","id":1,"method":"execute","params":{"contextId":$ctx,"method":$m,"argsJson":$a,"executorPublicKey":$e}}')" \
     >/dev/null
 }
 
@@ -364,18 +365,21 @@ else
     -H "Content-Type: application/json" \
     -d '{}' 2>/dev/null) || INVITE_RES="{}"
 
-  INVITE_DATA=$(echo "$INVITE_RES" | jq '.data // empty' 2>/dev/null)
+  # Response: { data: { invitation: { invitation: {...}, inviter_signature: "..." } } }
+  # The join endpoint wants: { invitation: { invitation: {...}, inviter_signature: "..." } }
+  # Extract .data.invitation (not .data) to avoid double-wrapping.
+  INVITE_DATA=$(echo "$INVITE_RES" | jq '.data.invitation // empty' 2>/dev/null)
   [ -n "$INVITE_DATA" ] && [ "$INVITE_DATA" != "null" ] \
     || { red "ERROR: namespace invitation is empty"; echo "$INVITE_RES" >&2; exit 1; }
   green "Namespace invitation generated"
 
   step "Node-2 joining namespace"
-  curl -sf -X POST "${NODE_2_URL}/admin-api/namespaces/${GROUP_ID}/join" \
+  JOIN_RES=$(curl -sf -X POST "${NODE_2_URL}/admin-api/namespaces/${GROUP_ID}/join" \
     -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
     -H "Content-Type: application/json" \
-    -d "$(jq -n --argjson inv "$INVITE_DATA" '{invitation: $inv}')" >/dev/null 2>&1 \
+    -d "$(jq -n --argjson inv "$INVITE_DATA" '{invitation: $inv}')" 2>/dev/null) \
     && green "Node-2 joined namespace" \
-    || yellow "Node-2 namespace join failed (may already be a member)"
+    || { red "Node-2 namespace join failed"; echo "$JOIN_RES" >&2; exit 1; }
 
   # ── Sync namespace to node-2 ──────────────────────────────────────────────
 

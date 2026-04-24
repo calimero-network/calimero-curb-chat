@@ -90,7 +90,7 @@ test.describe("No-workspace flow (node has no workspaces)", () => {
   test("shows invitation code textarea", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/invitation code/i)).toBeVisible();
+    await expect(page.locator("label").filter({ hasText: /invitation code/i })).toBeVisible();
     await expect(page.locator("textarea")).toBeVisible();
   });
 

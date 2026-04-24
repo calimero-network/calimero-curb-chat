@@ -81,16 +81,21 @@ step "Ensuring frontend dependencies"
 (cd "$APP_DIR" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install)
 green "Dependencies ready"
 
-# ── 4. Run RPC tests ──────────────────────────────────────────────────────────
+# ── 4. Run RPC tests (headless — no browser/Vite needed) ─────────────────────
 
-step "Running RPC tests (rpc + rpc-admin projects)"
+step "Running RPC + admin tests (headless)"
 cd "$APP_DIR"
 
-# SKIP_DEV_SERVER: playwright.config.ts starts pnpm dev by default; we don't
-# need the browser dev server for headless RPC-only tests.
 SKIP_DEV_SERVER=1 pnpm exec playwright test \
   --project=rpc \
   --project=rpc-admin \
+  "${PLAYWRIGHT_EXTRA_ARGS[@]:-}"
+
+# ── 5. Run mocked browser tests (Playwright starts Vite automatically) ────────
+
+step "Running mocked browser tests"
+pnpm exec playwright test \
+  --project=mocked \
   "${PLAYWRIGHT_EXTRA_ARGS[@]:-}"
 
 # Exit code from playwright propagates via the trap.

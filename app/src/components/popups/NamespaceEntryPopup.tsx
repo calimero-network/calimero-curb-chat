@@ -111,29 +111,51 @@ const Select = styled.select`
   appearance: none;
   -webkit-appearance: none;
   padding: 0.7rem 2.5rem 0.7rem 0.9rem;
-  background-color: rgba(255, 255, 255, 0.05);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b8b8d1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-color: rgba(165, 255, 17, 0.04);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a5ff11' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
   background-size: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(165, 255, 17, 0.22);
   border-radius: 10px;
   color: #fff;
   font-size: 0.85rem;
   cursor: pointer;
   width: 100%;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:hover {
+    border-color: rgba(165, 255, 17, 0.45);
+    background-color: rgba(165, 255, 17, 0.07);
+  }
 
   &:focus {
     outline: none;
-    border-color: rgba(165, 255, 17, 0.35);
-    box-shadow: 0 0 0 3px rgba(165, 255, 17, 0.08);
+    border-color: rgba(165, 255, 17, 0.6);
+    box-shadow: 0 0 0 3px rgba(165, 255, 17, 0.12);
   }
 
   option {
     background: #18181c;
     color: #e8e8f0;
   }
+`;
+
+const CreateLink = styled.button`
+  background: none;
+  border: none;
+  color: #a5ff11;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 0.6rem;
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0.01em;
+  transition: opacity 0.15s;
+
+  &:hover { opacity: 0.75; }
 `;
 
 const Err = styled.div`
@@ -471,6 +493,13 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       clearInvitationFromStorage();
     }
 
+    // Single namespace: skip the picker and go straight to identity check
+    if (groups.length === 1) {
+      setSelectedId(groups[0].groupId);
+      void checkNamespace(groups[0].groupId);
+      return;
+    }
+
     const storedId = getGroupId();
     const preferred = groups.find((g) => g.groupId === storedId) ?? groups[0];
     setSelectedId(preferred.groupId);
@@ -647,6 +676,9 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
             >
               Continue
             </Button>
+            <CreateLink onClick={() => { setError(""); setNsNameInput(""); setStep("create"); }}>
+              + Create new workspace
+            </CreateLink>
             <Divider />
             <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
           </>
@@ -768,7 +800,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
               type="button"
               variant="secondary"
               style={{ width: "100%", marginTop: "0.5rem" }}
-              onClick={() => { setError(""); setStep("no-workspace"); }}
+              onClick={() => { setError(""); setStep(namespaces.length > 0 ? "select" : "no-workspace"); }}
             >
               ← Back
             </Button>

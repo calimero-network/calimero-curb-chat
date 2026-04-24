@@ -1,4 +1,4 @@
-.PHONY: help setup install build dev dev-node test unit e2e workflows ci ci-stop \
+.PHONY: help setup install build dev dev-node start test test-full unit e2e workflows ci ci-stop \
         logic-build logic-js-build app-install app-build app-typecheck app-lint clean
 
 # ── Help ───────────────────────────────────────────────────────────────────────
@@ -18,6 +18,7 @@ help:
 	@echo "    app-build      Bundle frontend (dist/)"
 	@echo ""
 	@echo "  Dev"
+	@echo "    start          Start node + frontend in one shot (full dev setup)"
 	@echo "    dev            Start Vite dev server (http://localhost:5173)"
 	@echo ""
 	@echo "  Quality"
@@ -25,10 +26,11 @@ help:
 	@echo "    app-lint       Run ESLint on frontend"
 	@echo ""
 	@echo "  Test"
+	@echo "    test-full      1 node: rpc + rpc-admin + mocked + live (58 tests, skips 2-node)"
+	@echo "    ci             2 nodes: rpc + rpc-admin + mocked — full suite (90 tests)"
 	@echo "    test           Run unit tests + e2e tests"
 	@echo "    unit           Vitest unit tests"
 	@echo "    e2e            Playwright e2e tests"
-	@echo "    ci             Build WASM, start 2 nodes, run all RPC tests, stop nodes"
 	@echo "    ci-stop        Stop nodes started by 'make ci' or setup-nodes.sh"
 	@echo "    workflows      merobox workflow tests (requires merobox)"
 	@echo ""
@@ -67,6 +69,12 @@ build: logic-build app-build
 dev: app-install
 	cd app && pnpm dev
 
+# Full dev setup: node + frontend in one shot.
+# Runs dev-node.sh (blocking until node is ready), then starts Vite.
+start: app-install
+	@bash scripts/dev-node.sh
+	cd app && pnpm dev
+
 # ── Quality ────────────────────────────────────────────────────────────────────
 
 app-typecheck:
@@ -76,6 +84,20 @@ app-lint:
 	cd app && pnpm lint
 
 # ── Test ───────────────────────────────────────────────────────────────────────
+
+# Start a single dev node, run all test suites, stop node on exit.
+# Projects:
+#   rpc + rpc-admin  — headless HTTP/RPC tests (no browser, no Vite)
+#   mocked           — browser tests with mock API (Playwright starts Vite)
+#   live             — browser tests with real auth injected from .env.integration
+test-full: app-install
+	@REPO_ROOT="$$(pwd)"; \
+	bash scripts/dev-node.sh; \
+	trap "bash $$REPO_ROOT/scripts/dev-node.sh --stop 2>/dev/null || true" EXIT; \
+	cd app && \
+	  SKIP_DEV_SERVER=1 pnpm exec playwright test --project=rpc --project=rpc-admin && \
+	  pnpm exec playwright test --project=mocked && \
+	  LIVE_AUTH=1 pnpm exec playwright test --project=live
 
 unit:
 	cd app && pnpm test
