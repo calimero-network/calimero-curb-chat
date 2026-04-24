@@ -27,6 +27,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout calimero/core (Cargo path deps)
+        run: git clone --depth 1 https://github.com/calimero-network/core.git "${GITHUB_WORKSPACE}/../core"
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -41,11 +44,7 @@ jobs:
           cp target/wasm32-unknown-unknown/app-release/curb.wasm res/
 
       - name: Install merobox
-        run: |
-          curl -fsSL https://calimero-network.github.io/merobox/gpg.key | sudo tee /usr/share/keyrings/merobox.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/merobox.gpg] https://calimero-network.github.io/merobox stable main" | sudo tee /etc/apt/sources.list.d/merobox.list
-          sudo apt update
-          sudo apt install -y merobox
+        run: pip install merobox==0.4.6
 
       - name: Verify merobox installation
         run: merobox --version

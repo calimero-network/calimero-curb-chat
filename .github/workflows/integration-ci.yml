@@ -31,6 +31,9 @@ jobs:
 
       # ── Build curb WASM ───────────────────────────────────────────────────────
 
+      - name: Checkout calimero/core (Cargo path deps)
+        run: git clone --depth 1 https://github.com/calimero-network/core.git "${GITHUB_WORKSPACE}/../core"
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -47,15 +50,7 @@ jobs:
       # ── Install merobox ───────────────────────────────────────────────────────
 
       - name: Install merobox
-        run: |
-          curl -fsSL https://calimero-network.github.io/merobox/gpg.key \
-            | sudo tee /usr/share/keyrings/merobox.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/merobox.gpg] \
-            https://calimero-network.github.io/merobox stable main" \
-            | sudo tee /etc/apt/sources.list.d/merobox.list
-          sudo apt update
-          sudo apt install -y merobox
-          merobox --version
+        run: pip install merobox==0.4.6 && merobox --version
 
       # ── Start nodes + install curb app + create context + seed messages ───────
       # integration-setup.yml sets stop_all_nodes: false so nodes stay running.
