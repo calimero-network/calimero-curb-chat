@@ -65,7 +65,7 @@ export default defineConfig({
         navigationTimeout: 30_000,
       },
       timeout: 90_000,
-      testMatch: ["**/integration.spec.ts"],
+      testMatch: ["**/integration.spec.ts", "**/chat.spec.ts"],
     },
     // Live tests — same browser specs as mocked but with real auth session.
     // landing.spec.ts is excluded: all its tests expect unauthenticated state

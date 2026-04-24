@@ -109,10 +109,11 @@ export default async function globalSetup(_config: FullConfig) {
         {
           origin: APP_URL,
           localStorage: [
-            { name: "mero:node_url", value: NODE_URL },
-            { name: "mero-tokens",   value: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }) },
-            { name: "app-url",       value: NODE_URL },
-            { name: "access-token",  value: JSON.stringify(accessToken) },
+            { name: "mero:node_url",  value: NODE_URL },
+            { name: "mero-tokens",    value: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }) },
+            { name: "app-url",        value: JSON.stringify(NODE_URL) },
+            { name: "access-token",   value: JSON.stringify(accessToken) },
+            { name: "refresh-token",  value: JSON.stringify(refreshToken) },
           ],
         },
       ],

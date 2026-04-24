@@ -217,8 +217,9 @@ export async function injectRealTokens(
         "mero-tokens",
         JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
       );
-      localStorage.setItem("app-url", nodeUrl);
+      localStorage.setItem("app-url", JSON.stringify(nodeUrl));
       localStorage.setItem("access-token", JSON.stringify(accessToken));
+      localStorage.setItem("refresh-token", JSON.stringify(refreshToken));
     },
     opts,
   );

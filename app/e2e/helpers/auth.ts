@@ -23,8 +23,10 @@ export async function injectMeroAuthTokens(
         }),
       );
       // Bridge to calimero-client keys (mirroring main.tsx IIFE)
-      localStorage.setItem("app-url", nodeUrl);
+      // calimero-client does JSON.parse("app-url"), so the value must be JSON-encoded
+      localStorage.setItem("app-url", JSON.stringify(nodeUrl));
       localStorage.setItem("access-token", JSON.stringify(accessToken));
+      localStorage.setItem("refresh-token", JSON.stringify(refreshToken ?? ""));
     },
     opts,
   );
