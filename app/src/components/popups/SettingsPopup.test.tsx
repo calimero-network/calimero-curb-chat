@@ -16,8 +16,8 @@ const {
   mockNavigate: vi.fn(),
 }));
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  useCalimero: () => ({
+vi.mock("@calimero-network/mero-react", () => ({
+  useMero: () => ({
     logout: mockLogout,
   }),
 }));

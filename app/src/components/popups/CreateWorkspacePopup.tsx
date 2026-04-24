@@ -182,7 +182,6 @@ export default function CreateWorkspacePopup({
         throw new Error(groupResult.error?.message || "Failed to create group");
       }
       const groupId = groupResult.data.groupId;
-      setCreatedGroupId(groupId);
       setGroupId(groupId);
 
       // Allow all members to create contexts and invite others (0x0B = 0b1011)

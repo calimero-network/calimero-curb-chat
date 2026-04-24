@@ -6,6 +6,7 @@ import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { getApplicationId, getGroupId, setContextMemberIdentity } from "../../constants/config";
 import { memo, useCallback, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { log } from "../../utils/logger";
 import {
   getChannelVisibilityOption,
@@ -68,6 +69,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const [defaultVisibility, setDefaultVisibility] = useState<"public" | "private">("public");
   const [isLoadingDefaultVisibility, setIsLoadingDefaultVisibility] = useState(false);
   const groupId = getGroupId();
+  const { canCreateContext } = useCurrentGroupPermissions();
 
   const createChannel = async (
     channelName: string,
@@ -162,7 +164,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   return (
     <Container $isCollapsed={props.isCollapsed}>
       {!props.isCollapsed && <TextBold>{props.title}</TextBold>}
-      {groupId && (
+      {groupId && canCreateContext && (
         <CreateChannelPopup
           title={"Create new Channel"}
           inputValue={inputValue}

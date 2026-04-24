@@ -180,7 +180,6 @@ export default function SettingsPopup({
     clearWorkspaceSelection();
     logout();
     setIsOpen(false);
-    navigate("/login");
   };
 
   const tabs = isOwner

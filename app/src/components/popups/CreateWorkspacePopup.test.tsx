@@ -148,22 +148,15 @@ describe("CreateWorkspacePopup", () => {
 
     expect(screen.queryByText(/#general/i)).not.toBeInTheDocument();
     expect(
-      screen.getByText(/add channels after you enter the workspace/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("textbox", { name: /workspace name/i }),
+      screen.getByRole("textbox", { name: /namespace name/i }),
     ).toBeInTheDocument();
   });
 
   it("requires a workspace name before creation is enabled", () => {
     render(<CreateWorkspacePopup onSuccess={vi.fn()} onCancel={vi.fn()} />);
 
-    const createButton = screen.getByRole("button", {
-      name: /create workspace/i,
-    });
-    const nameInput = screen.getByRole("textbox", {
-      name: /workspace name/i,
-    });
+    const createButton = screen.getByRole("button", { name: /^create$/i });
+    const nameInput = screen.getByRole("textbox", { name: /namespace name/i });
 
     expect(createButton).toBeDisabled();
 
@@ -174,15 +167,14 @@ describe("CreateWorkspacePopup", () => {
     expect(createButton).toBeEnabled();
   });
 
-  it("creates only the workspace and invitation during onboarding", async () => {
-    render(<CreateWorkspacePopup onSuccess={vi.fn()} onCancel={vi.fn()} />);
+  it("creates the workspace and calls onSuccess with the group id", async () => {
+    const onSuccess = vi.fn();
+    render(<CreateWorkspacePopup onSuccess={onSuccess} onCancel={vi.fn()} />);
 
-    fireEvent.change(screen.getByRole("textbox", { name: /workspace name/i }), {
+    fireEvent.change(screen.getByRole("textbox", { name: /namespace name/i }), {
       target: { value: "  Team Space  " },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /create workspace/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
 
     await waitFor(() => {
       expect(mockCreateGroup).toHaveBeenCalledWith({
@@ -192,27 +184,12 @@ describe("CreateWorkspacePopup", () => {
       });
     });
 
-    await waitFor(() => {
-      expect(mockCreateInvitation).toHaveBeenCalledWith("group-1");
-    });
-
     expect(mockCreateGroupContext).not.toHaveBeenCalled();
     expect(mockSetGroupId).toHaveBeenCalledWith("group-1");
-    expect(mockSetGroupMemberIdentity).toHaveBeenCalledWith(
-      "group-1",
-      "member-1",
-    );
-    expect(mockSerializeGroupInvitationPayload).toHaveBeenCalledWith({
-      invitation: {
-        invitation: "payload",
-      },
-      groupAlias: "Team Space",
-    });
+    expect(mockSetGroupMemberIdentity).toHaveBeenCalledWith("group-1", "member-1");
 
-    expect(await screen.findByText("Workspace created!")).toBeInTheDocument();
-    expect(
-      screen.getByText(/share an invitation now and create your first channel/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Workspace ID: group-1")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledWith("group-1");
+    });
   });
 });

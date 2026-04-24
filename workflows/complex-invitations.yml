@@ -92,6 +92,11 @@ steps:
     namespace_id: "{{namespace_id}}"
     invitation: "{{invitation_2}}"
 
+  - name: Node 2 joins channel context
+    type: join_context
+    node: calimero-node-2
+    context_id: "{{context_id}}"
+
   # ── Open invitation (1 invite per node) ─────────────────────────────────────
   - name: Create Open Invitation for Node 3
     type: invite_open
@@ -106,6 +111,11 @@ steps:
     namespace_id: "{{namespace_id}}"
     invitation: "{{open_invitation_3}}"
 
+  - name: Node 3 joins channel context
+    type: join_context
+    node: calimero-node-3
+    context_id: "{{context_id}}"
+
   - name: Create Open Invitation for Node 4
     type: invite_open
     node: calimero-node-1
@@ -118,6 +128,11 @@ steps:
     node: calimero-node-4
     namespace_id: "{{namespace_id}}"
     invitation: "{{open_invitation_4}}"
+
+  - name: Node 4 joins channel context
+    type: join_context
+    node: calimero-node-4
+    context_id: "{{context_id}}"
 
   - name: Assert All Joins Succeeded
     type: assert
