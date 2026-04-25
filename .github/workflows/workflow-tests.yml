@@ -49,7 +49,7 @@ jobs:
       - name: Verify merobox installation
         run: merobox --version
 
-      - name: Run simple-invitation workflow
+      - name: Run E2E workflow
         working-directory: workflows
         run: |
           max_attempts=2
@@ -61,7 +61,7 @@ jobs:
               merobox nuke --force || true
               sleep 2
             fi
-            if merobox bootstrap run simple-invitation.yml; then
+            if merobox bootstrap run e2e.yml; then
               success=true
               break
             fi
@@ -71,7 +71,7 @@ jobs:
           merobox nuke --force || true
           if [ "$success" = false ]; then exit 1; fi
 
-      - name: Run simple-open-invitation workflow
+      - name: Run integration-setup workflow
         working-directory: workflows
         run: |
           max_attempts=2
@@ -83,73 +83,7 @@ jobs:
               merobox nuke --force || true
               sleep 2
             fi
-            if merobox bootstrap run simple-open-invitation.yml; then
-              success=true
-              break
-            fi
-            attempt=$((attempt + 1))
-          done
-          merobox stop --all || true
-          merobox nuke --force || true
-          if [ "$success" = false ]; then exit 1; fi
-
-      - name: Run complex-invitations workflow
-        working-directory: workflows
-        run: |
-          max_attempts=2
-          attempt=1
-          success=false
-          while [ $attempt -le $max_attempts ]; do
-            if [ $attempt -gt 1 ]; then
-              merobox stop --all || true
-              merobox nuke --force || true
-              sleep 2
-            fi
-            if merobox bootstrap run complex-invitations.yml; then
-              success=true
-              break
-            fi
-            attempt=$((attempt + 1))
-          done
-          merobox stop --all || true
-          merobox nuke --force || true
-          if [ "$success" = false ]; then exit 1; fi
-
-      - name: Run dm-flow workflow
-        working-directory: workflows
-        run: |
-          max_attempts=2
-          attempt=1
-          success=false
-          while [ $attempt -le $max_attempts ]; do
-            if [ $attempt -gt 1 ]; then
-              merobox stop --all || true
-              merobox nuke --force || true
-              sleep 2
-            fi
-            if merobox bootstrap run dm-flow.yml; then
-              success=true
-              break
-            fi
-            attempt=$((attempt + 1))
-          done
-          merobox stop --all || true
-          merobox nuke --force || true
-          if [ "$success" = false ]; then exit 1; fi
-
-      - name: Run full-logic-test workflow
-        working-directory: workflows
-        run: |
-          max_attempts=2
-          attempt=1
-          success=false
-          while [ $attempt -le $max_attempts ]; do
-            if [ $attempt -gt 1 ]; then
-              merobox stop --all || true
-              merobox nuke --force || true
-              sleep 2
-            fi
-            if merobox bootstrap run full-logic-test.yml; then
+            if merobox bootstrap run integration-setup.yml; then
               success=true
               break
             fi
