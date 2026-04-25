@@ -1,5 +1,5 @@
 .PHONY: help setup install build dev dev-node start test test-full unit e2e workflows ci ci-stop \
-        logic-build logic-js-build app-install app-build app-typecheck app-lint clean
+        logic-build app-install app-build app-typecheck app-lint clean
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 
@@ -52,9 +52,6 @@ install: app-install
 
 logic-build:
 	cd logic && ./build.sh
-
-logic-js-build:
-	cd logic-js && bash build.sh
 
 app-install:
 	cd app && pnpm install
@@ -119,11 +116,8 @@ ci-stop:
 	@bash scripts/setup-nodes.sh --stop
 
 WORKFLOW_FILES := \
-	workflows/simple-invitation.yml \
-	workflows/simple-open-invitation.yml \
-	workflows/complex-invitations.yml \
-	workflows/dm-flow.yml \
-	workflows/full-logic-test.yml
+	workflows/e2e.yml \
+	workflows/integration-setup.yml
 
 workflows: logic-build
 	@command -v merobox >/dev/null 2>&1 || { \
