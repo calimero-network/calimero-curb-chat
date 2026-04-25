@@ -69,7 +69,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const [defaultVisibility, setDefaultVisibility] = useState<"public" | "private">("public");
   const [isLoadingDefaultVisibility, setIsLoadingDefaultVisibility] = useState(false);
   const groupId = getGroupId();
-  const { canCreateContext } = useCurrentGroupPermissions();
+  const { canCreateContext } = useCurrentGroupPermissions(groupId);
 
   const createChannel = async (
     channelName: string,

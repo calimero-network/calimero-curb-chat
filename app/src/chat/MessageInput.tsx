@@ -519,13 +519,21 @@ export default function MessageInput({
     });
   }, []);
 
+  const clearUploadedFile = useCallback(() => {
+    setUploadedFile(null);
+  }, [setUploadedFile]);
+
+  const clearUploadedImage = useCallback(() => {
+    setUploadedImage(null);
+  }, [setUploadedImage]);
+
   useEffect(() => {
     setMessage(null);
     setEmojiSelectorOpen(false);
     setShowUpload(false);
     clearUploadedFile();
     clearUploadedImage();
-  }, [selectedChat]);
+  }, [selectedChat, clearUploadedFile, clearUploadedImage]);
 
   const removeUploadedFile = useCallback(() => {
     if (uploadedFile?.file.blobId) {
@@ -533,7 +541,7 @@ export default function MessageInput({
     }
     setUploadedFile(null);
     setShowUpload(false);
-  }, [deleteBlobById, setShowUpload, uploadedFile]);
+  }, [deleteBlobById, setShowUpload, setUploadedFile, uploadedFile]);
 
   const removeUploadedImage = useCallback(() => {
     if (uploadedImage?.file.blobId) {
@@ -542,15 +550,7 @@ export default function MessageInput({
     setUploadedImage(null);
     setShowUpload(false);
     resetImage();
-  }, [deleteBlobById, resetImage, setShowUpload, uploadedImage]);
-
-  const clearUploadedFile = useCallback(() => {
-    setUploadedFile(null);
-  }, [setUploadedFile]);
-
-  const clearUploadedImage = useCallback(() => {
-    setUploadedImage(null);
-  }, [setUploadedImage]);
+  }, [deleteBlobById, resetImage, setShowUpload, setUploadedImage, uploadedImage]);
 
   useEffect(() => {
     return () => {

@@ -696,14 +696,15 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
             {error && <Err>{error}</Err>}
             <Field>
               <Label>Your name</Label>
-              <Input
-                type="text"
-                placeholder="e.g. Alice"
-                value={nameInput}
-                onChange={(e) => { setNameInput(e.target.value); setError(""); }}
-                autoFocus
-                onKeyDown={(e) => { if (e.key === "Enter") void handleJoin(); }}
-              />
+              <div onKeyDown={(e) => { if (e.key === "Enter") void handleJoin(); }}>
+                <Input
+                  type="text"
+                  placeholder="e.g. Alice"
+                  value={nameInput}
+                  onChange={(e) => { setNameInput(e.target.value); setError(""); }}
+                  autoFocus
+                />
+              </div>
             </Field>
             <Button
               type="button"
@@ -778,14 +779,15 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
             {error && <Err>{error}</Err>}
             <Field>
               <Label>Server name</Label>
-              <Input
-                type="text"
-                placeholder="e.g. My Team"
-                value={nsNameInput}
-                onChange={(e) => { setNsNameInput(e.target.value); setError(""); }}
-                autoFocus
-                onKeyDown={(e) => { if (e.key === "Enter") void handleCreate(); }}
-              />
+              <div onKeyDown={(e) => { if (e.key === "Enter") void handleCreate(); }}>
+                <Input
+                  type="text"
+                  placeholder="e.g. My Team"
+                  value={nsNameInput}
+                  onChange={(e) => { setNsNameInput(e.target.value); setError(""); }}
+                  autoFocus
+                />
+              </div>
             </Field>
             <Button
               type="button"
