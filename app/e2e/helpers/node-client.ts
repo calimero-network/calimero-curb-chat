@@ -225,22 +225,3 @@ export async function injectRealTokens(
   );
 }
 
-/**
- * Inject the group-id + messenger-name that the curb app needs to skip
- * the workspace-selection step and land directly on the home page.
- */
-export async function injectWorkspaceState(
-  page: Page,
-  opts: {
-    groupId: string;
-    messengerName: string;
-  },
-) {
-  await page.addInitScript(
-    ({ groupId, messengerName }) => {
-      localStorage.setItem("group-id", JSON.stringify(groupId));
-      localStorage.setItem("messenger-name", JSON.stringify(messengerName));
-    },
-    opts,
-  );
-}

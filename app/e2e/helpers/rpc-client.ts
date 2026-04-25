@@ -147,7 +147,7 @@ export function getEnv(): IntegrationEnv {
 /** True when the single-node minimum env is present. */
 export function envAvailable(): boolean {
   const e = getEnv();
-  return !!(e.nodeUrl && e.accessToken && e.contextId && e.memberKey);
+  return !!(e.nodeUrl && e.accessToken && e.groupId && e.contextId && e.memberKey);
 }
 
 /** True when both nodes are configured for multi-user tests. */
