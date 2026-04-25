@@ -115,7 +115,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
       mode: visibilityMode,
     });
 
-    if (visibilityResp.error) {
+    if (visibilityResp.error && visibilityResp.error.code !== 404) {
       log.error(
         "ChannelHeader",
         `Failed to set channel visibility to ${visibilityMode}`,

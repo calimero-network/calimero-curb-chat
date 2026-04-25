@@ -41,15 +41,17 @@ const GROUP_MEMBER_IDENTITIES_SESSION_KEY = "calimero_group_member_identities";
 const GROUP_ALIASES_STORAGE_KEY = "calimero_group_aliases";
 const CONTEXT_OWNER_SESSION_KEY = "curb_is_context_owner";
 
-/** Group ID: URL param `group-id` > sessionStorage > env VITE_GROUP_ID > empty */
+/** Group ID: URL param `group-id` > sessionStorage > localStorage > env VITE_GROUP_ID > empty */
 export function getGroupId(): string {
   const fromUrl = getUrlParam("group-id");
   if (fromUrl) {
     sessionStorage.setItem(GROUP_ID_SESSION_KEY, fromUrl);
+    localStorage.setItem(GROUP_ID_SESSION_KEY, fromUrl);
     return fromUrl;
   }
   return (
     sessionStorage.getItem(GROUP_ID_SESSION_KEY) ||
+    localStorage.getItem(GROUP_ID_SESSION_KEY) ||
     import.meta.env.VITE_GROUP_ID ||
     ""
   );
@@ -57,10 +59,12 @@ export function getGroupId(): string {
 
 export function setGroupId(groupId: string): void {
   sessionStorage.setItem(GROUP_ID_SESSION_KEY, groupId);
+  localStorage.setItem(GROUP_ID_SESSION_KEY, groupId);
 }
 
 export function clearGroupId(): void {
   sessionStorage.removeItem(GROUP_ID_SESSION_KEY);
+  localStorage.removeItem(GROUP_ID_SESSION_KEY);
 }
 
 export function clearWorkspaceSelection(): void {

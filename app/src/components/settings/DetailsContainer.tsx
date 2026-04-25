@@ -2,12 +2,14 @@ import React, { useState } from "react";
 import styled from "styled-components";
 import AboutDetails from "./AboutDetails";
 import MemberDetails from "./MemberDetails";
+import MembersTab from "../admin/MembersTab";
 import TabSwitch from "./TabSwitch";
 import type { ChannelMeta } from "../../types/Common";
 import type { UserId } from "../../api/clientApi";
 import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import { isRestrictedChannelType } from "../../utils/channelVisibility";
+import type { GroupMember, MemberCapabilities } from "../../api/groupApi";
 
 const Wrapper = styled.div``;
 
@@ -35,6 +37,15 @@ interface DetailsContainerProps {
   promoteModerator: (user: string) => void;
   removeUserFromChannel: (user: string) => void;
   reFetchChannelMembers: () => void;
+  // Group member management (optional — shown when provided)
+  groupId?: string;
+  groupMembers?: GroupMember[];
+  isAdmin?: boolean;
+  actionLoading?: boolean;
+  onRemoveMember?: (groupId: string, identity: string) => Promise<boolean>;
+  onSetCapabilities?: (groupId: string, identity: string, capabilities: number) => Promise<boolean>;
+  onGetCapabilities?: (groupId: string, identity: string) => Promise<MemberCapabilities | null>;
+  onRefreshMembers?: () => void;
 }
 
 const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
@@ -48,6 +59,8 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
   const removeUserFromChannel = props.removeUserFromChannel;
   const nonInvitedUserList = props.nonInvitedUserList;
   const reFetchChannelMembers = props.reFetchChannelMembers;
+  const { groupId, groupMembers, isAdmin, actionLoading, onRemoveMember, onSetCapabilities, onGetCapabilities, onRefreshMembers } = props;
+  const hasGroupMembers = !!groupId && !!groupMembers && groupMembers.length > 0;
 
   const [selectedTabIndex, setSelectedTabIndex] = useState(initialTabIndex);
 
@@ -114,7 +127,17 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
           channelName={channelName}
         />
       )}
-      {selectedTabIndex === 1 && (
+      {selectedTabIndex === 1 && hasGroupMembers && isAdmin ? (
+        <MembersTab
+          groupId={groupId!}
+          members={groupMembers!}
+          actionLoading={actionLoading ?? false}
+          onRemoveMember={onRemoveMember ?? (() => Promise.resolve(false))}
+          onSetCapabilities={onSetCapabilities ?? (() => Promise.resolve(false))}
+          onGetCapabilities={onGetCapabilities ?? (() => Promise.resolve(null))}
+          onRefresh={onRefreshMembers ?? (() => {})}
+        />
+      ) : selectedTabIndex === 1 ? (
         <MemberDetails
           id={0}
           user={getExecutorPublicKey() as unknown as UserId}
@@ -146,7 +169,7 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
           getNonInvitedUsers={getNonInvitedUsers}
           nonInvitedUserList={nonInvitedUserList}
         />
-      )}
+      ) : null}
     </Wrapper>
   );
 };

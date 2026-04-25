@@ -1,14 +1,24 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { styled, keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
 import BaseModal from "../common/popups/BaseModal";
-import TabbedInterface from "../contextOperations/TabbedInterface";
 import { useMero } from "@calimero-network/mero-react";
 import {
   clearStoredSession,
   clearSessionActivity,
 } from "../../utils/session";
-import { clearWorkspaceSelection } from "../../constants/config";
+import {
+  clearWorkspaceSelection,
+  getGroupId,
+  getStoredGroupAlias,
+} from "../../constants/config";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
+import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
+import {
+  generateInvitationDeepLink,
+  generateInvitationUrl,
+  serializeGroupInvitationPayload,
+} from "../../utils/invitation";
 
 // ─── Animations ────────────────────────────────────────────────────────────────
 
@@ -88,6 +98,145 @@ const CloseButton = styled.button`
   }
 `;
 
+// ─── Workspace card ────────────────────────────────────────────────────────────
+
+const WorkspaceCard = styled.div`
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+`;
+
+const WorkspaceInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+`;
+
+const WorkspaceLabel = styled.span`
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+`;
+
+const WorkspaceName = styled.span`
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const RoleBadge = styled.span<{ $admin: boolean }>`
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 5px;
+  letter-spacing: 0.04em;
+  background: ${({ $admin }) =>
+    $admin ? "rgba(165, 255, 17, 0.12)" : "rgba(255, 255, 255, 0.07)"};
+  border: 1px solid ${({ $admin }) =>
+    $admin ? "rgba(165, 255, 17, 0.3)" : "rgba(255, 255, 255, 0.12)"};
+  color: ${({ $admin }) =>
+    $admin ? "#a5ff11" : "rgba(255, 255, 255, 0.55)"};
+`;
+
+// ─── Invite section ────────────────────────────────────────────────────────────
+
+const Section = styled.div`
+  margin-bottom: 1.25rem;
+`;
+
+const SectionLabel = styled.div`
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.6rem;
+`;
+
+const InviteBox = styled.div`
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 0.75rem 0.875rem;
+`;
+
+const InviteRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const InviteDescription = styled.p`
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0 0 0.75rem;
+  line-height: 1.4;
+`;
+
+const CopyRow = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+`;
+
+const InviteStatusText = styled.span`
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.35);
+`;
+
+const ActionButton = styled.button<{ $variant?: "primary" | "secondary" | "ghost" }>`
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.875rem;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex: 1;
+  justify-content: center;
+
+  ${({ $variant = "secondary" }) =>
+    $variant === "primary"
+      ? `
+    border: 1px solid rgba(165, 255, 17, 0.35);
+    background: rgba(165, 255, 17, 0.08);
+    color: #a5ff11;
+    &:hover { background: rgba(165, 255, 17, 0.14); border-color: rgba(165, 255, 17, 0.55); }
+    &:disabled { opacity: 0.4; cursor: default; }
+  `
+      : $variant === "ghost"
+      ? `
+    border: 1px solid rgba(255,255,255,0.09);
+    background: transparent;
+    color: rgba(255,255,255,0.55);
+    &:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  `
+      : `
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.72);
+    &:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.08); color: #fff; }
+    &:disabled { opacity: 0.4; cursor: default; }
+  `}
+`;
+
+// ─── Session section ────────────────────────────────────────────────────────────
+
 const LogoutSection = styled.div`
   margin-top: 1.25rem;
   padding-top: 1rem;
@@ -144,9 +293,7 @@ const LogoutButton = styled(SessionButton)`
     color: #ff6464;
   }
 
-  svg {
-    opacity: 0.7;
-  }
+  svg { opacity: 0.7; }
 `;
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -164,14 +311,69 @@ export default function SettingsPopup({
 }: SettingsPopupProps) {
   const { logout } = useMero();
   const navigate = useNavigate();
-  const isOwner = sessionStorage.getItem("curb_is_context_owner") === "true";
+  const groupId = getGroupId();
+  const namespaceName = getStoredGroupAlias(groupId) || groupId.slice(0, 12) + "…";
+  const { isAdmin, canInviteMembers } = useCurrentGroupPermissions(groupId);
+
+  // ── Invitation state ────────────────────────────────────────────────────────
+  const [invitePayload, setInvitePayload] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [copiedTarget, setCopiedTarget] = useState<"web" | "desktop" | "">("");
+
+  const webUrl = useMemo(
+    () => (invitePayload ? generateInvitationUrl(invitePayload) : ""),
+    [invitePayload],
+  );
+  const desktopUrl = useMemo(
+    () => (invitePayload ? generateInvitationDeepLink(invitePayload) : ""),
+    [invitePayload],
+  );
+
+  // Reset invite state when popup closes
+  useEffect(() => {
+    if (!isOpen) {
+      setInvitePayload("");
+      setInviteError("");
+      setCopiedTarget("");
+    }
+  }, [isOpen]);
+
+  const handleGenerateInvite = async () => {
+    setInviteLoading(true);
+    setInviteError("");
+    const response = await new GroupApiDataSource().createInvitation(groupId);
+    setInviteLoading(false);
+    if (response.error || !response.data) {
+      setInviteError(response.error?.message ?? "Failed to generate invitation");
+      return;
+    }
+    setInvitePayload(
+      serializeGroupInvitationPayload({
+        invitation: response.data.invitation,
+        groupAlias: response.data.groupAlias,
+      }),
+    );
+  };
+
+  const handleCopy = async (target: "web" | "desktop") => {
+    const value = target === "web" ? webUrl : desktopUrl;
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedTarget(target);
+      setTimeout(() => setCopiedTarget(""), 2000);
+    } catch {
+      prompt("Copy this invite link:", value);
+    }
+  };
+
+  // ── Session handlers ────────────────────────────────────────────────────────
 
   const handleChangeWorkspace = () => {
-    clearStoredSession();
-    clearSessionActivity();
     clearWorkspaceSelection();
     setIsOpen(false);
-    navigate("/login");
+    navigate("/login", { state: { forceSelect: true } });
   };
 
   const handleLogout = () => {
@@ -181,10 +383,6 @@ export default function SettingsPopup({
     logout();
     setIsOpen(false);
   };
-
-  const tabs = isOwner
-    ? [{ id: "invite-to-context", label: "Invite to Context" }]
-    : [];
 
   const popupContent = (
     <Container>
@@ -205,22 +403,92 @@ export default function SettingsPopup({
         </CloseButton>
       </Header>
 
-      {tabs.length > 0 && <TabbedInterface tabs={tabs} />}
+      {/* Workspace info */}
+      <WorkspaceCard>
+        <WorkspaceInfo>
+          <WorkspaceLabel>Workspace</WorkspaceLabel>
+          <WorkspaceName>{namespaceName}</WorkspaceName>
+        </WorkspaceInfo>
+        <RoleBadge $admin={isAdmin}>{isAdmin ? "Admin" : "Member"}</RoleBadge>
+      </WorkspaceCard>
+
+      {/* Invite section */}
+      {canInviteMembers && (
+        <Section>
+          <SectionLabel>Invite</SectionLabel>
+          <InviteBox>
+            {!invitePayload && (
+              <>
+                <InviteDescription>
+                  Generate a workspace invitation link to share with others.
+                </InviteDescription>
+                <InviteRow>
+                  <ActionButton
+                    $variant="primary"
+                    onClick={() => void handleGenerateInvite()}
+                    disabled={inviteLoading}
+                    style={{ flex: "unset" }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                    {inviteLoading ? "Generating…" : "Generate invitation"}
+                  </ActionButton>
+                  {inviteError && (
+                    <InviteStatusText style={{ color: "rgba(255,100,100,0.8)" }}>
+                      {inviteError}
+                    </InviteStatusText>
+                  )}
+                </InviteRow>
+              </>
+            )}
+
+            {invitePayload && (
+              <>
+                <InviteDescription style={{ marginBottom: "0.5rem" }}>
+                  Share one of these links to invite someone to this workspace.
+                </InviteDescription>
+                <CopyRow>
+                  <ActionButton
+                    $variant="secondary"
+                    onClick={() => void handleCopy("web")}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                    </svg>
+                    {copiedTarget === "web" ? "Copied!" : "Copy web link"}
+                  </ActionButton>
+                  <ActionButton
+                    $variant="secondary"
+                    onClick={() => void handleCopy("desktop")}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                    </svg>
+                    {copiedTarget === "desktop" ? "Copied!" : "Copy desktop link"}
+                  </ActionButton>
+                </CopyRow>
+                <ActionButton
+                  $variant="ghost"
+                  onClick={() => { setInvitePayload(""); setInviteError(""); }}
+                  style={{ marginTop: "0.5rem", flex: "unset" }}
+                >
+                  Generate new
+                </ActionButton>
+              </>
+            )}
+          </InviteBox>
+        </Section>
+      )}
 
       <LogoutSection>
         <LogoutLabel>Session</LogoutLabel>
         <SessionActions>
           <ChangeWorkspaceButton onClick={handleChangeWorkspace}>
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12h13" />
               <path d="m11 4 8 8-8 8" />
             </svg>

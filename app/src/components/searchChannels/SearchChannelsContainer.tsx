@@ -229,7 +229,7 @@ export default function SearchChannelsContainer({
           let blockedReason = "";
 
           if (!canJoin) {
-            if (visibilityResponse.error) {
+            if (visibilityResponse.error && visibilityResponse.error.code !== 404) {
               blockedReason =
                 "This channel's visibility could not be loaded, so join access cannot be determined yet.";
             } else if (currentGroupPermissions.isAdmin) {

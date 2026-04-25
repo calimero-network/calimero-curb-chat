@@ -360,7 +360,7 @@ pub struct FullMessageResponse {
     pub start_position: u32,
 }
 
-/// Per-context metadata returned by `get_info`.
+/// Per-context metadata returned by `get_info` / `get_channel_info`.
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "calimero_sdk::serde")]
 pub struct ContextInfo {
@@ -368,6 +368,7 @@ pub struct ContextInfo {
     pub context_type: ContextType,
     pub description: String,
     pub created_at: u64,
+    pub creator: String,
 }
 
 /// Per-context user profile returned by `get_profiles`.
@@ -409,6 +410,7 @@ pub struct MeroChat {
     context_type: LwwRegister<ContextType>,
     description: LwwRegister<String>,
     created_at: LwwRegister<u64>,
+    creator: LwwRegister<String>,
     messages: AuthoredVector<Message>,
     threads: UnorderedMap<MessageId, AuthoredVector<Message>>,
     reactions: UnorderedMap<MessageId, UnorderedMap<String, UnorderedSet<String>>>,
@@ -426,11 +428,14 @@ impl MeroChat {
     ) -> MeroChat {
         app::emit!(Event::Initialized());
 
+        let creator = encode_blob_id_base58(&env::executor_id());
+
         MeroChat {
             name: LwwRegister::new(name),
             context_type: LwwRegister::new(context_type),
             description: LwwRegister::new(description),
             created_at: LwwRegister::new(created_at),
+            creator: LwwRegister::new(creator),
             messages: AuthoredVector::new(),
             threads: UnorderedMap::new(),
             reactions: UnorderedMap::new(),
@@ -444,7 +449,24 @@ impl MeroChat {
             context_type: self.context_type.get().clone(),
             description: self.description.get().clone(),
             created_at: *self.created_at,
+            creator: self.creator.get().clone(),
         }
+    }
+
+    /// Alias for `get_info` — satisfies frontends that call `get_channel_info`.
+    /// The legacy `channel` argument is accepted but ignored.
+    pub fn get_channel_info(&self, _channel: Option<String>) -> ContextInfo {
+        self.get_info()
+    }
+
+    /// No-op stub so frontends that call `mark_messages_as_read` don't get
+    /// a "method not found" error. Read state is tracked client-side only.
+    pub fn mark_messages_as_read(
+        &self,
+        _channel: Option<String>,
+        _timestamp: Option<u64>,
+    ) -> app::Result<String, String> {
+        Ok("ok".to_string())
     }
 
     pub fn update_info(

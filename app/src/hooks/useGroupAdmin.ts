@@ -41,7 +41,7 @@ export function useGroupAdmin() {
       ]);
 
       if (groupResp.data) setGroup(groupResp.data);
-      if (membersResp.data) setMembers(membersResp.data);
+      if (membersResp.data) setMembers(membersResp.data.members);
       if (upgradeResp.data !== undefined) setUpgradeStatus(upgradeResp.data);
 
       const firstError =

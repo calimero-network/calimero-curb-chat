@@ -38,6 +38,7 @@ export interface ContextInfo {
   context_type: "Channel" | "Dm";
   description?: string;
   created_at?: number;
+  creator?: string;
 }
 
 

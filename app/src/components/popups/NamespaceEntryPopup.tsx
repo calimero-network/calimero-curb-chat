@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { styled, keyframes } from "styled-components";
 import { Button, Input } from "@calimero-network/mero-ui";
 import { getAppEndpointKey, getAuthConfig } from "@calimero-network/calimero-client";
 import axios from "axios";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
+import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import type { GroupSummary } from "../../api/groupApi";
 import {
   getApplicationId,
@@ -185,6 +186,22 @@ const Spinner = styled.div`
   margin: 0 auto 1rem;
 `;
 
+const BtnSpinner = styled.div`
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(165, 255, 17, 0.3);
+  border-top-color: #a5ff11;
+  border-radius: 50%;
+  animation: ${spin} 0.7s linear infinite;
+  flex-shrink: 0;
+`;
+
+const FieldError = styled.p`
+  color: #ff6b6b;
+  font-size: 0.72rem;
+  margin: 0.3rem 0 0;
+`;
+
 const Row = styled.div`
   display: flex;
   gap: 0.5rem;
@@ -290,6 +307,8 @@ interface Props {
 
 export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLogout }: Props) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const forceSelect = !!(location.state as Record<string, unknown> | null)?.forceSelect;
   const api = useRef(new GroupApiDataSource());
 
   const [step, setStep] = useState<Step>("loading");
@@ -346,16 +365,34 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       const res = await api.current.resolveCurrentMemberIdentity(namespaceId, storedIdentity);
       if (res.data?.memberIdentity) {
         setGroupMemberIdentity(namespaceId, res.data.memberIdentity);
+        const memberIdentity = res.data.memberIdentity;
 
+        // 1. Try the group member alias (set via setMemberAlias)
         const serverAlias = res.data.members
-          ?.find((m) => m.identity === res.data!.memberIdentity)
+          ?.find((m) => m.identity === memberIdentity)
           ?.alias?.trim();
-        const displayName = serverAlias || storedName;
 
-        if (displayName) {
-          // Node already has a username — auto-enter
-          enterChat(namespaceId, displayName, res.data.memberIdentity);
+        if (serverAlias) {
+          setMessengerDisplayName(serverAlias);
+          enterChat(namespaceId, serverAlias, memberIdentity);
           return;
+        }
+
+        // 2. Try get_profiles RPC on any available context to recover username from WASM state
+        const ctxRes = await api.current.listGroupContexts(namespaceId);
+        if (ctxRes.data?.length) {
+          const clientApi = new ClientApiDataSource();
+          for (const ctx of ctxRes.data) {
+            const profilesRes = await clientApi.getProfiles(ctx.contextId, memberIdentity);
+            if (profilesRes.data) {
+              const myProfile = profilesRes.data.find((p) => p.identity === memberIdentity);
+              if (myProfile?.username) {
+                setMessengerDisplayName(myProfile.username);
+                enterChat(namespaceId, myProfile.username, memberIdentity);
+                return;
+              }
+            }
+          }
         }
       }
     } catch {
@@ -493,8 +530,8 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       clearInvitationFromStorage();
     }
 
-    // Single namespace: skip the picker and go straight to identity check
-    if (groups.length === 1) {
+    // Single namespace: skip picker on initial login but always show it when switching workspace
+    if (groups.length === 1 && !forceSelect) {
       setSelectedId(groups[0].groupId);
       void checkNamespace(groups[0].groupId);
       return;
@@ -504,7 +541,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
     const preferred = groups.find((g) => g.groupId === storedId) ?? groups[0];
     setSelectedId(preferred.groupId);
     setStep("select");
-  }, [checkNamespace, processInvitation]);
+  }, [checkNamespace, processInvitation, forceSelect]);
 
   useEffect(() => {
     if (isAuthenticated || isConfigSet) {
@@ -643,20 +680,14 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
           </>
         )}
 
-        {/* Creating namespace */}
-        {step === "creating" && (
-          <>
-            <Spinner />
-            <Info>Creating your server…</Info>
-          </>
-        )}
+        {/* Creating namespace — handled inline inside the "create" step (spinner on button) */}
 
         {/* Select namespace */}
         {step === "select" && (
           <>
             <Header>
-              <Title>Welcome to MeroChat</Title>
-              <Sub>Select the server you want to join.</Sub>
+              <Title>{forceSelect ? "Switch workspace" : "Welcome to MeroChat"}</Title>
+              <Sub>{forceSelect ? "Pick an existing workspace or join a new one." : "Select the server you want to join."}</Sub>
             </Header>
             {error && <Err>{error}</Err>}
             <Field>
@@ -679,6 +710,28 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
             <CreateLink onClick={() => { setError(""); setNsNameInput(""); setStep("create"); }}>
               + Create new workspace
             </CreateLink>
+            {forceSelect && (
+              <>
+                <OrDivider>or join via invite</OrDivider>
+                <Field>
+                  <Label>Invitation code</Label>
+                  <CodeTextarea
+                    placeholder="Paste your invitation code here…"
+                    value={inviteCodeInput}
+                    onChange={(e) => { setInviteCodeInput(e.target.value); setError(""); }}
+                  />
+                </Field>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  style={{ width: "100%" }}
+                  onClick={() => void handleInviteCode()}
+                  disabled={!inviteCodeInput.trim()}
+                >
+                  Join with code
+                </Button>
+              </>
+            )}
             <Divider />
             <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
           </>
@@ -770,44 +823,60 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
         )}
 
         {/* Create namespace */}
-        {step === "create" && (
+        {(step === "create" || step === "creating") && (
           <>
             <Header>
               <Title>Create workspace</Title>
               <Sub>Give your server a name to get started.</Sub>
             </Header>
-            {error && <Err>{error}</Err>}
             <Field>
               <Label>Server name</Label>
-              <div onKeyDown={(e) => { if (e.key === "Enter") void handleCreate(); }}>
+              <div onKeyDown={(e) => {
+                if (e.key === "Enter" && step !== "creating" && nsNameInput.trim() && nsNameInput.trim().length <= 64) {
+                  void handleCreate();
+                }
+              }}>
                 <Input
                   type="text"
                   placeholder="e.g. My Team"
                   value={nsNameInput}
                   onChange={(e) => { setNsNameInput(e.target.value); setError(""); }}
                   autoFocus
+                  disabled={step === "creating"}
                 />
               </div>
+              {nsNameInput.length > 64 && (
+                <FieldError>Name must be 64 characters or fewer ({nsNameInput.length}/64)</FieldError>
+              )}
+              {nsNameInput.length <= 64 && error && (
+                <FieldError>{error}</FieldError>
+              )}
             </Field>
             <Button
               type="button"
               variant="primary"
-              style={{ width: "100%" }}
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
               onClick={() => void handleCreate()}
-              disabled={!nsNameInput.trim()}
+              disabled={step === "creating" || !nsNameInput.trim() || nsNameInput.trim().length > 64}
             >
-              Create server
+              {step === "creating" ? (
+                <>
+                  <BtnSpinner />
+                  Creating…
+                </>
+              ) : "Create"}
             </Button>
             <Button
               type="button"
               variant="secondary"
               style={{ width: "100%", marginTop: "0.5rem" }}
               onClick={() => { setError(""); setStep(namespaces.length > 0 ? "select" : "no-workspace"); }}
+              disabled={step === "creating"}
             >
               ← Back
             </Button>
             <Divider />
-            <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
+            <LogoutBtn onClick={onLogout} disabled={step === "creating"}>Disconnect node</LogoutBtn>
           </>
         )}
 

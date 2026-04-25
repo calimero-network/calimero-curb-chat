@@ -16,7 +16,7 @@ export function useGroupMembers() {
       const response = await new GroupApiDataSource().listMembers(groupId);
 
       if (response.data) {
-        setMembers(response.data);
+        setMembers(response.data.members);
       } else if (response.error) {
         setError(
           response.error.message || "Failed to fetch group members",

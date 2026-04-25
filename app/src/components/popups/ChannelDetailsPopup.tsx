@@ -5,6 +5,9 @@ import BaseModal from "../common/popups/BaseModal";
 import type { ChannelInfo, UserId } from "../../api/clientApi";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
+import { useGroupAdmin } from "../../hooks/useGroupAdmin";
+import { getGroupId, getGroupMemberIdentity } from "../../constants/config";
+import type { GroupMember } from "../../api/groupApi";
 
 interface ChannelDetailsPopupProps {
   toggle: React.ReactNode;
@@ -47,7 +50,26 @@ export default function ChannelDetailsPopup({
     readOnly: false,
   });
 
+  const groupId = getGroupId();
+  const {
+    members: groupMembers,
+    actionLoading,
+    fetchAll,
+    removeMember,
+    setMemberCapabilities,
+    getMemberCapabilities,
+  } = useGroupAdmin();
+
   const channelName = chat.type === "channel" ? chat.name : chat.id;
+
+  const currentIdentity = groupId ? getGroupMemberIdentity(groupId) : "";
+  const isAdmin =
+    !!currentIdentity &&
+    groupMembers.some(
+      (m: GroupMember) =>
+        m.identity === currentIdentity &&
+        String(m.role ?? "").toLowerCase() === "admin",
+    );
 
   const getChannelMetadata = async (channelName: string) => {
     const channelInfo: ResponseData<ChannelInfo> =
@@ -83,6 +105,12 @@ export default function ChannelDetailsPopup({
     fetchMetadata();
   }, [chat]);
 
+  useEffect(() => {
+    if (isOpen && groupId) {
+      void fetchAll(groupId);
+    }
+  }, [isOpen, groupId, fetchAll]);
+
   const popupContent = (
     <DetailsContainer
       channelName={channelName}
@@ -95,6 +123,14 @@ export default function ChannelDetailsPopup({
       promoteModerator={() => {}}
       removeUserFromChannel={() => {}}
       reFetchChannelMembers={reFetchChannelMembers}
+      groupId={groupId}
+      groupMembers={groupMembers}
+      isAdmin={isAdmin}
+      actionLoading={actionLoading}
+      onRemoveMember={removeMember}
+      onSetCapabilities={setMemberCapabilities}
+      onGetCapabilities={getMemberCapabilities}
+      onRefreshMembers={() => groupId && void fetchAll(groupId)}
     />
   );
 

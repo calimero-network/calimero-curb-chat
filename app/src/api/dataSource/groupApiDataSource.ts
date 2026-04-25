@@ -63,6 +63,35 @@ function ok<T>(data: T): Result<T> {
   return { data, error: null };
 }
 
+// ─── Simple in-process dedup cache ───────────────────────────────────────────
+// Deduplicates concurrent identical requests (same key within TTL) so that
+// multiple hooks mounting simultaneously don't fan out into N identical calls.
+const CACHE_TTL_MS = 5_000;
+
+interface CacheEntry<T> {
+  promise: Promise<Result<T>>;
+  expiresAt: number;
+}
+
+const pendingCache = new Map<string, CacheEntry<unknown>>();
+
+function cachedRequest<T>(key: string, fetch: () => Promise<Result<T>>): Promise<Result<T>> {
+  const now = Date.now();
+  const existing = pendingCache.get(key) as CacheEntry<T> | undefined;
+  if (existing && existing.expiresAt > now) {
+    return existing.promise;
+  }
+  const promise = fetch().finally(() => {
+    const entry = pendingCache.get(key);
+    if (entry && entry.promise === promise) {
+      pendingCache.delete(key);
+    }
+  });
+  pendingCache.set(key, { promise: promise as Promise<Result<unknown>>, expiresAt: now + CACHE_TTL_MS });
+  return promise;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function fail<T>(code: number, message: string): Result<T> {
   return { data: null, error: { code, message } };
 }
@@ -227,6 +256,30 @@ function catchError<T>(context: string, error: unknown): Result<T> {
       : `An unexpected error occurred during ${context}`;
   console.error(`${context} failed:`, error);
   return fail(500, message);
+}
+
+export interface BlobUploadResult {
+  blobId: string;
+  size: number;
+}
+
+/** Direct blob upload via axios – bypasses the calimero-client SDK which misparses the server's `data` envelope. */
+export async function uploadBlobDirect(file: File): ApiResponse<BlobUploadResult> {
+  try {
+    const buffer = await file.arrayBuffer();
+    const response = await axios.put(
+      `${getNodeEndpoint()}/admin-api/blobs`,
+      buffer,
+      { headers: { ...getAuthHeaders(), "Content-Type": "application/octet-stream" } },
+    );
+    const raw = response.data?.data ?? response.data;
+    if (!raw?.blob_id) {
+      return fail(500, "Upload succeeded but server returned no blob_id");
+    }
+    return ok({ blobId: raw.blob_id as string, size: raw.size as number });
+  } catch (error) {
+    return catchError("uploadBlobDirect", error);
+  }
 }
 
 export class GroupApiDataSource implements GroupApi {
@@ -400,18 +453,35 @@ export class GroupApiDataSource implements GroupApi {
     }
   }
 
-  async listMembers(groupId: string): ApiResponse<GroupMember[]> {
-    try {
-      const response = await axios.get(
-        `${this.base()}/groups/${groupId}/members`,
-        { headers: getAuthHeaders() },
-      );
-      return response.status === 200
-        ? ok(response.data.data)
-        : httpFail(response.status, response.statusText);
-    } catch (error) {
-      return catchError("listMembers", error);
-    }
+  async listMembers(
+    groupId: string,
+  ): ApiResponse<{ members: GroupMember[]; selfIdentity?: string }> {
+    return cachedRequest(`listMembers:${groupId}`, async () => {
+      try {
+        const response = await axios.get(
+          `${this.base()}/groups/${groupId}/members`,
+          { headers: getAuthHeaders() },
+        );
+        if (response.status !== 200) {
+          return httpFail(response.status, response.statusText);
+        }
+        // Handle both wrapped ({ data: { members, selfIdentity } }) and
+        // unwrapped ({ members, selfIdentity }) API response shapes.
+        const raw: unknown = response.data.data ?? response.data;
+        const members: GroupMember[] = Array.isArray(raw)
+          ? (raw as GroupMember[])
+          : Array.isArray((raw as { members?: unknown })?.members)
+            ? ((raw as { members: GroupMember[] }).members)
+            : [];
+        const selfIdentity: string | undefined =
+          raw && typeof raw === "object" && "selfIdentity" in raw
+            ? String((raw as { selfIdentity: unknown }).selfIdentity)
+            : undefined;
+        return ok({ members, selfIdentity });
+      } catch (error) {
+        return catchError("listMembers", error);
+      }
+    });
   }
 
   async resolveCurrentMemberIdentity(
@@ -433,22 +503,21 @@ export class GroupApiDataSource implements GroupApi {
       };
     }
 
-    const resolution = resolveCurrentGroupMemberIdentity({
-      members: membersResponse.data,
-      storedMemberIdentity,
-    });
+    const { members, selfIdentity } = membersResponse.data;
 
-    if (!resolution.memberIdentity) {
+    // Prefer selfIdentity from the API — it's authoritative and avoids heuristic matching.
+    const resolvedIdentity =
+      selfIdentity ||
+      resolveCurrentGroupMemberIdentity({ members, storedMemberIdentity }).memberIdentity;
+
+    if (!resolvedIdentity) {
       return fail(
         404,
         "Could not resolve identity for this namespace. Make sure you joined it on this device.",
       );
     }
 
-    return ok({
-      memberIdentity: resolution.memberIdentity,
-      members: membersResponse.data,
-    });
+    return ok({ memberIdentity: resolvedIdentity, members });
   }
 
   async removeMember(
@@ -471,6 +540,7 @@ export class GroupApiDataSource implements GroupApi {
   }
 
   async listGroupContexts(groupId: string): ApiResponse<GroupContextEntry[]> {
+    return cachedRequest(`listGroupContexts:${groupId}`, async () => {
     try {
       const response = await axios.get(
         `${this.base()}/groups/${groupId}/contexts`,
@@ -491,6 +561,7 @@ export class GroupApiDataSource implements GroupApi {
     } catch (error) {
       return catchError("listGroupContexts", error);
     }
+    });
   }
 
   async joinGroupContext(

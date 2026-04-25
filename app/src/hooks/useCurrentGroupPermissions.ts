@@ -72,7 +72,7 @@ export function useCurrentGroupPermissions(groupId: string) {
         return;
       }
 
-      if (currentMember.role === "Admin") {
+      if (String(currentMember.role ?? "").toLowerCase() === "admin") {
         setState({
           loading: false,
           memberIdentity,

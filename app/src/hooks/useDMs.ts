@@ -47,7 +47,7 @@ export function useDMs() {
       const membersResponse = await groupApi.listMembers(groupId);
       const memberAliasByIdentity = new Map<string, string>();
       if (membersResponse.data) {
-        membersResponse.data.forEach((member) => {
+        membersResponse.data.members.forEach((member) => {
           const alias = member.alias?.trim();
           if (alias) {
             memberAliasByIdentity.set(member.identity, alias);
