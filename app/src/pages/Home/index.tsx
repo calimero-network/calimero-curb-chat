@@ -504,6 +504,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   } = useChatHandlers(activeChatRef, activeChat, chatHandlersRefs);
 
   useWebSocketEvents(useCallback(async (event: WebSocketEvent) => {
+    console.log("[SSE] WebSocket event listener fired in Home:", { contextId: event.contextId, type: event.type });
     try {
       await handleStateMutation(event);
 
@@ -562,6 +563,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   // Subscribe to ALL group contexts + DM contexts for real-time updates
   useEffect(() => {
+    console.log("[SSE] subscription effect — app:", !!app, "allContextIdsKey:", allContextIdsKey);
     if (!app || !allContextIdsKey) return;
 
     const contextIds = allContextIdsKey.split(",");

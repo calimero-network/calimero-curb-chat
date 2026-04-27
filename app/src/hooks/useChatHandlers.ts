@@ -524,17 +524,21 @@ export function useChatHandlers(
    * Each event type triggers only the specific data refresh it needs
    */
   const handleStateMutation = useCallback(
-    // NOTE: chefsale - return executor public key for event contextID
     async (event: WebSocketEvent) => {
-      // const sessionChat = getStoredSession();
-      // const useDM = (sessionChat?.type === "direct_message" &&
-      //   sessionChat?.account &&
-      //   !sessionChat?.canJoin &&
-      //   sessionChat?.otherIdentityNew) as boolean;
+      console.log("[SSE] handleStateMutation called:", {
+        contextId: event.contextId,
+        type: event.type,
+        hasData: !!event.data,
+        dataKeys: event.data ? Object.keys(event.data) : [],
+        eventsCount: event.data?.events?.length ?? 0,
+        rawData: event.data,
+      });
 
-      // Process execution events if present - this handles all the specific refreshes
       if (event.data?.events && event.data.events.length > 0) {
+        console.log("[SSE] Processing", event.data.events.length, "execution events:", event.data.events.map((e: ExecutionEventData) => e.kind));
         handleExecutionEvents(event.contextId, event.data.events);
+      } else {
+        console.log("[SSE] No execution events in data — StateMutation without events or unknown format");
       }
     },
     [handleExecutionEvents]
