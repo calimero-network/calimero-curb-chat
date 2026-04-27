@@ -132,6 +132,21 @@ merod --node "$NODE_NAME" --home "$NODE_HOME" init \
   --auth-mode embedded
 green "Node initialised"
 
+# ── Patch CORS — allow all localhost origins for dev ─────────────────────────
+
+CONFIG_FILE="$NODE_HOME/${NODE_NAME}/config.toml"
+if [ -f "$CONFIG_FILE" ]; then
+  python3 - "$CONFIG_FILE" <<'PYEOF'
+import sys, re
+path = sys.argv[1]
+txt  = open(path).read()
+txt  = re.sub(r'allow_all_origins\s*=\s*false', 'allow_all_origins = true',  txt)
+txt  = re.sub(r'allowed_origins\s*=\s*\[\]',   'allowed_origins = []',        txt)
+open(path, 'w').write(txt)
+PYEOF
+  green "CORS patched (allow_all_origins = true)"
+fi
+
 # ── Start node ────────────────────────────────────────────────────────────────
 
 step "Starting node"

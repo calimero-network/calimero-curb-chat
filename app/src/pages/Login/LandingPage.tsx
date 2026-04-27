@@ -140,6 +140,10 @@ const HeroSection = styled.div`
   justify-content: center;
   overflow: hidden;
 
+  @media (max-width: 1099px) {
+    padding-top: 12px;
+  }
+
   @media (min-width: 1100px) {
     flex-direction: row;
     align-items: center;
@@ -152,21 +156,21 @@ const HeroSection = styled.div`
 // ─── Background ──────────────────────────────────────────────────────────────
 
 const Orb = styled.div<{
-  size: number; top: string; left: string;
-  color: string; delay: number; anim: number;
+  $size: number; $top: string; $left: string;
+  $color: string; $delay: number; $anim: number;
 }>`
   position: absolute;
-  width: ${p => p.size}px;
-  height: ${p => p.size}px;
-  top: ${p => p.top};
-  left: ${p => p.left};
+  width: ${p => p.$size}px;
+  height: ${p => p.$size}px;
+  top: ${p => p.$top};
+  left: ${p => p.$left};
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 40%, ${p => p.color}, transparent 70%);
-  filter: blur(${p => Math.round(p.size * 0.3)}px);
+  background: radial-gradient(circle at 40% 40%, ${p => p.$color}, transparent 70%);
+  filter: blur(${p => Math.round(p.$size * 0.3)}px);
   opacity: 0.45;
   ${p => css`
-    animation: ${p.anim === 1 ? float1 : p.anim === 2 ? float2 : float3} ${16 + p.delay}s ease-in-out infinite;
-    animation-delay: ${-p.delay * 2.5}s;
+    animation: ${p.$anim === 1 ? float1 : p.$anim === 2 ? float2 : float3} ${16 + p.$delay}s ease-in-out infinite;
+    animation-delay: ${-p.$delay * 2.5}s;
   `}
   pointer-events: none;
 `;
@@ -188,10 +192,10 @@ const VignetteOverlay = styled.div`
   pointer-events: none;
 `;
 
-const Ring = styled.div<{ size: number; duration: number; reverse?: boolean }>`
+const Ring = styled.div<{ $size: number; $duration: number; $reverse?: boolean }>`
   position: absolute;
-  width: ${p => p.size}px;
-  height: ${p => p.size}px;
+  width: ${p => p.$size}px;
+  height: ${p => p.$size}px;
   border-radius: 50%;
   border: 1px solid rgba(165,255,17,0.08);
   top: 50%;
@@ -199,8 +203,8 @@ const Ring = styled.div<{ size: number; duration: number; reverse?: boolean }>`
   transform: translate(-50%, -50%);
   pointer-events: none;
   ${p => css`
-    animation: ${spin} ${p.duration}s linear infinite;
-    animation-direction: ${p.reverse ? "reverse" : "normal"};
+    animation: ${spin} ${p.$duration}s linear infinite;
+    animation-direction: ${p.$reverse ? "reverse" : "normal"};
   `}
 
   &::before {
@@ -434,7 +438,7 @@ const PreviewCaption = styled.div`
 
 // ─── Browser Frame ────────────────────────────────────────────────────────────
 
-const BrowserFrame = styled.div<{ fading: boolean }>`
+const BrowserFrame = styled.div<{ $fading: boolean }>`
   position: relative;
   width: 420px;
   height: 496px;
@@ -444,7 +448,7 @@ const BrowserFrame = styled.div<{ fading: boolean }>`
   overflow: hidden;
   animation: ${frameGlow} 6s ease-in-out infinite;
   transition: opacity 0.5s ease;
-  opacity: ${p => p.fading ? 0 : 1};
+  opacity: ${p => p.$fading ? 0 : 1};
 `;
 
 const FrameBar = styled.div`
@@ -519,18 +523,18 @@ const SideSectionLabel = styled.div`
   text-transform: uppercase;
 `;
 
-const ChannelRow = styled.div<{ active: boolean; shown: boolean }>`
+const ChannelRow = styled.div<{ $active: boolean; $shown: boolean }>`
   padding: 4px 12px 4px 10px;
   font-size: 0.7rem;
-  color: ${p => p.active ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.38)"};
-  background: ${p => p.active ? "rgba(165,255,17,0.07)" : "transparent"};
-  border-left: 2px solid ${p => p.active ? "rgba(165,255,17,0.45)" : "transparent"};
+  color: ${p => p.$active ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.38)"};
+  background: ${p => p.$active ? "rgba(165,255,17,0.07)" : "transparent"};
+  border-left: 2px solid ${p => p.$active ? "rgba(165,255,17,0.45)" : "transparent"};
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  opacity: ${p => p.shown ? 1 : 0};
-  animation: ${p => p.shown ? css`${channelSlide} 0.28s ease both` : "none"};
+  opacity: ${p => p.$shown ? 1 : 0};
+  animation: ${p => p.$shown ? css`${channelSlide} 0.28s ease both` : "none"};
 
   span.hash { opacity: 0.38; margin-right: 2px; }
 `;
@@ -576,20 +580,20 @@ const MessagesArea = styled.div`
   overflow: hidden;
 `;
 
-const Msg = styled.div<{ shown: boolean }>`
+const Msg = styled.div<{ $shown: boolean }>`
   display: flex;
   gap: 7px;
   align-items: flex-start;
   padding: 3px 0;
-  opacity: ${p => p.shown ? 1 : 0};
-  animation: ${p => p.shown ? css`${msgAppear} 0.28s ease both` : "none"};
+  opacity: ${p => p.$shown ? 1 : 0};
+  animation: ${p => p.$shown ? css`${msgAppear} 0.28s ease both` : "none"};
 `;
 
-const Av = styled.div<{ bg: string }>`
+const Av = styled.div<{ $bg: string }>`
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: ${p => p.bg};
+  background: ${p => p.$bg};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -630,7 +634,7 @@ const MsgText = styled.div`
   word-break: break-word;
 `;
 
-const Reaction = styled.div<{ shown: boolean }>`
+const Reaction = styled.div<{ $shown: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -642,16 +646,16 @@ const Reaction = styled.div<{ shown: boolean }>`
   font-size: 0.62rem;
   color: rgba(255,255,255,0.48);
   cursor: pointer;
-  opacity: ${p => p.shown ? 1 : 0};
-  animation: ${p => p.shown ? css`${reactionPop} 0.28s ease both` : "none"};
+  opacity: ${p => p.$shown ? 1 : 0};
+  animation: ${p => p.$shown ? css`${reactionPop} 0.28s ease both` : "none"};
 `;
 
-const TypingRow = styled.div<{ shown: boolean }>`
+const TypingRow = styled.div<{ $shown: boolean }>`
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 4px 2px;
-  opacity: ${p => p.shown ? 1 : 0};
+  opacity: ${p => p.$shown ? 1 : 0};
   transition: opacity 0.18s ease;
 `;
 
@@ -696,21 +700,21 @@ const InputMock = styled.div`
   color: rgba(255,255,255,0.18);
 `;
 
-const DmRow = styled.div<{ shown: boolean }>`
+const DmRow = styled.div<{ $shown: boolean }>`
   padding: 4px 10px;
   display: flex;
   align-items: center;
   gap: 6px;
-  opacity: ${p => p.shown ? 1 : 0};
-  animation: ${p => p.shown ? css`${dmSlide} 0.26s ease both` : "none"};
+  opacity: ${p => p.$shown ? 1 : 0};
+  animation: ${p => p.$shown ? css`${dmSlide} 0.26s ease both` : "none"};
 `;
 
-const DmAvatar = styled.div<{ bg: string }>`
+const DmAvatar = styled.div<{ $bg: string }>`
   position: relative;
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: ${p => p.bg};
+  background: ${p => p.$bg};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -720,14 +724,14 @@ const DmAvatar = styled.div<{ bg: string }>`
   flex-shrink: 0;
 `;
 
-const OnlineDot = styled.div<{ online: boolean }>`
+const OnlineDot = styled.div<{ $online: boolean }>`
   position: absolute;
   bottom: -1px;
   right: -1px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: ${p => p.online ? "#a5ff11" : "rgba(255,255,255,0.18)"};
+  background: ${p => p.$online ? "#a5ff11" : "rgba(255,255,255,0.18)"};
   border: 1px solid #0d0d0f;
 `;
 
@@ -750,7 +754,7 @@ const ToastOverlay = styled.div`
   pointer-events: none;
 `;
 
-const ToastItem = styled.div<{ shown: boolean }>`
+const ToastItem = styled.div<{ $shown: boolean }>`
   background: rgba(22, 22, 28, 0.95);
   border: 1px solid rgba(165,255,17,0.22);
   border-radius: 8px;
@@ -759,9 +763,9 @@ const ToastItem = styled.div<{ shown: boolean }>`
   align-items: center;
   gap: 7px;
   max-width: 160px;
-  opacity: ${p => p.shown ? 1 : 0};
+  opacity: ${p => p.$shown ? 1 : 0};
   transition: opacity 0.25s ease;
-  animation: ${p => p.shown ? css`${toastSlide} 0.3s ease both` : "none"};
+  animation: ${p => p.$shown ? css`${toastSlide} 0.3s ease both` : "none"};
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
 `;
 
@@ -824,7 +828,7 @@ function ChatPreview() {
   const showChannelToast  = step === 14 || step === 15;
 
   return (
-    <BrowserFrame fading={fading}>
+    <BrowserFrame $fading={fading}>
       <FrameBar>
         <TL color="#ff5f56" />
         <TL color="#ffbd2e" />
@@ -837,7 +841,7 @@ function ChatPreview() {
           <SideSection>
             <SideSectionLabel>Channels</SideSectionLabel>
             {CHANNELS.map((ch, i) => (
-              <ChannelRow key={ch.name} active={i === 0} shown={shownChannels > i}>
+              <ChannelRow key={ch.name} $active={i === 0} $shown={shownChannels > i}>
                 <span><span className="hash">#</span>{ch.name}</span>
                 {ch.unread > 0 && <UnreadBadge>{ch.unread}</UnreadBadge>}
               </ChannelRow>
@@ -847,10 +851,10 @@ function ChatPreview() {
             <SideSection>
               <SideSectionLabel>Direct Messages</SideSectionLabel>
               {DMS.map((dm, i) => (
-                <DmRow key={dm.name} shown={shownDms > i}>
-                  <DmAvatar bg={dm.color}>
+                <DmRow key={dm.name} $shown={shownDms > i}>
+                  <DmAvatar $bg={dm.color}>
                     {dm.init}
-                    <OnlineDot online={dm.online} />
+                    <OnlineDot $online={dm.online} />
                   </DmAvatar>
                   <DmName>{dm.name}</DmName>
                 </DmRow>
@@ -868,8 +872,8 @@ function ChatPreview() {
           <MessagesArea>
             {MSGS.map((m, i) => (
               <React.Fragment key={i}>
-                <Msg shown={msgShown[i]}>
-                  <Av bg={m.color}>{m.init}</Av>
+                <Msg $shown={msgShown[i]}>
+                  <Av $bg={m.color}>{m.init}</Av>
                   <MsgBody>
                     <MsgMeta>
                       <MsgUser color={m.color}>{m.user}</MsgUser>
@@ -877,14 +881,14 @@ function ChatPreview() {
                     </MsgMeta>
                     <MsgText>{m.text}</MsgText>
                     {i === 1 && (
-                      <Reaction shown={showReaction && msgShown[1]}>🎉 3</Reaction>
+                      <Reaction $shown={showReaction && msgShown[1]}>🎉 3</Reaction>
                     )}
                   </MsgBody>
                 </Msg>
               </React.Fragment>
             ))}
 
-            <TypingRow shown={showTyping}>
+            <TypingRow $shown={showTyping}>
               <Dots>
                 <Dot d={0} /><Dot d={180} /><Dot d={360} />
               </Dots>
@@ -899,11 +903,11 @@ function ChatPreview() {
       </AppLayout>
 
       <ToastOverlay>
-        <ToastItem shown={showInviteToast}>
+        <ToastItem $shown={showInviteToast}>
           <ToastIconEl>👤</ToastIconEl>
           <ToastText><strong>Bob</strong> was invited to #dev</ToastText>
         </ToastItem>
-        <ToastItem shown={showChannelToast}>
+        <ToastItem $shown={showChannelToast}>
           <ToastIconEl>📢</ToastIconEl>
           <ToastText><strong>#announcements</strong> channel created</ToastText>
         </ToastItem>
@@ -916,24 +920,24 @@ function ChatPreview() {
 
 const Background = () => (
   <>
-    <Orb size={460} top="-12%" left="-10%" color="rgba(100,220,10,0.55)"  delay={0} anim={1} />
-    <Orb size={360} top="58%"  left="68%"  color="rgba(165,255,17,0.4)"   delay={4} anim={2} />
-    <Orb size={260} top="62%"  left="2%"   color="rgba(80,180,10,0.35)"   delay={7} anim={3} />
-    <Orb size={180} top="8%"   left="76%"  color="rgba(165,255,17,0.28)"  delay={2} anim={1} />
+    <Orb $size={460} $top="-12%" $left="-10%" $color="rgba(100,220,10,0.55)"  $delay={0} $anim={1} />
+    <Orb $size={360} $top="58%"  $left="68%"  $color="rgba(165,255,17,0.4)"   $delay={4} $anim={2} />
+    <Orb $size={260} $top="62%"  $left="2%"   $color="rgba(80,180,10,0.35)"   $delay={7} $anim={3} />
+    <Orb $size={180} $top="8%"   $left="76%"  $color="rgba(165,255,17,0.28)"  $delay={2} $anim={1} />
     <GridOverlay />
     <VignetteOverlay />
-    <Ring size={580} duration={45} />
-    <Ring size={800} duration={70} reverse />
+    <Ring $size={580} $duration={45} />
+    <Ring $size={800} $duration={70} $reverse />
   </>
 );
 
 // ─── Section Primitives ───────────────────────────────────────────────────────
 
-const Sect = styled.section<{ alt?: boolean }>`
+const Sect = styled.section<{ $alt?: boolean }>`
   position: relative;
   width: 100%;
   padding: 5.5rem 1.5rem;
-  background: ${p => p.alt ? 'rgba(255,255,255,0.012)' : 'transparent'};
+  background: ${p => p.$alt ? 'rgba(255,255,255,0.012)' : 'transparent'};
   border-top: 1px solid rgba(255,255,255,0.04);
   overflow: hidden;
 `;
@@ -1004,33 +1008,37 @@ const DiagramWrap = styled.div`
 
 const DiagramRow = styled.div`
   display: grid;
-  grid-template-columns: 144px 1fr 144px;
+  grid-template-columns: 185px 1fr 138px;
   align-items: center;
-  margin: 5px 0;
+  margin: 4px 0;
 
   @media (max-width: 520px) {
-    grid-template-columns: 100px 1fr 100px;
+    grid-template-columns: 130px 1fr 100px;
   }
 `;
 
-const NodeCard = styled.div<{ idx: number }>`
+const NodeCard = styled.div<{ $idx: number }>`
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  border-radius: 9px;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 13px;
+  border-radius: 10px;
   border: 1px solid rgba(165,255,17,0.22);
   background: rgba(165,255,17,0.04);
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.82);
-  ${p => css`animation: ${nodeGlow} 3.5s ${p.idx * 1.1}s ease-in-out infinite;`}
+  ${p => css`animation: ${nodeGlow} 3.5s ${p.$idx * 1.1}s ease-in-out infinite;`}
+`;
+
+const NodeTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
   white-space: nowrap;
 
   @media (max-width: 520px) {
-    font-size: 0.66rem;
-    padding: 7px 9px;
-    gap: 5px;
+    font-size: 0.63rem;
   }
 `;
 
@@ -1043,23 +1051,69 @@ const NodePulse = styled.div`
   flex-shrink: 0;
 `;
 
+const NamespaceBox = styled.div`
+  padding: 5px 8px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(165,255,17,0.12);
+  background: rgba(165,255,17,0.025);
+`;
+
+const NamespaceLabel = styled.div`
+  font-size: 0.54rem;
+  font-weight: 600;
+  color: rgba(165,255,17,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+`;
+
+const ContextBox = styled.div`
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.02);
+  font-size: 0.58rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.38);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  @media (max-width: 520px) {
+    font-size: 0.52rem;
+  }
+`;
+
 const AppCard = styled.div`
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 7px;
-  padding: 9px 12px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 10px 11px;
   border-radius: 9px;
   border: 1px solid rgba(255,255,255,0.07);
   background: rgba(255,255,255,0.03);
-  font-size: 0.74rem;
-  font-weight: 500;
-  color: rgba(255,255,255,0.52);
+`;
+
+const AppTypeLabel = styled.div`
+  font-size: 0.54rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
   white-space: nowrap;
+`;
+
+const DiagramAppName = styled.div`
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 
   @media (max-width: 520px) {
-    font-size: 0.66rem;
-    padding: 7px 9px;
+    font-size: 0.6rem;
   }
 `;
 
@@ -1085,15 +1139,15 @@ const WireLabel = styled.div`
   top: -17px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 0.58rem;
+  font-size: 0.54rem;
   font-weight: 600;
   color: rgba(165,255,17,0.4);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   white-space: nowrap;
   pointer-events: none;
 `;
 
-const PacketDot = styled.div<{ delay: string; dur: string }>`
+const PacketDot = styled.div<{ $delay: string; $dur: string }>`
   position: absolute;
   top: -3px;
   width: 8px;
@@ -1101,18 +1155,30 @@ const PacketDot = styled.div<{ delay: string; dur: string }>`
   border-radius: 50%;
   background: #a5ff11;
   box-shadow: 0 0 10px rgba(165,255,17,0.85), 0 0 20px rgba(165,255,17,0.3);
-  ${p => css`animation: ${packetTravel} ${p.dur} ${p.delay} ease-in-out infinite;`}
+  ${p => css`animation: ${packetTravel} ${p.$dur} ${p.$delay} ease-in-out infinite;`}
 `;
 
 const DiagramConnector = styled.div`
-  padding-left: 25px;
-  margin: -2px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 19px;
+  margin: 2px 0;
 `;
 
 const VertLine = styled.div`
   width: 1px;
-  height: 18px;
-  background: linear-gradient(180deg, rgba(165,255,17,0.25), rgba(165,255,17,0.08));
+  height: 20px;
+  background: linear-gradient(180deg, rgba(165,255,17,0.28), rgba(165,255,17,0.07));
+  flex-shrink: 0;
+`;
+
+const SyncLabel = styled.div`
+  font-size: 0.56rem;
+  font-weight: 600;
+  color: rgba(165,255,17,0.35);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
 `;
 
 const DiagramLegend = styled.div`
@@ -1160,44 +1226,74 @@ const LegendVert = styled.div`
 function P2PDiagram() {
   return (
     <DiagramWrap>
-      {/* Row 1 */}
       <DiagramRow>
-        <NodeCard idx={0}><NodePulse />Node 1</NodeCard>
+        <NodeCard $idx={0}>
+          <NodeTitle><NodePulse />Node 1</NodeTitle>
+          <NamespaceBox>
+            <NamespaceLabel>Namespace</NamespaceLabel>
+            <ContextBox>Group / Context</ContextBox>
+          </NamespaceBox>
+        </NodeCard>
         <WireTrack>
-          <WireLabel>P2P · CRDT sync</WireLabel>
-          <PacketDot delay="0s"    dur="2.3s" />
-          <PacketDot delay="1.15s" dur="2.3s" />
+          <WireLabel>JSON-RPC req &amp; res</WireLabel>
+          <PacketDot $delay="0s"    $dur="2.3s" />
+          <PacketDot $delay="1.15s" $dur="2.3s" />
         </WireTrack>
-        <AppCard>Alice's App <span>👤</span></AppCard>
+        <AppCard>
+          <AppTypeLabel>Frontend App</AppTypeLabel>
+          <DiagramAppName><span>👤</span>Alice</DiagramAppName>
+        </AppCard>
       </DiagramRow>
 
-      <DiagramConnector><VertLine /></DiagramConnector>
+      <DiagramConnector>
+        <VertLine />
+        <SyncLabel>P2P · CRDT Sync</SyncLabel>
+      </DiagramConnector>
 
-      {/* Row 2 */}
       <DiagramRow>
-        <NodeCard idx={1}><NodePulse />Node 2</NodeCard>
+        <NodeCard $idx={1}>
+          <NodeTitle><NodePulse />Node 2</NodeTitle>
+          <NamespaceBox>
+            <NamespaceLabel>Namespace</NamespaceLabel>
+            <ContextBox>Group / Context</ContextBox>
+          </NamespaceBox>
+        </NodeCard>
         <WireTrack>
-          <PacketDot delay="0.65s" dur="2.3s" />
-          <PacketDot delay="1.8s"  dur="2.3s" />
+          <PacketDot $delay="0.65s" $dur="2.3s" />
+          <PacketDot $delay="1.8s"  $dur="2.3s" />
         </WireTrack>
-        <AppCard>Bob's App <span>👤</span></AppCard>
+        <AppCard>
+          <AppTypeLabel>Frontend App</AppTypeLabel>
+          <DiagramAppName><span>👤</span>Bob</DiagramAppName>
+        </AppCard>
       </DiagramRow>
 
-      <DiagramConnector><VertLine /></DiagramConnector>
+      <DiagramConnector>
+        <VertLine />
+        <SyncLabel>P2P · CRDT Sync</SyncLabel>
+      </DiagramConnector>
 
-      {/* Row 3 */}
       <DiagramRow>
-        <NodeCard idx={2}><NodePulse />Node 3</NodeCard>
+        <NodeCard $idx={2}>
+          <NodeTitle><NodePulse />Node 3</NodeTitle>
+          <NamespaceBox>
+            <NamespaceLabel>Namespace</NamespaceLabel>
+            <ContextBox>Group / Context</ContextBox>
+          </NamespaceBox>
+        </NodeCard>
         <WireTrack>
-          <PacketDot delay="1.3s"  dur="2.3s" />
-          <PacketDot delay="0.2s"  dur="2.3s" />
+          <PacketDot $delay="1.3s" $dur="2.3s" />
+          <PacketDot $delay="0.2s" $dur="2.3s" />
         </WireTrack>
-        <AppCard>Carol's App <span>👤</span></AppCard>
+        <AppCard>
+          <AppTypeLabel>Frontend App</AppTypeLabel>
+          <DiagramAppName><span>👤</span>Carol</DiagramAppName>
+        </AppCard>
       </DiagramRow>
 
       <DiagramLegend>
         <LegendItem><LegendDot />Self-hosted node</LegendItem>
-        <LegendItem><PacketDot as="div" delay="0s" dur="0s" style={{ position: 'static', animation: 'none', width: 8, height: 8 }} />Live packet</LegendItem>
+        <LegendItem><PacketDot as="div" $delay="0s" $dur="0s" style={{ position: 'static', animation: 'none', width: 8, height: 8 }} />Live packet</LegendItem>
         <LegendItem><LegendLine />Encrypted channel</LegendItem>
         <LegendItem><LegendVert />P2P mesh link</LegendItem>
       </DiagramLegend>
@@ -1334,24 +1430,24 @@ const FAQBtn = styled.button`
   &:hover { color: #ffffff; }
 `;
 
-const FAQIcon = styled.div<{ open: boolean }>`
+const FAQIcon = styled.div<{ $open: boolean }>`
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 1px solid ${p => p.open ? 'rgba(165,255,17,0.35)' : 'rgba(255,255,255,0.1)'};
+  border: 1px solid ${p => p.$open ? 'rgba(165,255,17,0.35)' : 'rgba(255,255,255,0.1)'};
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: ${p => p.open ? '#a5ff11' : 'rgba(255,255,255,0.3)'};
+  color: ${p => p.$open ? '#a5ff11' : 'rgba(255,255,255,0.3)'};
   transition: all 0.2s;
-  transform: ${p => p.open ? 'rotate(45deg)' : 'rotate(0deg)'};
+  transform: ${p => p.$open ? 'rotate(45deg)' : 'rotate(0deg)'};
 `;
 
-const FAQBody = styled.div<{ open: boolean }>`
-  max-height: ${p => p.open ? '240px' : '0'};
+const FAQBody = styled.div<{ $open: boolean }>`
+  max-height: ${p => p.$open ? '400px' : '0'};
   overflow: hidden;
-  transition: max-height 0.3s ease;
+  transition: max-height 0.35s ease;
 
   p {
     font-size: 0.84rem;
@@ -1365,27 +1461,27 @@ const FAQBody = styled.div<{ open: boolean }>`
 const FAQS = [
   {
     q: "What is a Calimero node?",
-    a: "A Calimero node is your personal server that stores your messages and manages access to namespaces and contexts. You run it on your own hardware, a VPS, or via Calimero Desktop. Nobody else can access it — not even Calimero.",
+    a: "A node (merod) is the core runtime that orchestrates synchronization, event handling, and blob distribution across a distributed network of peers. It wraps a DAG-based CRDT storage layer with WASM execution, libp2p networking, and lifecycle management. You self-host it — on bare metal, a VPS, or via Calimero Desktop. Each node exposes a JSON-RPC API (port 2528) and a WebSocket endpoint for real-time subscriptions; your frontend application talks exclusively to your own node.",
   },
   {
     q: "How does P2P sync work?",
-    a: "Nodes that share a namespace sync messages directly, peer-to-peer. Using CRDTs (Conflict-free Replicated Data Types), changes from multiple users always merge cleanly — no conflicts, no central coordinator needed.",
+    a: "Calimero uses a dual-path synchronization strategy. The primary path is Gossipsub broadcast: when a node executes a transaction it produces a delta, which propagates to all peers in ~100–200 ms. The fallback path is periodic P2P sync every 10–30 seconds — nodes open a direct stream, exchange DAG heads, and request any missing deltas. This guarantees eventual consistency even across packet loss, network partitions, or temporary node downtime. All deltas are causally ordered via a DAG, so they can arrive out of order and still be applied correctly.",
   },
   {
     q: "What is a CRDT?",
-    a: "CRDTs (Conflict-free Replicated Data Types) are data structures built for distributed systems. They guarantee that independent updates from multiple peers always converge to the same state — real-time sync without a central server.",
+    a: "A Conflict-free Replicated Data Type (CRDT) is a data structure whose merge semantics guarantee that any set of concurrent updates always converges to the same state, regardless of application order. Calimero's storage layer uses CRDT collections (maps, sets, ordered sequences) backed by a DAG that tracks causal dependencies between deltas. When two nodes have diverged, their states can be merged deterministically with no coordination or conflict-resolution step required.",
   },
   {
     q: "Who can read my messages?",
-    a: "Only members of the namespace you explicitly invite via cryptographic invitations. Messages live on the nodes of group members. There are no central servers to breach or subpoena.",
+    a: "Only nodes whose identities hold an active membership in the context. Membership is invite-only: invitations are cryptographically signed and can be anchored on-chain for tamper-evidence. Each context maintains its own isolated CRDT state — Context A cannot access Context B's state. Private storage (marked #[app::private]) is node-local and never replicated to peers. There are no relay servers; messages travel directly between member nodes.",
   },
   {
     q: "Do I need to keep my node online 24/7?",
-    a: "No. When your node reconnects, it automatically syncs any missed messages via P2P state sync. For always-on access, deploy merod on a VPS or server.",
+    a: "No. The periodic P2P sync path (every 10–30 s) is specifically designed for catch-up after downtime. When your node reconnects it opens a stream to a peer, exchanges DAG heads, and pulls any deltas it missed — the DAG's causal-ordering ensures they are applied in correct order regardless of how long the node was offline. For always-on availability, deploy merod on a VPS or server.",
   },
   {
     q: "Can Calimero read my messages?",
-    a: "No. Calimero builds the infrastructure but has zero access to your node or data. Your node, your keys, your messages.",
+    a: "No. Calimero ships the merod runtime and client SDKs but operates no relay infrastructure and holds no keys. State lives exclusively on the nodes of context members. Every state transition is executed inside a deterministic WASM sandbox on your node, tied to your executor identity via the audit log. Selective disclosure lets applications emit only hashed or redacted event payloads, keeping full data on the owner's node.",
   },
 ];
 
@@ -1397,14 +1493,14 @@ function FAQSection() {
         <FAQRow key={i}>
           <FAQBtn onClick={() => setOpen(open === i ? null : i)}>
             {item.q}
-            <FAQIcon open={open === i}>
+            <FAQIcon $open={open === i}>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <line x1="5" y1="1" x2="5" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </FAQIcon>
           </FAQBtn>
-          <FAQBody open={open === i}>
+          <FAQBody $open={open === i}>
             <p>{item.a}</p>
           </FAQBody>
         </FAQRow>
@@ -1522,7 +1618,7 @@ export default function LandingPage({ connectButton, children }: LandingPageProp
       </Sect>
 
       {/* ── Features ── */}
-      <Sect alt>
+      <Sect $alt>
         <SectCenter>
           <SectTag>Why Mero Chat</SectTag>
           <H2>Built different</H2>

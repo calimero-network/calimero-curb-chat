@@ -34,7 +34,7 @@ export default function GroupInviteIcon() {
     return null;
   }
 
-  if (!permissions.isAdmin && !permissions.canInviteMembers) {
+  if (!permissions.isAdmin && !permissions.isModerator) {
     return null;
   }
 

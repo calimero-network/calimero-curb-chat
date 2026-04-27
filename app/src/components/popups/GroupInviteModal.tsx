@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { styled } from "styled-components";
-import { Button } from "@calimero-network/mero-ui";
+import { styled, keyframes } from "styled-components";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import {
   generateInvitationDeepLink,
@@ -8,12 +7,15 @@ import {
   serializeGroupInvitationPayload,
 } from "../../utils/invitation";
 
+const spin = keyframes`to { transform: rotate(360deg); }`;
+const fadeUp = keyframes`
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
 const Overlay = styled.div`
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
@@ -22,75 +24,195 @@ const Overlay = styled.div`
   backdrop-filter: blur(8px);
 `;
 
-const PopupContainer = styled.div`
-  background: #1a1a1f;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 2rem;
+const Modal = styled.div`
+  background: #111113;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
   width: 90%;
-  max-width: 480px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+  max-width: 460px;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6);
+  animation: ${fadeUp} 0.2s ease both;
+  overflow: hidden;
 `;
 
-const Title = styled.h2`
-  color: #ffffff;
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  text-align: center;
-`;
-
-const Subtitle = styled.p`
-  color: #b8b8d1;
-  font-size: 0.85rem;
-  text-align: center;
-  margin-bottom: 1.5rem;
-`;
-
-const Message = styled.div<{ $type?: "success" | "error" | "info" }>`
-  padding: 0.75rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  text-align: center;
-  margin-bottom: 1rem;
-  color: ${({ $type }) =>
-    $type === "success"
-      ? "#27ae60"
-      : $type === "error"
-        ? "#e74c3c"
-        : "#b8b8d1"};
-  background: ${({ $type }) =>
-    $type === "success"
-      ? "rgba(39, 174, 96, 0.1)"
-      : $type === "error"
-        ? "rgba(231, 76, 60, 0.1)"
-        : "rgba(184, 184, 209, 0.1)"};
-`;
-
-const Label = styled.label`
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #b8b8d1;
-`;
-
-const InviteLinkBox = styled.div`
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 0.75rem;
-  margin-bottom: 1rem;
-  word-break: break-all;
-  font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 0.75rem;
-  color: #b8b8d1;
-  max-height: 120px;
-  overflow-y: auto;
-`;
-
-const ButtonGroup = styled.div`
+const ModalHeader = styled.div`
   display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+`;
+
+const IconBox = styled.div`
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(165, 255, 17, 0.1);
+  border: 1px solid rgba(165, 255, 17, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #a5ff11;
+`;
+
+const HeaderText = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const ModalTitle = styled.h2`
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0 0 0.1rem;
+`;
+
+const ModalSub = styled.p`
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.72rem;
+  margin: 0;
+  line-height: 1.4;
+`;
+
+const CloseBtn = styled.button`
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+  &:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+`;
+
+const Body = styled.div`
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const LoadingRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.82rem;
+`;
+
+const Spinner = styled.div`
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(165, 255, 17, 0.25);
+  border-top-color: #a5ff11;
+  animation: ${spin} 0.7s linear infinite;
+  flex-shrink: 0;
+`;
+
+const ErrorBanner = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 59, 59, 0.07);
+  border: 1px solid rgba(255, 59, 59, 0.18);
+  border-radius: 8px;
+  color: #ff6b6b;
+  font-size: 0.82rem;
+  line-height: 1.4;
+`;
+
+const SuccessBanner = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.6rem 0.875rem;
+  background: rgba(165, 255, 17, 0.06);
+  border: 1px solid rgba(165, 255, 17, 0.15);
+  border-radius: 8px;
+  color: #a5ff11;
+  font-size: 0.78rem;
+  font-weight: 500;
+`;
+
+const Field = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+`;
+
+const FieldLabel = styled.div`
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+`;
+
+const CodeBox = styled.div`
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 0.65rem 0.875rem;
+  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
+  word-break: break-all;
+  line-height: 1.5;
+  max-height: 80px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+`;
+
+const CopyBtn = styled.button<{ $copied: boolean }>`
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid ${({ $copied }) =>
+    $copied ? "rgba(165,255,17,0.35)" : "rgba(255,255,255,0.1)"};
+  background: ${({ $copied }) =>
+    $copied ? "rgba(165,255,17,0.1)" : "rgba(255,255,255,0.05)"};
+  color: ${({ $copied }) => ($copied ? "#a5ff11" : "rgba(255,255,255,0.7)")};
+
+  &:hover {
+    background: ${({ $copied }) =>
+      $copied ? "rgba(165,255,17,0.12)" : "rgba(255,255,255,0.08)"};
+    color: ${({ $copied }) => ($copied ? "#a5ff11" : "#fff")};
+    border-color: ${({ $copied }) =>
+      $copied ? "rgba(165,255,17,0.4)" : "rgba(255,255,255,0.18)"};
+  }
+`;
+
+const DoneBtn = styled.button`
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #a5ff11;
+  color: #0a0a0a;
+  border: none;
+  transition: opacity 0.15s;
+  &:hover { opacity: 0.88; }
 `;
 
 interface GroupInviteModalProps {
@@ -109,9 +231,9 @@ export default function GroupInviteModal({
   isOpen,
   onClose,
   initialInvitationPayload,
-  title = "Invite people to workspace",
-  subtitle = "Generate a workspace invitation and share it with people who should join this workspace.",
-  successMessage = "Your workspace invitation is ready to share.",
+  title = "Invite to workspace",
+  subtitle = "Share this link with anyone you want to invite.",
+  successMessage = "Invitation ready to share",
   doneLabel = "Done",
 }: GroupInviteModalProps) {
   const [invitationPayload, setInvitationPayload] = useState(
@@ -146,14 +268,12 @@ export default function GroupInviteModal({
 
       const response = await new GroupApiDataSource().createInvitation(groupId);
 
-      if (cancelled) {
-        return;
-      }
+      if (cancelled) return;
 
       if (response.error || !response.data) {
         setInvitationPayload("");
         setErrorMessage(
-          response.error?.message || "Failed to generate workspace invitation",
+          response.error?.message || "Failed to generate invitation",
         );
         setLoading(false);
         return;
@@ -169,10 +289,7 @@ export default function GroupInviteModal({
     };
 
     void loadInvitation();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [groupId, initialInvitationPayload, isOpen]);
 
   const webUrl = useMemo(
@@ -180,19 +297,13 @@ export default function GroupInviteModal({
     [invitationPayload],
   );
   const desktopUrl = useMemo(
-    () =>
-      invitationPayload
-        ? generateInvitationDeepLink(invitationPayload)
-        : "",
+    () => (invitationPayload ? generateInvitationDeepLink(invitationPayload) : ""),
     [invitationPayload],
   );
 
   const handleCopy = async (target: "web" | "desktop") => {
     const value = target === "web" ? webUrl : desktopUrl;
-    if (!value) {
-      return;
-    }
-
+    if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
       setCopiedTarget(target);
@@ -202,60 +313,83 @@ export default function GroupInviteModal({
     }
   };
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   return (
-    <Overlay>
-      <PopupContainer>
-        <Title>{title}</Title>
-        <Subtitle>{subtitle}</Subtitle>
+    <Overlay onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <Modal>
+        <ModalHeader>
+          <IconBox>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <line x1="19" y1="8" x2="19" y2="14" />
+              <line x1="22" y1="11" x2="16" y2="11" />
+            </svg>
+          </IconBox>
+          <HeaderText>
+            <ModalTitle>{title}</ModalTitle>
+            <ModalSub>{subtitle}</ModalSub>
+          </HeaderText>
+          <CloseBtn onClick={onClose} aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </CloseBtn>
+        </ModalHeader>
 
-        {loading && (
-          <Message $type="info">
-            Generating a workspace invitation...
-          </Message>
-        )}
+        <Body>
+          {loading && (
+            <LoadingRow>
+              <Spinner />
+              Generating invitation…
+            </LoadingRow>
+          )}
 
-        {!loading && errorMessage && (
-          <Message $type="error">{errorMessage}</Message>
-        )}
+          {!loading && errorMessage && (
+            <ErrorBanner>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {errorMessage}
+            </ErrorBanner>
+          )}
 
-        {!loading && invitationPayload && (
-          <>
-            <Message $type="success">{successMessage}</Message>
-            <Label>Workspace ID</Label>
-            <InviteLinkBox>{groupId}</InviteLinkBox>
-            <Label>Workspace link (web)</Label>
-            <InviteLinkBox>{webUrl}</InviteLinkBox>
-            <ButtonGroup>
-              <Button
-                onClick={() => handleCopy("web")}
-                variant="secondary"
-                style={{ flex: 1 }}
-              >
-                {copiedTarget === "web" ? "Copied!" : "Copy web link"}
-              </Button>
-              <Button
-                onClick={() => handleCopy("desktop")}
-                variant="secondary"
-                style={{ flex: 1 }}
-              >
-                {copiedTarget === "desktop"
-                  ? "Copied!"
-                  : "Copy desktop link"}
-              </Button>
-            </ButtonGroup>
-          </>
-        )}
+          {!loading && invitationPayload && (
+            <>
+              <SuccessBanner>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                {successMessage}
+              </SuccessBanner>
 
-        <ButtonGroup>
-          <Button onClick={onClose} variant="primary" style={{ flex: 1 }}>
-            {doneLabel}
-          </Button>
-        </ButtonGroup>
-      </PopupContainer>
+              <Field>
+                <FieldLabel>Workspace ID</FieldLabel>
+                <CodeBox>{groupId}</CodeBox>
+              </Field>
+
+              <Field>
+                <FieldLabel>Web invite link</FieldLabel>
+                <CodeBox>{webUrl}</CodeBox>
+                <CopyBtn $copied={copiedTarget === "web"} onClick={() => void handleCopy("web")}>
+                  {copiedTarget === "web" ? "✓ Copied!" : "Copy web link"}
+                </CopyBtn>
+              </Field>
+
+              <Field>
+                <FieldLabel>Desktop invite link</FieldLabel>
+                <CodeBox>{desktopUrl}</CodeBox>
+                <CopyBtn $copied={copiedTarget === "desktop"} onClick={() => void handleCopy("desktop")}>
+                  {copiedTarget === "desktop" ? "✓ Copied!" : "Copy desktop link"}
+                </CopyBtn>
+              </Field>
+            </>
+          )}
+
+          <DoneBtn onClick={onClose}>{doneLabel}</DoneBtn>
+        </Body>
+      </Modal>
     </Overlay>
   );
 }

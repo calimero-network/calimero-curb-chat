@@ -6,12 +6,14 @@ import { useMero } from "@calimero-network/mero-react";
 import {
   clearStoredSession,
   clearSessionActivity,
+  clearNamespaceReady,
 } from "../../utils/session";
 import {
   clearWorkspaceSelection,
   getGroupId,
   getStoredGroupAlias,
 } from "../../constants/config";
+import { clearMessengerDisplayName } from "../../utils/messengerName";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import {
@@ -136,19 +138,19 @@ const WorkspaceName = styled.span`
   text-overflow: ellipsis;
 `;
 
-const RoleBadge = styled.span<{ $admin: boolean }>`
+const RoleBadge = styled.span<{ $admin: boolean; $mod?: boolean }>`
   flex-shrink: 0;
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.2rem 0.55rem;
   border-radius: 5px;
   letter-spacing: 0.04em;
-  background: ${({ $admin }) =>
-    $admin ? "rgba(165, 255, 17, 0.12)" : "rgba(255, 255, 255, 0.07)"};
-  border: 1px solid ${({ $admin }) =>
-    $admin ? "rgba(165, 255, 17, 0.3)" : "rgba(255, 255, 255, 0.12)"};
-  color: ${({ $admin }) =>
-    $admin ? "#a5ff11" : "rgba(255, 255, 255, 0.55)"};
+  background: ${({ $admin, $mod }) =>
+    $admin ? "rgba(165, 255, 17, 0.12)" : $mod ? "rgba(124, 58, 237, 0.12)" : "rgba(255, 255, 255, 0.07)"};
+  border: 1px solid ${({ $admin, $mod }) =>
+    $admin ? "rgba(165, 255, 17, 0.3)" : $mod ? "rgba(124, 58, 237, 0.35)" : "rgba(255, 255, 255, 0.12)"};
+  color: ${({ $admin, $mod }) =>
+    $admin ? "#a5ff11" : $mod ? "#a78bfa" : "rgba(255, 255, 255, 0.55)"};
 `;
 
 // ─── Invite section ────────────────────────────────────────────────────────────
@@ -313,7 +315,7 @@ export default function SettingsPopup({
   const navigate = useNavigate();
   const groupId = getGroupId();
   const namespaceName = getStoredGroupAlias(groupId) || groupId.slice(0, 12) + "…";
-  const { isAdmin, canInviteMembers } = useCurrentGroupPermissions(groupId);
+  const { isAdmin, isModerator } = useCurrentGroupPermissions(groupId);
 
   // ── Invitation state ────────────────────────────────────────────────────────
   const [invitePayload, setInvitePayload] = useState("");
@@ -372,15 +374,21 @@ export default function SettingsPopup({
 
   const handleChangeWorkspace = () => {
     clearWorkspaceSelection();
+    clearNamespaceReady();
     setIsOpen(false);
-    navigate("/login", { state: { forceSelect: true } });
+    navigate("/login");
   };
 
   const handleLogout = () => {
+    const nodeUrl = localStorage.getItem("mero:node_url");
     clearStoredSession();
     clearSessionActivity();
     clearWorkspaceSelection();
+    clearNamespaceReady();
+    clearMessengerDisplayName();
+    sessionStorage.clear();
     logout();
+    if (nodeUrl) localStorage.setItem("mero:node_url", nodeUrl);
     setIsOpen(false);
   };
 
@@ -409,11 +417,11 @@ export default function SettingsPopup({
           <WorkspaceLabel>Workspace</WorkspaceLabel>
           <WorkspaceName>{namespaceName}</WorkspaceName>
         </WorkspaceInfo>
-        <RoleBadge $admin={isAdmin}>{isAdmin ? "Admin" : "Member"}</RoleBadge>
+        <RoleBadge $admin={isAdmin} $mod={isModerator}>{isAdmin ? "Admin" : isModerator ? "Moderator" : "Member"}</RoleBadge>
       </WorkspaceCard>
 
       {/* Invite section */}
-      {canInviteMembers && (
+      {(isAdmin || isModerator) && (
         <Section>
           <SectionLabel>Invite</SectionLabel>
           <InviteBox>

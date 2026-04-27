@@ -324,59 +324,20 @@ export class ClientApiDataSource implements ClientApi {
   }
 
   async getChannelMembers(
-    props: GetChannelMembersProps,
+    _props: GetChannelMembersProps,
   ): ApiResponse<Map<string, string>> {
     try {
-      const response = await getJsonRpcClient().execute<
-       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        any,
-        Map<string, string>
-      >(
-        {
-          contextId: getContextId() || "",
-          method: ClientMethod.GET_CHANNEL_MEMBERS,
-          argsJson: {
-            channel: props.channel,
-          },
-          executorPublicKey: getExecutorPublicKey() || "",
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 10000,
-        },
-      );
-      if (response?.error) {
-        return {
-          data: null,
-          error: {
-            code: response?.error.code,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            message: (response?.error.error.cause.info as any).message,
-          },
-        };
+      const contextId = getContextId() || "";
+      const executorPublicKey = getExecutorPublicKey() || "";
+      if (!contextId || !executorPublicKey) return { data: new Map(), error: null };
+      const profilesRes = await this.getProfiles(contextId, executorPublicKey);
+      const memberMap = new Map<string, string>();
+      for (const p of profilesRes.data ?? []) {
+        if (p.identity && p.username) memberMap.set(p.identity, p.username);
       }
-
-      return {
-        data: response?.result.output as Map<string, string>,
-        error: null,
-      };
-    } catch (error) {
-      console.error("getChannelMembers failed:", error);
-      let errorMessage =
-        "An unexpected error occurred during getChannelMembers";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      }
-      return {
-        error: {
-          code: 500,
-          message: errorMessage,
-        },
-      };
+      return { data: memberMap, error: null };
+    } catch {
+      return { data: new Map(), error: null };
     }
   }
 
@@ -432,56 +393,11 @@ export class ClientApiDataSource implements ClientApi {
   }
 
   async getNonMemberUsers(
-    props: GetNonMemberUsersProps,
+    _props: GetNonMemberUsersProps,
   ): ApiResponse<UserId[]> {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, UserId[]>(
-        {
-          contextId: getContextId() || "",
-          method: ClientMethod.GET_INVITE_USERS,
-          argsJson: {
-            channel: props.channel,
-          },
-          executorPublicKey: getExecutorPublicKey() || "",
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 10000,
-        },
-      );
-      if (response?.error) {
-        return {
-          data: null,
-          error: {
-            code: response?.error.code,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            message: (response?.error.error.cause.info as any).message,
-          },
-        };
-      }
-      return {
-        data: response?.result.output as UserId[],
-        error: null,
-      };
-    } catch (error) {
-      console.error("getNonMemberUsers failed:", error);
-      let errorMessage =
-        "An unexpected error occurred during getNonMemberUsers";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      }
-      return {
-        error: {
-          code: 500,
-          message: errorMessage,
-        },
-      };
-    }
+    // get_non_member_users does not exist in the WASM contract.
+    // Return empty — the invite flow degrades gracefully.
+    return { data: [], error: null };
   }
 
   async joinChannel(props: JoinChannelProps): ApiResponse<string> {
@@ -829,53 +745,17 @@ export class ClientApiDataSource implements ClientApi {
     props: GetChatMembersProps,
   ): ApiResponse<Map<string, string>> {
     try {
-      const response = await getJsonRpcClient().execute<
-       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        any,
-        Map<string, string>
-      >(
-        {
-          contextId: getContextId() || "",
-          method: ClientMethod.GET_CHAT_USERNAMES,
-          argsJson: {},
-          executorPublicKey:
-            (props.isDM ? props.executor : getExecutorPublicKey()) || "",
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 10000,
-        },
-      );
-      if (response?.error) {
-        return {
-          data: null,
-          error: {
-            code: response?.error.code,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            message: (response?.error.error.cause.info as any).message,
-          },
-        };
+      const contextId = getContextId() || "";
+      const executorPublicKey = (props.isDM ? props.executor : getExecutorPublicKey()) || "";
+      if (!contextId || !executorPublicKey) return { data: new Map(), error: null };
+      const profilesRes = await this.getProfiles(contextId, executorPublicKey);
+      const memberMap = new Map<string, string>();
+      for (const p of profilesRes.data ?? []) {
+        if (p.identity && p.username) memberMap.set(p.identity, p.username);
       }
-      return {
-        data: response?.result.output as Map<string, string>,
-        error: null,
-      };
-    } catch (error) {
-      console.error("getChatMembers failed:", error);
-      let errorMessage = "An unexpected error occurred during getChatMembers";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      }
-      return {
-        error: {
-          code: 500,
-          message: errorMessage,
-        },
-      };
+      return { data: memberMap, error: null };
+    } catch {
+      return { data: new Map(), error: null };
     }
   }
 

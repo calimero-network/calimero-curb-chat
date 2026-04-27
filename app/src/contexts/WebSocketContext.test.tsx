@@ -16,16 +16,12 @@ const mockSubscription = vi.hoisted(() => ({
   getSubscriptionCount: vi.fn().mockReturnValue(0),
 }));
 
-// Capture the event-callback passed to useMultiWebSocketSubscription so tests
+// Capture the event-callback passed to useSseSubscription so tests
 // can fire events through it directly.
 let capturedEventCallback: ((event: WebSocketEvent) => Promise<void>) | null = null;
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  useCalimero: vi.fn().mockReturnValue({ app: null }),
-}));
-
-vi.mock("../hooks/useMultiWebSocketSubscription", () => ({
-  useMultiWebSocketSubscription: vi.fn((_app: unknown, callback: unknown) => {
+vi.mock("../hooks/useSseSubscription", () => ({
+  useSseSubscription: vi.fn((callback: unknown) => {
     capturedEventCallback = callback as (event: WebSocketEvent) => Promise<void>;
     return mockSubscription;
   }),

@@ -108,8 +108,8 @@ if (explicitApplicationId && !localStorage.getItem(CALIMERO_APP_ID_KEY)) {
   localStorage.setItem(CALIMERO_APP_ID_KEY, explicitApplicationId);
 }
 
-// Register service worker for PWA
-if ("serviceWorker" in navigator) {
+// Register service worker for PWA (production only — sw.js is not served in dev)
+if ("serviceWorker" in navigator && !import.meta.env.DEV) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/sw.js")

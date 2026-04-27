@@ -206,16 +206,7 @@ export function useChatHandlers(
                       channel: { name: activeChat?.name },
                       timestamp: lastMessage.timestamp,
                     })
-                    .then(() => {
-                      refs.fetchChannels.current();
-                    })
-                    .catch((error) =>
-                      log.error(
-                        "ChatHandlers",
-                        "Failed to mark message as read",
-                        error
-                      )
-                    );
+                    .catch(() => {});
                 }
               }
             }

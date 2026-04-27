@@ -1,6 +1,6 @@
 import React from "react";
 import { useMero, ConnectButton } from "@calimero-network/mero-react";
-import { clearStoredSession, clearSessionActivity } from "../../utils/session";
+import { clearStoredSession, clearSessionActivity, clearNamespaceReady } from "../../utils/session";
 import { useNavigate } from "react-router-dom";
 import LandingPage from "./LandingPage";
 import NamespaceEntryPopup from "../../components/popups/NamespaceEntryPopup";
@@ -21,10 +21,13 @@ export default function Login({ isAuthenticated, isConfigSet }: LoginProps) {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
+    const nodeUrl = localStorage.getItem("mero:node_url");
     clearStoredSession();
     clearSessionActivity();
+    clearNamespaceReady();
+    sessionStorage.clear();
     logout();
-    localStorage.clear();
+    if (nodeUrl) localStorage.setItem("mero:node_url", nodeUrl);
     if (window.__TAURI_INVOKE__) {
       try { await window.__TAURI_INVOKE__("close_current_window"); } catch { /* ignore */ }
     }

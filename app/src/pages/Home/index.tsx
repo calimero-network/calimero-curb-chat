@@ -42,10 +42,7 @@ import {
 } from "../../constants/config";
 import { getAppEntryState } from "../../utils/appEntry";
 import { getContextProfileSyncAction } from "../../utils/contextProfileSync";
-import {
-  getMessengerDisplayName,
-  setMessengerDisplayName,
-} from "../../utils/messengerName";
+import { getMessengerDisplayName, getIdentityDisplayName, getStoredExecutorIdentity } from "../../utils/messengerName";
 import {
   createDmContextInGroup,
   getDmDisplayName,
@@ -133,7 +130,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     isAuthenticated: true,
     isConfigSet,
     groupId: currentGroupId,
-    messengerName: getMessengerDisplayName(),
+    messengerName: getIdentityDisplayName(getStoredExecutorIdentity()) || getMessengerDisplayName(),
     activeChat,
   });
 
@@ -149,17 +146,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   }, [entryState]);
 
   const getChannelUsersRef = useRef(channelMembersHook.fetchChannelMembers);
-  const getNonInvitedUsersRef = useRef(channelMembersHook.fetchNonInvitedUsers);
-
   getChannelUsersRef.current = channelMembersHook.fetchChannelMembers;
-  getNonInvitedUsersRef.current = channelMembersHook.fetchNonInvitedUsers;
 
   const getChannelUsers = useCallback(async (id: string) => {
     return getChannelUsersRef.current(id);
-  }, []);
-
-  const getNonInvitedUsers = useCallback(async (id: string) => {
-    return getNonInvitedUsersRef.current(id);
   }, []);
 
   const reFetchChannelMembers = useCallback(async () => {
@@ -197,6 +187,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         resolvedChat = {
           ...selectedChat,
           contextIdentity: identity,
+          canJoin: false,
+          requiresProfileSetup: false,
         };
         setContextId(selectedChat.contextId);
         setExecutorPublicKey(identity);
@@ -213,49 +205,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       }
     }
 
-    if (
-      (resolvedChat.type === "channel" ||
-        resolvedChat.type === "direct_message") &&
-      resolvedChat.contextId &&
-      resolvedChat.contextIdentity
-    ) {
-      const messengerName = getMessengerDisplayName();
-      const usernameResponse = await new ClientApiDataSource().getUsername({
-        contextId: resolvedChat.contextId,
-        executorPublicKey: resolvedChat.contextIdentity,
-        userId: resolvedChat.contextIdentity,
-      });
-
-      if (messengerName) {
-        const syncAction = getContextProfileSyncAction({
-          globalName: messengerName,
-          contextUsername: usernameResponse.data || "",
-        });
-
-        if (syncAction === "apply-global-name") {
-          const setProfileResponse = await new ClientApiDataSource().joinChat({
-            contextId: resolvedChat.contextId,
-            executorPublicKey: resolvedChat.contextIdentity,
-            username: messengerName,
-          });
-
-          if (setProfileResponse.error) {
-            log.warn(
-              "Home",
-              `Failed to apply messenger name to ${resolvedChat.contextId}: ${setProfileResponse.error.message}`,
-            );
-          }
-        }
-      }
-
-      setMessengerDisplayName(messengerName);
-      resolvedChat = {
-        ...resolvedChat,
-        canJoin: false,
-        requiresProfileSetup: false,
-      };
-    }
-
+    // Commit the chat switch immediately — no blocking awaits
     setActiveChat(resolvedChat);
     activeChatRef.current = resolvedChat;
     setIsSidebarOpen(false);
@@ -267,7 +217,38 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       if (resolvedChat.type === "channel") {
         getChannelUsers(resolvedChat.id);
-        getNonInvitedUsers(resolvedChat.id);
+      }
+    }
+
+    // Background: ensure WASM profile is written for this context (no-op if already set via enterChat)
+    if (
+      (resolvedChat.type === "channel" || resolvedChat.type === "direct_message") &&
+      resolvedChat.contextId &&
+      resolvedChat.contextIdentity
+    ) {
+      const messengerName =
+        getIdentityDisplayName(resolvedChat.contextIdentity || "") ||
+        getMessengerDisplayName();
+      if (messengerName) {
+        const ctxId = resolvedChat.contextId;
+        const ctxIdentity = resolvedChat.contextIdentity;
+        new ClientApiDataSource().getUsername({
+          contextId: ctxId,
+          executorPublicKey: ctxIdentity,
+          userId: ctxIdentity,
+        }).then((usernameResponse) => {
+          const syncAction = getContextProfileSyncAction({
+            globalName: messengerName,
+            contextUsername: usernameResponse.data || "",
+          });
+          if (syncAction === "apply-global-name") {
+            new ClientApiDataSource().joinChat({
+              contextId: ctxId,
+              executorPublicKey: ctxIdentity,
+              username: messengerName,
+            }).catch(() => {});
+          }
+        }).catch(() => {});
       }
     }
 

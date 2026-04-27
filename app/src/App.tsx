@@ -4,16 +4,12 @@ import { useEffect, lazy, Suspense } from "react";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import {
   isSessionExpired,
-  clearStoredSession,
-  clearSessionActivity,
   updateSessionActivity,
+  isNamespaceReady,
 } from "./utils/session";
 import { ToastProvider, useToast } from "./contexts/ToastContext";
 import { ToastManager } from "./components/common/ToastManager";
 import { extractInvitationFromUrl, saveInvitationToStorage } from "./utils/invitation";
-import { getGroupId } from "./constants/config";
-import { getAppEntryState } from "./utils/appEntry";
-import { getMessengerDisplayName } from "./utils/messengerName";
 
 const Login = lazy(() => import("./pages/Login"));
 const Home = lazy(() => import("./pages/Home"));
@@ -43,8 +39,7 @@ function App() {
   useEffect(() => {
     if (isAuthenticated) {
       if (isSessionExpired()) {
-        clearStoredSession();
-        clearSessionActivity();
+        sessionStorage.clear();
         logout();
       } else {
         updateSessionActivity();
@@ -52,18 +47,10 @@ function App() {
     }
   }, [isAuthenticated, logout]);
 
-  // isAuthenticated from MeroProvider is the single source of truth.
-  // isConfigSet was a separate calimero-client concept (has nodeUrl + JWT);
-  // with mero-react, isAuthenticated already implies both are present and valid.
-  const appEntryState = getAppEntryState({
-    isAuthenticated,
-    isConfigSet: isAuthenticated,
-    groupId: getGroupId(),
-    messengerName: getMessengerDisplayName(),
-    activeChat: null,
-  });
-
-  const canEnterApp = appEntryState !== "login";
+  // canEnterApp requires both a valid auth session AND explicit namespace selection
+  // in this browser session (sessionStorage flag). This prevents the app from
+  // jumping straight to Home after a fresh login using stale localStorage values.
+  const canEnterApp = isAuthenticated && isNamespaceReady();
 
   if (isLoading) {
     return <LoadingSpinner />;

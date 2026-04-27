@@ -263,7 +263,7 @@ export default function CurbNavbar({
       <FlexContainer>
         {activeChat &&
           activeChat?.type === "channel" &&
-          Object.keys(channelUserList).length > 0 && (
+          channelUserList.size > 0 && (
             <ItemsContainer $align={false}>
               <ChannelDetailsPopup
                 toggle={

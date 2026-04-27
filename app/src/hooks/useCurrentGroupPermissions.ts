@@ -14,6 +14,7 @@ interface CurrentGroupPermissionsState {
   loading: boolean;
   memberIdentity: string;
   isAdmin: boolean;
+  isModerator: boolean;
   capabilities: number | null;
   canCreateContext: boolean;
   canInviteMembers: boolean;
@@ -24,6 +25,7 @@ const initialState: CurrentGroupPermissionsState = {
   loading: false,
   memberIdentity: "",
   isAdmin: false,
+  isModerator: false,
   capabilities: null,
   canCreateContext: false,
   canInviteMembers: false,
@@ -72,11 +74,28 @@ export function useCurrentGroupPermissions(groupId: string) {
         return;
       }
 
-      if (String(currentMember.role ?? "").toLowerCase() === "admin") {
+      const role = String(currentMember.role ?? "").toLowerCase();
+
+      if (role === "admin") {
         setState({
           loading: false,
           memberIdentity,
           isAdmin: true,
+          isModerator: false,
+          capabilities: null,
+          canCreateContext: true,
+          canInviteMembers: true,
+          canJoinOpenContexts: true,
+        });
+        return;
+      }
+
+      if (role === "moderator") {
+        setState({
+          loading: false,
+          memberIdentity,
+          isAdmin: false,
+          isModerator: true,
           capabilities: null,
           canCreateContext: true,
           canInviteMembers: true,
@@ -100,6 +119,7 @@ export function useCurrentGroupPermissions(groupId: string) {
         loading: false,
         memberIdentity,
         isAdmin: false,
+        isModerator: false,
         capabilities,
         canCreateContext: canCreateGroupContexts(capabilities),
         canInviteMembers: canInviteWorkspaceMembers(capabilities),

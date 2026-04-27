@@ -615,8 +615,9 @@ export class GroupApiDataSource implements GroupApi {
       return response.status === 200
         ? ok(response.data.data)
         : httpFail(response.status, response.statusText);
-    } catch (error) {
-      return catchError("getContextVisibility", error);
+    } catch {
+      // Endpoint not available on all merod versions — fail silently
+      return fail(404, "getContextVisibility not supported");
     }
   }
 

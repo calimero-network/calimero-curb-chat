@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { styled, keyframes } from "styled-components";
 import { Button, Input } from "@calimero-network/mero-ui";
 import { getAppEndpointKey, getAuthConfig } from "@calimero-network/calimero-client";
@@ -16,9 +16,15 @@ import {
   getStoredGroupAlias,
   setStoredGroupAlias,
   setContextMemberIdentity,
+  getContextMemberIdentity,
 } from "../../constants/config";
-import { getMessengerDisplayName, setMessengerDisplayName } from "../../utils/messengerName";
-import { clearStoredSession } from "../../utils/session";
+import {
+  getMessengerDisplayName,
+  setMessengerDisplayName,
+  getIdentityDisplayName,
+  setIdentityDisplayName,
+} from "../../utils/messengerName";
+import { clearStoredSession, setNamespaceReady } from "../../utils/session";
 import {
   extractInvitationFromUrl,
   getInvitationFromStorage,
@@ -229,43 +235,6 @@ const LogoutBtn = styled.button`
   &:hover { color: rgba(255, 255, 255, 0.5); }
 `;
 
-const CodeTextarea = styled.textarea`
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.65rem 0.85rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 10px;
-  color: #fff;
-  font-size: 0.78rem;
-  font-family: monospace;
-  resize: vertical;
-  min-height: 72px;
-  transition: border-color 0.15s;
-
-  &::placeholder { color: rgba(255, 255, 255, 0.2); }
-  &:focus {
-    outline: none;
-    border-color: rgba(165, 255, 17, 0.35);
-    box-shadow: 0 0 0 3px rgba(165, 255, 17, 0.08);
-  }
-`;
-
-const OrDivider = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 1rem 0;
-  color: rgba(255, 255, 255, 0.2);
-  font-size: 0.75rem;
-
-  &::before, &::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.06);
-  }
-`;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -307,8 +276,6 @@ interface Props {
 
 export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLogout }: Props) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const forceSelect = !!(location.state as Record<string, unknown> | null)?.forceSelect;
   const api = useRef(new GroupApiDataSource());
 
   const [step, setStep] = useState<Step>("loading");
@@ -317,7 +284,6 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
   const [nameInput, setNameInput] = useState(getMessengerDisplayName());
   const [nsNameInput, setNsNameInput] = useState("");
   const [inviteStatus, setInviteStatus] = useState("");
-  const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [error, setError] = useState("");
 
   // Auto-join all contexts in a namespace (fire-and-forget)
@@ -336,49 +302,76 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
     } catch { /* non-fatal */ }
   }, []);
 
-  // Final step: commit selection, join all contexts, then navigate to chat
+  // Final step: commit selection, join all contexts, write WASM profiles, then navigate to chat
   const enterChat = useCallback(async (namespaceId: string, username: string, memberIdentity: string) => {
     setGroupId(namespaceId);
     setMessengerDisplayName(username);
-    if (memberIdentity) setGroupMemberIdentity(namespaceId, memberIdentity);
+    if (memberIdentity) {
+      setGroupMemberIdentity(namespaceId, memberIdentity);
+      setIdentityDisplayName(memberIdentity, username);
+    }
     clearStoredSession();
     setStep("joining");
     await autoJoinContexts(namespaceId);
+
+    // Write WASM profile on every context so other members see the name immediately
+    if (username && memberIdentity) {
+      const ctxRes = await api.current.listGroupContexts(namespaceId);
+      if (ctxRes.data?.length) {
+        const clientApi = new ClientApiDataSource();
+        for (const ctx of ctxRes.data) {
+          const ctxIdentity = getContextMemberIdentity(ctx.contextId);
+          if (ctxIdentity) {
+            clientApi.joinChat({
+              contextId: ctx.contextId,
+              executorPublicKey: ctxIdentity,
+              username,
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    setNamespaceReady();
     navigate("/");
   }, [autoJoinContexts, navigate]);
 
-  // Check whether this node already has identity + username for a namespace
+  // Check whether this node already has identity + username for a namespace.
+  // Recovery order: server alias (node) → per-identity cache → WASM profiles → enter-name.
+  // Server alias is the authoritative source — if set, the user is never re-prompted.
   const checkNamespace = useCallback(async (namespaceId: string) => {
     setStep("checking");
     setError("");
 
-    const storedIdentity = getGroupMemberIdentity(namespaceId);
-    const storedName = getMessengerDisplayName();
-
-    // Fast path: we have a display name — re-use it (username is global, not per-workspace)
-    if (storedName) {
-      void enterChat(namespaceId, storedName, storedIdentity);
-      return;
-    }
-
     try {
+      const storedIdentity = getGroupMemberIdentity(namespaceId);
       const res = await api.current.resolveCurrentMemberIdentity(namespaceId, storedIdentity);
-      if (res.data?.memberIdentity) {
-        setGroupMemberIdentity(namespaceId, res.data.memberIdentity);
-        const memberIdentity = res.data.memberIdentity;
 
-        // 1. Try the group member alias (set via setMemberAlias)
+      if (res.data?.memberIdentity) {
+        const memberIdentity = res.data.memberIdentity;
+        setGroupMemberIdentity(namespaceId, memberIdentity);
+
+        // 1. Server alias — authoritative, survives localStorage.clear() and re-login
         const serverAlias = res.data.members
           ?.find((m) => m.identity === memberIdentity)
           ?.alias?.trim();
 
         if (serverAlias) {
-          setMessengerDisplayName(serverAlias);
+          setIdentityDisplayName(memberIdentity, serverAlias);
           enterChat(namespaceId, serverAlias, memberIdentity);
           return;
         }
 
-        // 2. Try get_profiles RPC on any available context to recover username from WASM state
+        // 2. Per-identity cache — fast path within a session
+        const cachedName = getIdentityDisplayName(memberIdentity);
+        if (cachedName) {
+          // Back-fill server alias so future re-logins don't reach enter-name
+          api.current.setMemberAlias(namespaceId, memberIdentity, { alias: cachedName }).catch(() => {});
+          enterChat(namespaceId, cachedName, memberIdentity);
+          return;
+        }
+
+        // 3. WASM profiles — P2P-replicated, may be set from another device
         const ctxRes = await api.current.listGroupContexts(namespaceId);
         if (ctxRes.data?.length) {
           const clientApi = new ClientApiDataSource();
@@ -387,7 +380,8 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
             if (profilesRes.data) {
               const myProfile = profilesRes.data.find((p) => p.identity === memberIdentity);
               if (myProfile?.username) {
-                setMessengerDisplayName(myProfile.username);
+                api.current.setMemberAlias(namespaceId, memberIdentity, { alias: myProfile.username }).catch(() => {});
+                setIdentityDisplayName(memberIdentity, myProfile.username);
                 enterChat(namespaceId, myProfile.username, memberIdentity);
                 return;
               }
@@ -396,7 +390,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
         }
       }
     } catch {
-      // Identity lookup failed — still allow entering with a new name
+      // Identity lookup failed — fall through to enter-name
     }
 
     setStep("enter-name");
@@ -460,9 +454,10 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
         }];
       });
 
-      // If we already have a username, go straight in
-      const existingName = getMessengerDisplayName();
+      // If user already has a name (same identity from another workspace), go straight in
+      const existingName = getIdentityDisplayName(memberIdentity) || getMessengerDisplayName();
       if (existingName) {
+        api.current.setMemberAlias(groupId, memberIdentity, { alias: existingName }).catch(() => {});
         enterChat(groupId, existingName, memberIdentity);
         return;
       }
@@ -530,18 +525,11 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       clearInvitationFromStorage();
     }
 
-    // Single namespace: skip picker on initial login but always show it when switching workspace
-    if (groups.length === 1 && !forceSelect) {
-      setSelectedId(groups[0].groupId);
-      void checkNamespace(groups[0].groupId);
-      return;
-    }
-
     const storedId = getGroupId();
     const preferred = groups.find((g) => g.groupId === storedId) ?? groups[0];
     setSelectedId(preferred.groupId);
     setStep("select");
-  }, [checkNamespace, processInvitation, forceSelect]);
+  }, [checkNamespace, processInvitation]);
 
   useEffect(() => {
     if (isAuthenticated || isConfigSet) {
@@ -642,13 +630,6 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
     }
   }, [nsNameInput, enterChat]);
 
-  const handleInviteCode = useCallback(async () => {
-    const code = inviteCodeInput.trim();
-    if (!code) return;
-    setInviteCodeInput("");
-    await processInvitation(code);
-  }, [inviteCodeInput, processInvitation]);
-
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const selectedNs = namespaces.find((g) => g.groupId === selectedId);
@@ -686,8 +667,8 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
         {step === "select" && (
           <>
             <Header>
-              <Title>{forceSelect ? "Switch workspace" : "Welcome to MeroChat"}</Title>
-              <Sub>{forceSelect ? "Pick an existing workspace or join a new one." : "Select the server you want to join."}</Sub>
+              <Title>Select workspace</Title>
+              <Sub>Pick the workspace you want to join.</Sub>
             </Header>
             {error && <Err>{error}</Err>}
             <Field>
@@ -710,28 +691,6 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
             <CreateLink onClick={() => { setError(""); setNsNameInput(""); setStep("create"); }}>
               + Create new workspace
             </CreateLink>
-            {forceSelect && (
-              <>
-                <OrDivider>or join via invite</OrDivider>
-                <Field>
-                  <Label>Invitation code</Label>
-                  <CodeTextarea
-                    placeholder="Paste your invitation code here…"
-                    value={inviteCodeInput}
-                    onChange={(e) => { setInviteCodeInput(e.target.value); setError(""); }}
-                  />
-                </Field>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  style={{ width: "100%" }}
-                  onClick={() => void handleInviteCode()}
-                  disabled={!inviteCodeInput.trim()}
-                >
-                  Join with code
-                </Button>
-              </>
-            )}
             <Divider />
             <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
           </>
@@ -788,7 +747,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
           <>
             <Header>
               <Title>Welcome to MeroChat</Title>
-              <Sub>No servers found on this node. Create one or join an existing server with an invitation code.</Sub>
+              <Sub>No servers found on this node. Create one, or join via an invitation link.</Sub>
             </Header>
             {error && <Err>{error}</Err>}
             <Button
@@ -798,24 +757,6 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
               onClick={() => { setError(""); setStep("create"); }}
             >
               Create workspace
-            </Button>
-            <OrDivider>or</OrDivider>
-            <Field>
-              <Label>Invitation code</Label>
-              <CodeTextarea
-                placeholder="Paste your invitation code here…"
-                value={inviteCodeInput}
-                onChange={(e) => { setInviteCodeInput(e.target.value); setError(""); }}
-              />
-            </Field>
-            <Button
-              type="button"
-              variant="secondary"
-              style={{ width: "100%" }}
-              onClick={() => void handleInviteCode()}
-              disabled={!inviteCodeInput.trim()}
-            >
-              Join with code
             </Button>
             <Divider />
             <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>

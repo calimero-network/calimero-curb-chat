@@ -7,90 +7,65 @@ import type { UserId } from "../../api/clientApi";
 
 const AddMemberButton = styled.div`
   display: flex;
-  column-gap: 0.5rem;
-  padding-left: 1rem;
-  padding-top: 0.4rem;
-  padding-bottom: 0.4rem;
-  color: #fff;
-  :hover {
-    background-color: #5765f2;
-  }
-  border-radius: 4px;
-  font-family: Helvetica Neue;
-  font-size: 14px;
-  font-style: normal;
-  font-weight: 400;
-  line-height: 150%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(165, 255, 17, 0.06);
+    border-color: rgba(165, 255, 17, 0.2);
+    color: #a5ff11;
+  }
 `;
 
 const UserListItem = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #777583;
-  padding-top: 0.4rem;
-  padding-bottom: 0.4rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  border-radius: 0.5rem;
-  cursor: pointer;
+  padding: 0.45rem 0.625rem;
+  border-radius: 8px;
+  cursor: default;
+  transition: background 0.12s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
 `;
 
 const UserList = styled.div`
-  overflow-y: scroll;
-  max-height: 24rem;
+  overflow-y: auto;
+  max-height: 22rem;
   @media (max-width: 1024px) {
     max-height: 12rem;
   }
-  scrollbar-color: black black;
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  ::-webkit-scrollbar-thumb {
-    background-color: black;
-    border-radius: 6px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background-color: black;
-  }
-  * {
-    scrollbar-color: black black;
-  }
-  html::-webkit-scrollbar {
-    width: 12px;
-  }
-  html::-webkit-scrollbar-thumb {
-    background-color: black;
-    border-radius: 6px;
-  }
-  html::-webkit-scrollbar-thumb:hover {
-    background-color: black;
-  }
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 `;
 
 const UserInfo = styled.div`
   display: flex;
-  column-gap: 0.5rem;
-  :hover {
-    background-color: transparent;
-  }
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 `;
 
 const Text = styled.div<{ $isSelected?: boolean }>`
-  display: flex;
-  justify-content: start;
-  align-items: center;
-  width: 100%;
-  color: ${({ $isSelected }) => ($isSelected ? "#5765F2" : "#fff")};
-  font-family: Helvetica Neue;
-  font-size: 14px;
-  font-style: normal;
-  font-weight: 400;
-  line-height: 150%;
-  :hover {
-    background-color: transparent;
-  }
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: ${({ $isSelected }) => ($isSelected ? "#a5ff11" : "rgba(255,255,255,0.85)")};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 // const RoleText = styled.div`
@@ -309,15 +284,13 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
       />
       {optionsOpen !== -1 && <OverLay onClick={() => setOptionsOpen(-1)} />}
       <UserList>
-        {Object.keys(userList).length > 0 &&
-          Object.keys(userList).map((user, id) => (
-            <UserListItem key={id}>
+        {userList.size > 0 &&
+          Array.from(userList.entries()).map(([identity, username], id) => (
+            <UserListItem key={identity}>
               <UserInfo>
-                {/* @ts-expect-error - userList is a Map */}
-                <Avatar size="xs" name={userList[user] ?? ""} />
-                <Text $isSelected={optionsOpen === Number(id)}>
-                  {/* @ts-expect-error - userList is a Map */}
-                  {userList[user]}
+                <Avatar size="xs" name={username ?? ""} />
+                <Text $isSelected={optionsOpen === id}>
+                  {username}
                 </Text>
               </UserInfo>
               {/* TODO: Add moderator options */}

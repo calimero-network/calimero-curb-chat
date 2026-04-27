@@ -1,4 +1,4 @@
-.PHONY: help setup install build dev dev-node start test test-full unit e2e workflows ci ci-stop \
+.PHONY: help setup install build dev dev-node dev-node2 start test test-full unit e2e workflows ci ci-stop \
         logic-build app-install app-build app-typecheck app-lint clean
 
 # ── Help ───────────────────────────────────────────────────────────────────────
@@ -9,7 +9,8 @@ help:
 	@echo ""
 	@echo "  Setup"
 	@echo "    setup          Check prereqs, build logic, install app deps"
-	@echo "    dev-node       Start a single local merod node for dev"
+	@echo "    dev-node       Start node1 with full workspace setup"
+	@echo "    dev-node2      Start node2 only (no workspace — invite from webapp)"
 	@echo "    install        Install frontend dependencies (pnpm)"
 	@echo ""
 	@echo "  Build"
@@ -18,7 +19,7 @@ help:
 	@echo "    app-build      Bundle frontend (dist/)"
 	@echo ""
 	@echo "  Dev"
-	@echo "    start          Start node + frontend in one shot (full dev setup)"
+	@echo "    start          Node1 (full setup) + node2 (bare) + frontend"
 	@echo "    dev            Start Vite dev server (http://localhost:5173)"
 	@echo ""
 	@echo "  Quality"
@@ -46,6 +47,9 @@ setup:
 dev-node:
 	@bash scripts/dev-node.sh
 
+dev-node2:
+	@bash scripts/dev-node2.sh
+
 install: app-install
 
 # ── Build ──────────────────────────────────────────────────────────────────────
@@ -66,10 +70,11 @@ build: logic-build app-build
 dev: app-install
 	cd app && pnpm dev
 
-# Full dev setup: node + frontend in one shot.
-# Runs dev-node.sh (blocking until node is ready), then starts Vite.
+# Full dev setup: node1 (full setup) + node2 (bare, no workspace) + frontend.
+# Node2 is left without a workspace — invite it into the namespace from the webapp.
 start: app-install
 	@bash scripts/dev-node.sh
+	@bash scripts/dev-node2.sh
 	cd app && pnpm dev
 
 # ── Quality ────────────────────────────────────────────────────────────────────

@@ -103,6 +103,18 @@ export default defineConfig({
       timeout: 60_000,
       testMatch: ["**/rpc-admin.spec.ts"],
     },
+    // SSE subscription tests — direct SSE stream + RPC calls against a live node.
+    // Measures subscribe/unsubscribe correctness and event latency.
+    // Requires app/.env.integration (written by scripts/dev-node.sh).
+    {
+      name: "sse",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: { cookies: [], origins: [] },
+      },
+      timeout: 30_000,
+      testMatch: ["**/sse.spec.ts"],
+    },
   ],
   webServer: process.env.SKIP_DEV_SERVER
     ? undefined

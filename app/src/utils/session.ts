@@ -60,3 +60,21 @@ export const isSessionExpired = (): boolean => {
 export const clearSessionActivity = (): void => {
   StorageHelper.removeItem(SESSION_TIMEOUT_KEY);
 };
+
+// ── Namespace-ready gate ──────────────────────────────────────────────────────
+// Set in sessionStorage (not localStorage) so it always requires going through
+// namespace selection after a fresh login or tab re-open.
+
+const NS_READY_KEY = "curb_ns_ready";
+
+export function setNamespaceReady(): void {
+  sessionStorage.setItem(NS_READY_KEY, "1");
+}
+
+export function isNamespaceReady(): boolean {
+  return sessionStorage.getItem(NS_READY_KEY) === "1";
+}
+
+export function clearNamespaceReady(): void {
+  sessionStorage.removeItem(NS_READY_KEY);
+}
