@@ -71,7 +71,6 @@ interface DetailsContainerProps {
 const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
   const channelName = props.channelName;
   const initialTabIndex = props.selectedTabIndex ? 0 : 1;
-  const userCount = props.userList.size;
   const userList = props.userList;
   const channelMeta = props.channelMeta;
   const handleLeaveChannel = props.handleLeaveChannel;
@@ -81,6 +80,9 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
   const reFetchChannelMembers = props.reFetchChannelMembers;
   const { groupId, groupMembers, isAdmin, actionLoading, onRemoveMember, onSetCapabilities, onGetCapabilities, onRefreshMembers } = props;
   const hasGroupMembers = !!groupId && !!groupMembers && groupMembers.length > 0;
+  const userCount = (isAdmin && hasGroupMembers)
+    ? (groupMembers?.length ?? 0)
+    : userList.size;
 
   const [selectedTabIndex, setSelectedTabIndex] = useState(initialTabIndex);
 

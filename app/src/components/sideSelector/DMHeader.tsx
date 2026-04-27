@@ -61,7 +61,7 @@ const DMHeader = memo(function DMHeader({
       if (!isMember) {
         return {
           isValid: false,
-          error: "Select a workspace member identity from the list",
+          error: "Cannot create DM: the user is not in the workspace",
         };
       }
       return { isValid: true, error: "" };

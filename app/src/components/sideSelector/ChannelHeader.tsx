@@ -3,6 +3,7 @@ import CreateChannelPopup from "../popups/CreateChannelPopup";
 import { isValidChannelName } from "../../utils/validation";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
+import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import { getApplicationId, getGroupId, setContextMemberIdentity } from "../../constants/config";
 import { memo, useCallback, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
@@ -13,6 +14,7 @@ import {
   getContextVisibilityModeFromOption,
 } from "../../utils/channelVisibility";
 import { buildChannelEntryChat } from "../../utils/channelEntry";
+import { getMessengerDisplayName } from "../../utils/messengerName";
 import type { ActiveChat } from "../../types/Common";
 
 const Container = styled.div<{ $isCollapsed?: boolean }>`
@@ -61,6 +63,7 @@ interface ChannelHeaderProps {
   isCollapsed?: boolean;
   onChannelCreated?: () => void;
   onChannelSelected?: (chat: ActiveChat) => void;
+  existingChannelNames?: string[];
 }
 
 const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
@@ -71,6 +74,20 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const groupId = getGroupId();
   const { canCreateContext } = useCurrentGroupPermissions(groupId);
 
+  const channelNameValidator = useCallback(
+    (value: string) => {
+      const base = isValidChannelName(value);
+      if (!base.isValid) return base;
+      const lower = value.toLowerCase();
+      const isDuplicate = (props.existingChannelNames ?? []).some(
+        (n) => n.toLowerCase() === lower,
+      );
+      if (isDuplicate) return { isValid: false, error: "A channel with this name already exists" };
+      return { isValid: true, error: "" };
+    },
+    [props.existingChannelNames],
+  );
+
   const createChannel = async (
     channelName: string,
     isPublic: boolean,
@@ -78,6 +95,15 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   ) => {
     if (!groupId) {
       log.error("ChannelHeader", "No groupId configured — cannot create channel");
+      return;
+    }
+
+    const lower = channelName.toLowerCase();
+    const isDuplicate = (props.existingChannelNames ?? []).some(
+      (n) => n.toLowerCase() === lower,
+    );
+    if (isDuplicate) {
+      log.warn("ChannelHeader", `Channel name "${channelName}" already exists`);
       return;
     }
 
@@ -103,8 +129,16 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     }
 
     const contextId = createResp.data.contextId;
-    if (createResp.data.memberPublicKey) {
-      setContextMemberIdentity(contextId, createResp.data.memberPublicKey);
+    const memberKey = createResp.data.memberPublicKey ?? "";
+    if (memberKey) {
+      setContextMemberIdentity(contextId, memberKey);
+      // Register creator's profile in the new WASM context so get_profiles returns them
+      const username = getMessengerDisplayName();
+      if (username) {
+        new ClientApiDataSource()
+          .joinChat({ contextId, executorPublicKey: memberKey, username })
+          .catch((e) => log.warn("ChannelHeader", "set_profile failed on new channel", e));
+      }
     }
     const groupApi = new GroupApiDataSource();
     const visibilityMode = getContextVisibilityModeFromOption(
@@ -126,7 +160,6 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     setInputValue("");
     setIsOpen(false);
 
-    const memberKey = createResp.data.memberPublicKey ?? "";
     if (memberKey) {
       props.onChannelSelected?.(
         buildChannelEntryChat({ contextId, name: channelName, contextIdentity: memberKey }),
@@ -188,7 +221,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
             </PlusButton>
           }
           createChannel={createChannel}
-          channelNameValidator={isValidChannelName}
+          channelNameValidator={channelNameValidator}
           defaultVisibility={defaultVisibility}
         />
       )}

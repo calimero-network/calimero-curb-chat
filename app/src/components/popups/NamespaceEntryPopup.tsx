@@ -570,6 +570,14 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
     const trimmedNs = nsNameInput.trim();
     if (!trimmedNs) return;
 
+    const isDuplicate = namespaces.some(
+      (n) => (n.alias ?? "").toLowerCase() === trimmedNs.toLowerCase(),
+    );
+    if (isDuplicate) {
+      setError("A workspace with this name already exists");
+      return;
+    }
+
     setStep("creating");
     setError("");
 
@@ -628,9 +636,13 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       setError(err instanceof Error ? err.message : "Failed to create namespace");
       setStep("create");
     }
-  }, [nsNameInput, enterChat]);
+  }, [nsNameInput, namespaces, enterChat]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
+
+  const isDuplicateNsName =
+    nsNameInput.trim().length > 0 &&
+    namespaces.some((n) => (n.alias ?? "").toLowerCase() === nsNameInput.trim().toLowerCase());
 
   const selectedNs = namespaces.find((g) => g.groupId === selectedId);
 
@@ -789,7 +801,10 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
               {nsNameInput.length > 64 && (
                 <FieldError>Name must be 64 characters or fewer ({nsNameInput.length}/64)</FieldError>
               )}
-              {nsNameInput.length <= 64 && error && (
+              {nsNameInput.length <= 64 && isDuplicateNsName && (
+                <FieldError>A workspace with this name already exists</FieldError>
+              )}
+              {nsNameInput.length <= 64 && !isDuplicateNsName && error && (
                 <FieldError>{error}</FieldError>
               )}
             </Field>
@@ -798,7 +813,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
               variant="primary"
               style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
               onClick={() => void handleCreate()}
-              disabled={step === "creating" || !nsNameInput.trim() || nsNameInput.trim().length > 64}
+              disabled={step === "creating" || !nsNameInput.trim() || nsNameInput.trim().length > 64 || isDuplicateNsName}
             >
               {step === "creating" ? (
                 <>

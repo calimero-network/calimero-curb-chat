@@ -97,19 +97,16 @@ export default function ChannelDetailsPopup({
   };
 
   useEffect(() => {
-    const fetchMetadata = async () => {
-      if (chat.name) {
-        await getChannelMetadata(chat.name);
-      }
-    };
-    fetchMetadata();
-  }, [chat]);
+    if (!isOpen || !chat.name) return;
+    void getChannelMetadata(chat.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, chat.name]);
 
   useEffect(() => {
-    if (isOpen && groupId) {
-      void fetchAll(groupId);
-    }
-  }, [isOpen, groupId, fetchAll]);
+    if (!isOpen) return;
+    if (groupId) void fetchAll(groupId);
+    reFetchChannelMembers();
+  }, [isOpen, chat.contextId, groupId, fetchAll, reFetchChannelMembers]);
 
   const popupContent = (
     <DetailsContainer

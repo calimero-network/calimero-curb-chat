@@ -273,53 +273,40 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getChannelInfo(props: GetChannelInfoProps): ApiResponse<ChannelInfo> {
+  async getChannelInfo(_props: GetChannelInfoProps): ApiResponse<ChannelInfo> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, ChannelInfo>(
+      const response = await getJsonRpcClient().execute<any, {
+        name: string; context_type: string; description: string;
+        created_at: number; creator: string;
+      }>(
         {
           contextId: getContextId() || "",
-          method: ClientMethod.GET_CHANNEL_INFO,
-          argsJson: {
-            channel: props.channel,
-          },
+          method: "get_info",
+          argsJson: {},
           executorPublicKey: getExecutorPublicKey() || "",
         },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 10000,
-        },
+        { headers: { "Content-Type": "application/json" }, timeout: 10000 },
       );
       if (response?.error) {
-        return {
-          data: null,
-          error: {
-            code: response?.error.code,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            message: (response?.error.error.cause.info as any).message,
-          },
-        };
+        return { data: null, error: { code: response.error.code, message: "get_info failed" } };
       }
+      const out = response?.result.output;
       return {
-        data: response?.result.output as ChannelInfo,
+        data: {
+          channel_type: out?.context_type ?? "",
+          created_at: out?.created_at ?? 0,
+          created_by: out?.creator ?? "",
+          created_by_username: "",
+          links_allowed: true,
+          read_only: false,
+          unread_count: 0,
+          unread_mentions: 0,
+        },
         error: null,
       };
-    } catch (error) {
-      console.error("getChannelInfo failed:", error);
-      let errorMessage = "An unexpected error occurred during getChannelInfo";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      }
-      return {
-        error: {
-          code: 500,
-          message: errorMessage,
-        },
-      };
+    } catch {
+      return { data: null, error: { code: 500, message: "get_info failed" } };
     }
   }
 

@@ -41,7 +41,6 @@ import {
   setGroupMemberIdentity,
 } from "../../constants/config";
 import { getAppEntryState } from "../../utils/appEntry";
-import { getContextProfileSyncAction } from "../../utils/contextProfileSync";
 import { getMessengerDisplayName, getIdentityDisplayName, getStoredExecutorIdentity } from "../../utils/messengerName";
 import {
   createDmContextInGroup,
@@ -167,7 +166,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
    * RPC calls (messages, reactions, etc.) target the correct context.
    */
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
-    mainMessages.clear();
     threadMessages.clear();
     setOpenThread(undefined);
     setCurrentOpenThread(undefined);
@@ -215,40 +213,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     if (lastSelectedChatIdRef.current !== chatId) {
       lastSelectedChatIdRef.current = chatId;
 
-      if (resolvedChat.type === "channel") {
+      if (resolvedChat.type === "channel" && resolvedChat.contextIdentity) {
         getChannelUsers(resolvedChat.id);
-      }
-    }
-
-    // Background: ensure WASM profile is written for this context (no-op if already set via enterChat)
-    if (
-      (resolvedChat.type === "channel" || resolvedChat.type === "direct_message") &&
-      resolvedChat.contextId &&
-      resolvedChat.contextIdentity
-    ) {
-      const messengerName =
-        getIdentityDisplayName(resolvedChat.contextIdentity || "") ||
-        getMessengerDisplayName();
-      if (messengerName) {
-        const ctxId = resolvedChat.contextId;
-        const ctxIdentity = resolvedChat.contextIdentity;
-        new ClientApiDataSource().getUsername({
-          contextId: ctxId,
-          executorPublicKey: ctxIdentity,
-          userId: ctxIdentity,
-        }).then((usernameResponse) => {
-          const syncAction = getContextProfileSyncAction({
-            globalName: messengerName,
-            contextUsername: usernameResponse.data || "",
-          });
-          if (syncAction === "apply-global-name") {
-            new ClientApiDataSource().joinChat({
-              contextId: ctxId,
-              executorPublicKey: ctxIdentity,
-              username: messengerName,
-            }).catch(() => {});
-          }
-        }).catch(() => {});
       }
     }
 
@@ -506,8 +472,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }, []);
 
   // Group-based channels (each context = one channel)
-  const channels: GroupContextChannel[] = groupContextsHook.channels.filter(
-    (ch) => (ch.isJoined ?? false) && (!ch.info || ch.info.context_type === "Channel"),
+  const channels = useMemo(
+    () => groupContextsHook.channels.filter(
+      (ch) => (ch.isJoined ?? false) && (!ch.info || ch.info.context_type === "Channel"),
+    ),
+    [groupContextsHook.channels],
   );
 
   const privateDMs = dmsHook.dms;
@@ -579,50 +548,26 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     }
   }, [dmsHook, chatMembersHook, groupContextsHook, groupMembersHook]);
 
+  // Stable key — only changes when the actual set of context IDs changes
+  const allContextIdsKey = useMemo(() => {
+    const ids: string[] = [];
+    groupContextsHook.channels.forEach((ch) => {
+      if (ch.isJoined && ch.contextId) ids.push(ch.contextId);
+    });
+    privateDMs.forEach((dm) => {
+      if (dm.contextId && !ids.includes(dm.contextId)) ids.push(dm.contextId);
+    });
+    return ids.sort().join(",");
+  }, [groupContextsHook.channels, privateDMs]);
+
   // Subscribe to ALL group contexts + DM contexts for real-time updates
   useEffect(() => {
-    if (!app) return;
+    if (!app || !allContextIdsKey) return;
 
-    const contextIdsToSubscribe: string[] = [];
-
-    // Add all group context IDs (each channel is its own context now)
-    const joinedChannelContextIds = groupContextsHook.channels
-      .filter((channel) => channel.isJoined)
-      .map((channel) => channel.contextId);
-
-    if (joinedChannelContextIds.length > 0) {
-      joinedChannelContextIds.forEach((id) => {
-        if (id && !contextIdsToSubscribe.includes(id)) {
-          contextIdsToSubscribe.push(id);
-        }
-      });
-      log.debug(
-        "Home",
-        `Adding ${joinedChannelContextIds.length} joined group contexts for subscription`,
-      );
-    }
-
-    // Add DM contexts (group-based DMs are also group contexts)
-    if (privateDMs && privateDMs.length > 0) {
-      privateDMs.forEach((dm) => {
-        if (dm.contextId && !contextIdsToSubscribe.includes(dm.contextId)) {
-          contextIdsToSubscribe.push(dm.contextId);
-        }
-      });
-      log.debug("Home", `Added ${privateDMs.length} DM contexts`);
-    }
-
-    if (contextIdsToSubscribe.length > 0) {
-      log.info(
-        "Home",
-        `Subscribing to ${contextIdsToSubscribe.length} contexts (${joinedChannelContextIds.length} channels + ${privateDMs.length} DMs)`,
-        { totalContexts: contextIdsToSubscribe.length },
-      );
-      webSocket.subscribeToContexts(contextIdsToSubscribe);
-    } else {
-      log.warn("Home", "No contexts to subscribe to");
-    }
-  }, [app, groupContextsHook.channels, privateDMs, webSocket]);
+    const contextIds = allContextIdsKey.split(",");
+    log.info("Home", `Subscribing to ${contextIds.length} contexts`, { totalContexts: contextIds.length });
+    webSocket.subscribeToContexts(contextIds);
+  }, [app, allContextIdsKey, webSocket]);
 
   const onJoinedChat = async () => {
     fetchGroupChannels();
@@ -684,9 +629,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       if (myIdentity === otherIdentity) {
         return {
           data: "",
-          error: "Select another workspace member to start a DM",
+          error: "Cannot create DM: you cannot DM yourself",
         };
       }
+
+      const existingDm = privateDMs.find((dm) => dm.otherIdentity === otherIdentity);
+      if (existingDm) {
+        return { data: "", error: "Cannot create DM: already exists" };
+      }
+
       const otherUsername = dmMembers.get(otherIdentity) || chatMembers.get(otherIdentity) || "";
 
       const createResponse = await createDmContextInGroup({

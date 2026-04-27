@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import styled from "styled-components";
 import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import ChannelHeader from "./ChannelHeader";
@@ -199,58 +199,104 @@ const SectionLabel = styled.div`
   }
 `;
 
+interface SideMenuContentProps {
+  isOpenSearchChannel: boolean;
+  setIsOpenSearchChannel: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  channels: GroupContextChannel[];
+  existingChannelNames: string[];
+  activeChat: ActiveChat | null;
+  onChatSelected: (chat: ActiveChat) => void;
+  dmMembers: Map<string, string>;
+  onDMSelected: (dm: DMContextInfo) => void;
+  createDM: (value: string) => Promise<CreateContextResult>;
+  privateDMs: DMContextInfo[];
+  onChannelCreated?: () => void;
+  onChannelSelected?: (chat: ActiveChat) => void;
+}
+
+const SideMenuContent = memo(function SideMenuContent({
+  isOpenSearchChannel,
+  setIsOpenSearchChannel,
+  isCollapsed,
+  onToggleCollapse,
+  channels,
+  existingChannelNames,
+  activeChat,
+  onChatSelected,
+  dmMembers,
+  onDMSelected,
+  createDM,
+  privateDMs,
+  onChannelCreated,
+  onChannelSelected,
+}: SideMenuContentProps) {
+  return (
+    <>
+      <SearchChannels
+        isOpenSearchChannel={isOpenSearchChannel}
+        setIsOpenSearchChannel={setIsOpenSearchChannel}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={onToggleCollapse}
+      />
+      <HorizontalSeparatorLine $isMobile={false} />
+      {isCollapsed && <SectionLabel>CH</SectionLabel>}
+      <ChannelHeader
+        title="Channels"
+        isCollapsed={isCollapsed}
+        onChannelCreated={onChannelCreated}
+        onChannelSelected={onChannelSelected}
+        existingChannelNames={existingChannelNames}
+      />
+      <ChannelList
+        channels={channels}
+        selectChannel={onChatSelected}
+        selectedChannelId={activeChat?.type === "channel" ? activeChat.id : ""}
+        isCollapsed={isCollapsed}
+      />
+      <HorizontalSeparatorLine $isMobile={true} />
+      {isCollapsed && <SectionLabel>DM</SectionLabel>}
+      <DMSideSelector
+        dmMembers={dmMembers}
+        onDMSelected={onDMSelected}
+        selectedDM={
+          activeChat?.type === "direct_message"
+            ? activeChat.contextId || activeChat.id
+            : ""
+        }
+        createDM={createDM}
+        privateDMs={privateDMs}
+        isCollapsed={isCollapsed}
+        onNoActiveChat={setIsOpenSearchChannel}
+      />
+    </>
+  );
+});
+
 const SideSelector: React.FC<SideSelectorProps> = (props) => {
   const channels = props.channels;
   const isSidebarOpen = props.isSidebarOpen;
-  const setIsOpenSearchChannel = props.setIsOpenSearchChannel;
-  const isOpenSearchChannel = props.isOpenSearchChannel;
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const SideMenuContent = () => {
-    return (
-      <>
-        <SearchChannels
-          isOpenSearchChannel={isOpenSearchChannel}
-          setIsOpenSearchChannel={setIsOpenSearchChannel}
-          isCollapsed={isCollapsed}
-          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
-        />
-        <HorizontalSeparatorLine $isMobile={false} />
-        {isCollapsed && <SectionLabel>CH</SectionLabel>}
-        <ChannelHeader
-          key="channels-header"
-          title="Channels"
-          isCollapsed={isCollapsed}
-          onChannelCreated={props.onChannelCreated}
-          onChannelSelected={props.onChannelSelected}
-        />
-        <ChannelList
-          channels={channels}
-          selectChannel={props.onChatSelected}
-          selectedChannelId={
-            props.activeChat?.type === "channel"
-              ? props.activeChat.id
-              : ""
-          }
-          isCollapsed={isCollapsed}
-        />
-        <HorizontalSeparatorLine $isMobile={true} />
-        {isCollapsed && <SectionLabel>DM</SectionLabel>}
-        <DMSideSelector
-          dmMembers={props.dmMembers}
-          onDMSelected={props.onDMSelected}
-          selectedDM={
-            props.activeChat?.type === "direct_message"
-              ? props.activeChat.contextId || props.activeChat.id
-              : ""
-          }
-          createDM={props.createDM}
-          privateDMs={props.privateDMs}
-          isCollapsed={isCollapsed}
-          onNoActiveChat={props.setIsOpenSearchChannel}
-        />
-      </>
-    );
+  const toggleCollapse = useCallback(() => setIsCollapsed((prev) => !prev), []);
+  const existingChannelNames = useMemo(() => channels.map((c) => c.alias ?? ""), [channels]);
+
+  const sharedContentProps: SideMenuContentProps = {
+    isOpenSearchChannel: props.isOpenSearchChannel,
+    setIsOpenSearchChannel: props.setIsOpenSearchChannel,
+    isCollapsed,
+    onToggleCollapse: toggleCollapse,
+    channels,
+    existingChannelNames,
+    activeChat: props.activeChat,
+    onChatSelected: props.onChatSelected,
+    dmMembers: props.dmMembers,
+    onDMSelected: props.onDMSelected,
+    createDM: props.createDM,
+    privateDMs: props.privateDMs,
+    onChannelCreated: props.onChannelCreated,
+    onChannelSelected: props.onChannelSelected,
   };
 
   return (
@@ -260,11 +306,11 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
           <MobileHeaderWrapper>
             <CurbLogo isMobile={true} />
           </MobileHeaderWrapper>
-          <SideMenuContent />
+          <SideMenuContent {...sharedContentProps} />
         </SideMenuMobile>
       )}
       <SideMenu $isCollapsed={isCollapsed}>
-        <SideMenuContent />
+        <SideMenuContent {...sharedContentProps} />
       </SideMenu>
     </>
   );
