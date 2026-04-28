@@ -22,7 +22,6 @@ import {
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { extractUsernames } from "../utils/mentions";
 import { RichTextEditor } from "@calimero-network/mero-ui";
-import { getDmContextId } from "../utils/session";
 import { useToast } from "../contexts/ToastContext";
 
 export const EditorWrapper = styled.div`
@@ -496,7 +495,7 @@ export default function MessageInput({
     if (contextId && contextId.length > 0) {
       return contextId;
     }
-    return getContextId() ?? getDmContextId() ?? "";
+    return getContextId() ?? "";
   }, [contextId]);
 
   const handleMessageChange = useCallback(
@@ -520,13 +519,21 @@ export default function MessageInput({
     });
   }, []);
 
+  const clearUploadedFile = useCallback(() => {
+    setUploadedFile(null);
+  }, [setUploadedFile]);
+
+  const clearUploadedImage = useCallback(() => {
+    setUploadedImage(null);
+  }, [setUploadedImage]);
+
   useEffect(() => {
     setMessage(null);
     setEmojiSelectorOpen(false);
     setShowUpload(false);
     clearUploadedFile();
     clearUploadedImage();
-  }, [selectedChat]);
+  }, [selectedChat, clearUploadedFile, clearUploadedImage]);
 
   const removeUploadedFile = useCallback(() => {
     if (uploadedFile?.file.blobId) {
@@ -534,7 +541,7 @@ export default function MessageInput({
     }
     setUploadedFile(null);
     setShowUpload(false);
-  }, [deleteBlobById, setShowUpload, uploadedFile]);
+  }, [deleteBlobById, setShowUpload, setUploadedFile, uploadedFile]);
 
   const removeUploadedImage = useCallback(() => {
     if (uploadedImage?.file.blobId) {
@@ -543,15 +550,7 @@ export default function MessageInput({
     setUploadedImage(null);
     setShowUpload(false);
     resetImage();
-  }, [deleteBlobById, resetImage, setShowUpload, uploadedImage]);
-
-  const clearUploadedFile = useCallback(() => {
-    setUploadedFile(null);
-  }, [setUploadedFile]);
-
-  const clearUploadedImage = useCallback(() => {
-    setUploadedImage(null);
-  }, [setUploadedImage]);
+  }, [deleteBlobById, resetImage, setShowUpload, setUploadedImage, uploadedImage]);
 
   useEffect(() => {
     return () => {
@@ -645,6 +644,12 @@ export default function MessageInput({
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to send message";
+        // "no mesh peers for namespace" means the message was stored locally but
+        // P2P sync found no connected peers — expected with a single node.
+        // Don't surface this as an error to the user.
+        if (/mesh|no.*peer|peer.*sync/i.test(message)) {
+          return;
+        }
         addToast({
           title: "Message error",
           message,

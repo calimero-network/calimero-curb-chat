@@ -3,6 +3,9 @@ import type { UserId } from "./clientApi";
 
 export interface CreateContextProps {
   user: UserId;
+  groupId?: string;
+  /** Hex-encoded 32-byte private key for group context creation. Optional — the node derives it from its group identity when omitted. */
+  identitySecret?: string;
 }
 
 export interface CreateContextResponse {

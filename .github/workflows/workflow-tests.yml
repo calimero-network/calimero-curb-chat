@@ -27,6 +27,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout calimero/core (Cargo path deps)
+        run: git clone --depth 1 https://github.com/calimero-network/core.git "${GITHUB_WORKSPACE}/../core"
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -41,16 +44,12 @@ jobs:
           cp target/wasm32-unknown-unknown/app-release/curb.wasm res/
 
       - name: Install merobox
-        run: |
-          curl -fsSL https://calimero-network.github.io/merobox/gpg.key | sudo tee /usr/share/keyrings/merobox.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/merobox.gpg] https://calimero-network.github.io/merobox stable main" | sudo tee /etc/apt/sources.list.d/merobox.list
-          sudo apt update
-          sudo apt install -y merobox
+        run: pip install merobox==0.4.6
 
       - name: Verify merobox installation
         run: merobox --version
 
-      - name: Run simple-invitation workflow
+      - name: Run E2E workflow
         working-directory: workflows
         run: |
           max_attempts=2
@@ -62,7 +61,7 @@ jobs:
               merobox nuke --force || true
               sleep 2
             fi
-            if merobox bootstrap run simple-invitation.yml; then
+            if merobox bootstrap run e2e.yml; then
               success=true
               break
             fi
@@ -72,7 +71,7 @@ jobs:
           merobox nuke --force || true
           if [ "$success" = false ]; then exit 1; fi
 
-      - name: Run simple-open-invitation workflow
+      - name: Run integration-setup workflow
         working-directory: workflows
         run: |
           max_attempts=2
@@ -84,51 +83,7 @@ jobs:
               merobox nuke --force || true
               sleep 2
             fi
-            if merobox bootstrap run simple-open-invitation.yml; then
-              success=true
-              break
-            fi
-            attempt=$((attempt + 1))
-          done
-          merobox stop --all || true
-          merobox nuke --force || true
-          if [ "$success" = false ]; then exit 1; fi
-
-      - name: Run complex-invitations workflow
-        working-directory: workflows
-        run: |
-          max_attempts=2
-          attempt=1
-          success=false
-          while [ $attempt -le $max_attempts ]; do
-            if [ $attempt -gt 1 ]; then
-              merobox stop --all || true
-              merobox nuke --force || true
-              sleep 2
-            fi
-            if merobox bootstrap run complex-invitations.yml; then
-              success=true
-              break
-            fi
-            attempt=$((attempt + 1))
-          done
-          merobox stop --all || true
-          merobox nuke --force || true
-          if [ "$success" = false ]; then exit 1; fi
-
-      - name: Run full-logic-test workflow
-        working-directory: workflows
-        run: |
-          max_attempts=2
-          attempt=1
-          success=false
-          while [ $attempt -le $max_attempts ]; do
-            if [ $attempt -gt 1 ]; then
-              merobox stop --all || true
-              merobox nuke --force || true
-              sleep 2
-            fi
-            if merobox bootstrap run full-logic-test.yml; then
+            if merobox bootstrap run integration-setup.yml; then
               success=true
               break
             fi

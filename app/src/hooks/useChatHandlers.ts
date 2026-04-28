@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { ActiveChat } from "../types/Common";
-import type { DMChatInfo } from "../api/clientApi";
+import type { DMContextInfo } from "./useDMs";
 import { getStoredSession } from "../utils/session";
 import type { NotificationType } from "../utils/notificationSound";
 import { log } from "../utils/logger";
@@ -19,7 +19,6 @@ import { bytesParser } from "../utils/bytesParser";
 // Simplified interface - accept refs directly instead of creating them internally
 interface ChatHandlersRefs {
   mainMessages: React.MutableRefObject<{
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     checkForNewMessages: (
       chat: ActiveChat,
       isDM: boolean,
@@ -61,13 +60,16 @@ interface ChatHandlersRefs {
       text: string
     ) => void
   >;
-  fetchDms: React.MutableRefObject<() => Promise<DMChatInfo[] | undefined>>;
+  fetchDms: React.MutableRefObject<() => Promise<DMContextInfo[] | undefined>>;
   onDMSelected: React.MutableRefObject<
-    (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void
+    (dm: DMContextInfo) => void
   >;
   fetchChannels: React.MutableRefObject<() => Promise<void>>;
   fetchDMs: React.MutableRefObject<() => Promise<void>>;
   fetchMembers: React.MutableRefObject<() => Promise<void>>;
+  fetchGroupMembers: React.MutableRefObject<() => Promise<void>>;
+  onLeftChannel: React.MutableRefObject<(contextId: string) => void>;
+  subscribeToContext: React.MutableRefObject<(contextId: string) => void>;
 }
 
 export function useChatHandlers(
@@ -130,13 +132,20 @@ export function useChatHandlers(
           if (useDM) {
             if (!shouldNotifyMessage) {
               messagesBelongToActiveChat = true;
+            } else if (contextId && activeChatRef.current?.contextId) {
+              messagesBelongToActiveChat = contextId === activeChatRef.current.contextId;
             } else {
               messagesBelongToActiveChat =
                 lastMessageTest.senderUsername === activeDMName;
             }
           } else {
-            messagesBelongToActiveChat =
-              lastMessageTest.group === activeChatName;
+            // Prefer contextId match (reliable) over channel name string comparison
+            // which can silently mismatch when display name differs from event bytes
+            if (contextId && activeChatRef.current?.contextId) {
+              messagesBelongToActiveChat = contextId === activeChatRef.current.contextId;
+            } else {
+              messagesBelongToActiveChat = group === activeChatName;
+            }
           }
 
           // Always show notifications for all messages (even if not in active chat)
@@ -164,8 +173,7 @@ export function useChatHandlers(
               }
             }
           } else {
-            // For DMs, check both the main identity and the DM-specific identity
-            const currentDMIdentity = activeChatRef.current?.account;
+            const currentDMIdentity = activeChatRef.current?.contextIdentity;
             const isFromCurrentUser =
               lastMessage &&
               (lastMessage.sender === currentUserId ||
@@ -208,41 +216,10 @@ export function useChatHandlers(
                       channel: { name: activeChat?.name },
                       timestamp: lastMessage.timestamp,
                     })
-                    .then(() => {
-                      refs.fetchChannels.current();
-                    })
-                    .catch((error) =>
-                      log.error(
-                        "ChatHandlers",
-                        "Failed to mark message as read",
-                        error
-                      )
-                    );
+                    .catch(() => {});
                 }
-              } else {
-                new ClientApiDataSource()
-                  .readDm({
-                    other_user_id: activeChatRef.current?.name || "",
-                  })
-                  .then(() => {
-                    refs.fetchDMs.current();
-                  })
-                  .catch((error) =>
-                    log.error(
-                      "ChatHandlers",
-                      "Failed to mark DM as read",
-                      error
-                    )
-                  );
               }
             }
-          } else {
-            console.log(
-              "Messages received but not appended - they don't belong to the active chat. Active:",
-              activeChatName,
-              "Message group:",
-              newMessages[0]?.group
-            );
           }
         }
       } catch (error) {
@@ -309,52 +286,13 @@ export function useChatHandlers(
     [refs]
   );
 
-  // Track last DM update to prevent infinite loops
-  const lastDMUpdateRef = useRef<{
-    contextId: string;
-    timestamp: number;
-  } | null>(null);
-
   /**
-   * Handle DM-specific updates
+   * Handle DM-specific updates (group-based DMs are just contexts)
    */
   const handleDMUpdates = useCallback(
-    async (sessionChat: ActiveChat | null) => {
-      if (sessionChat?.type !== "direct_message") return;
-
-      const now = Date.now();
-      if (
-        lastDMUpdateRef.current &&
-        lastDMUpdateRef.current.contextId === sessionChat.contextId &&
-        now - lastDMUpdateRef.current.timestamp < 2000
-      ) {
-        return;
-      }
-
+    async (_sessionChat: ActiveChat | null) => {
       try {
-        const updatedDMs = await refs.fetchDms.current();
-
-        if (
-          !sessionChat?.isFinal &&
-          updatedDMs?.length &&
-          (sessionChat?.canJoin ||
-            !sessionChat?.isSynced ||
-            !sessionChat?.account ||
-            !sessionChat?.otherIdentityNew)
-        ) {
-          const currentDM = updatedDMs.find(
-            (dm) => dm.context_id === sessionChat.contextId
-          );
-
-          if (currentDM && sessionChat.contextId) {
-            lastDMUpdateRef.current = {
-              contextId: sessionChat.contextId,
-              timestamp: now,
-            };
-            // Trigger DM selection to update UI state
-            refs.onDMSelected.current(currentDM, undefined, false);
-          }
-        }
+        await refs.fetchDms.current();
       } catch (error) {
         log.error("ChatHandlers", "Error handling DM updates", error);
       }
@@ -388,19 +326,13 @@ export function useChatHandlers(
             if (executionEvent.data) {
               try {
                 const asciiString = bytesParser(executionEvent.data);
-
-                // Parse the JSON to get channel/group and message_id
                 const parsed = JSON.parse(asciiString);
                 if (parsed.channel) {
                   actions.fetchMessageGroup = parsed.channel;
                   actions.isDM = parsed.channel === "private_dm";
                 }
               } catch (e) {
-                console.log(
-                  `MessageSent - Couldn't decode data:`,
-                  executionEvent.data,
-                  e
-                );
+                log.warn("ChatHandlers", "Couldn't decode MessageSent data", e);
               }
             }
             break;
@@ -419,11 +351,7 @@ export function useChatHandlers(
                   actions.shouldNotifyMessage = false;
                 }
               } catch (e) {
-                console.log(
-                  `MessageSent - Couldn't decode data:`,
-                  executionEvent.data,
-                  e
-                );
+                log.warn("ChatHandlers", "Couldn't decode MessageSentThread data", e);
               }
             }
             break;
@@ -455,43 +383,51 @@ export function useChatHandlers(
             break;
 
           case "ChannelJoined":
-            // Refresh channel list and members
             actions.fetchChannels = true;
             actions.fetchMembers = true;
-            log.debug(
-              "ChatHandlers",
-              "Channel joined, refreshing channel list and members"
-            );
+            if (executionEvent.data) {
+              try {
+                const parsed = JSON.parse(bytesParser(executionEvent.data));
+                if (parsed.context_id) refs.subscribeToContext.current(parsed.context_id);
+              } catch { /* ignore parse errors */ }
+            }
+            log.debug("ChatHandlers", "Channel joined, refreshing channel list and members");
             break;
 
           case "ChannelLeft":
-            // Refresh channel list and members
             actions.fetchChannels = true;
             actions.fetchMembers = true;
-            log.debug(
-              "ChatHandlers",
-              "Channel left, refreshing channel list and members"
-            );
+            if (contextId === activeChatRef.current?.contextId) {
+              refs.onLeftChannel.current(contextId);
+            }
+            log.debug("ChatHandlers", "Channel left, refreshing channel list and members");
             break;
 
           case "ChannelInvited":
-            // Refresh channel list and members
             actions.fetchChannels = true;
             actions.fetchMembers = true;
-            log.debug(
-              "ChatHandlers",
-              "User invited to channel, refreshing channel list and members"
-            );
+            if (executionEvent.data) {
+              try {
+                const parsed = JSON.parse(bytesParser(executionEvent.data));
+                if (parsed.context_id) refs.subscribeToContext.current(parsed.context_id);
+              } catch { /* ignore parse errors */ }
+            }
+            log.debug("ChatHandlers", "User invited to channel, refreshing channel list and members");
             break;
 
           case "ChatJoined":
-            // When a new user joins the chat, refresh members list
             actions.fetchMembers = true;
+            refs.fetchGroupMembers.current();
             break;
 
           case "DMCreated":
-            // Refresh DM list and potentially trigger DM selection
             actions.fetchDMs = true;
+            if (executionEvent.data) {
+              try {
+                const parsed = JSON.parse(bytesParser(executionEvent.data));
+                if (parsed.context_id) refs.subscribeToContext.current(parsed.context_id);
+              } catch { /* ignore parse errors */ }
+            }
             log.debug("ChatHandlers", "DM created, refreshing DM list");
             break;
           case "DMDeleted":
@@ -529,47 +465,41 @@ export function useChatHandlers(
       }
       // Execute only the necessary actions with proper sequencing
       if (actions.fetchMessages) {
-        handleMessageUpdates(
-          actions.isDM,
-          actions.fetchMessageGroup,
-          contextId,
-          actions.shouldNotifyMessage
-        );
+        // Fall back to active chat name/type when the event data didn't carry a channel name
+        // (e.g. MessageReceived, or MessageSent whose data bytes couldn't be parsed)
+        let messageGroup = actions.fetchMessageGroup;
+        let isDM = actions.isDM;
+        if (!messageGroup && activeChatRef.current) {
+          if (activeChatRef.current.type === "channel") {
+            messageGroup = activeChatRef.current.name;
+            isDM = false;
+          } else if (activeChatRef.current.type === "direct_message") {
+            messageGroup = "private_dm";
+            isDM = true;
+          }
+        }
+        handleMessageUpdates(isDM, messageGroup, contextId, actions.shouldNotifyMessage);
       }
       if (actions.fetchChannels) {
         refs.fetchChannels.current();
       }
       if (actions.fetchDMs) {
         refs.fetchDMs.current();
-        // Trigger DM state update to refresh UI and handle deletion
         const sessionChat = getStoredSession();
         if (sessionChat?.type === "direct_message") {
-          // Add a small delay to ensure DM list is updated before making decisions
           setTimeout(async () => {
             try {
               const updated = await refs.fetchDms.current();
-              // If current active DM no longer exists, switch to another DM or general
               const stillExists = updated?.some(
-                (dm) => dm.other_identity_old === sessionChat.id
+                (dm) => dm.contextId === sessionChat.contextId
               );
-              if (!stillExists) {
-                if (updated && updated.length > 0) {
-                  // pick the first DM
-                  refs.onDMSelected.current(updated[0], undefined, true);
-                } else {
-                  // fallback to general channel
-                  refs.onDMSelected.current(undefined, {
-                    type: "channel",
-                    id: "general",
-                    name: "general",
-                  } as ActiveChat);
-                }
+              if (!stillExists && updated && updated.length > 0) {
+                refs.onDMSelected.current(updated[0]);
               } else if (!actions.dmDeleted) {
-                // Normal DM update flow (e.g., metadata changes)
                 handleDMUpdates(sessionChat);
               }
             } catch (e) {
-              log.error("ChatHandlers", "Error handling DMDeleted switch", e);
+              log.error("ChatHandlers", "Error handling DM update", e);
             }
           }, 150);
         }
@@ -603,16 +533,9 @@ export function useChatHandlers(
    * Each event type triggers only the specific data refresh it needs
    */
   const handleStateMutation = useCallback(
-    // NOTE: chefsale - return executor public key for event contextID
     async (event: WebSocketEvent) => {
-      // const sessionChat = getStoredSession();
-      // const useDM = (sessionChat?.type === "direct_message" &&
-      //   sessionChat?.account &&
-      //   !sessionChat?.canJoin &&
-      //   sessionChat?.otherIdentityNew) as boolean;
-
-      // Process execution events if present - this handles all the specific refreshes
       if (event.data?.events && event.data.events.length > 0) {
+        log.info("useChatHandlers", `[SSE] handleStateMutation contextId=${event.contextId} events=${event.data.events.length}`, event.data.events);
         handleExecutionEvents(event.contextId, event.data.events);
       }
     },

@@ -6,77 +6,89 @@ interface AboutDetailsProps {
   channelName: string;
   dateCreated: string;
   manager: string;
+  isOwner?: boolean;
   handleLeaveChannel: () => void;
+  handleDeleteChannel?: () => void;
 }
 
-interface SettingsItemProps {
-  $borderbottom?: boolean;
-  $roundedTop?: boolean;
-  $roundedBottom?: boolean;
-}
-
-interface TextProps {
-  $red?: boolean;
-}
-
-const SettingsItem = styled.div<SettingsItemProps>`
-  display: flex;
-  gap: 0.5rem;
-  background-color: #0e0e10;
-  padding-left: 1rem;
-  ${({ $borderbottom }) => $borderbottom && "border-bottom: 1px solid #282933;"}
-  ${({ $roundedTop }) =>
-    $roundedTop &&
-    "border-top-left-radius: 0.375rem; border-top-right-radius: 0.375rem;"}
-    ${({ $roundedBottom }) =>
-    $roundedBottom &&
-    "border-bottom-left-radius: 0.375rem; border-bottom-right-radius: 0.375rem;"}
-`;
-
-const Text = styled.h6<TextProps>`
-  ${({ $red }) =>
-    $red ? "color: #DC3545; :hover { color: #f76560 }" : "color: #FFF;"}
-  /* Body/Regular */
-    font-family: Helvetica Neue;
-  font-size: 14px;
-  font-style: normal;
-  font-weight: 400;
-  line-height: 150%; /* 24px */
-  margin-top: 0.75rem;
+const InfoCard = styled.div`
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  overflow: hidden;
   margin-bottom: 0.75rem;
-  padding: 0;
 `;
 
-const ButtonLeave = styled.button`
-  background-color: transparent;
-  border: none;
-  padding: 0rem;
-  margin: 0rem;
+const InfoRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 0.875rem;
+
+  & + & {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+`;
+
+const InfoLabel = styled.span`
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+`;
+
+const InfoValue = styled.span`
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 60%;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const ActionButton = styled.button<{ $danger?: boolean }>`
+  width: 100%;
+  padding: 0.6rem 0.875rem;
+  background: rgba(255, 59, 59, 0.07);
+  border: 1px solid rgba(255, 59, 59, 0.2);
+  border-radius: 10px;
+  color: #ff6b6b;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 59, 59, 0.12);
+    border-color: rgba(255, 59, 59, 0.35);
+    color: #ff8585;
+  }
 `;
 
 const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
   return (
     <>
-      <SettingsItem $borderbottom $roundedTop>
-        <Text>Created</Text>
-        <Text>
-          {props.dateCreated ? timestampToDate(props.dateCreated) : "N/A"}
-        </Text>
-      </SettingsItem>
-      <SettingsItem $borderbottom>
-        <Text>Managed by</Text>
-        <Text>{props.manager}</Text>
-      </SettingsItem>
-      <SettingsItem $roundedBottom>
-        {props.channelName !== "general" && (
-          <ButtonLeave>
-            <Text $red={true} onClick={props.handleLeaveChannel}>
-              Leave Channel
-            </Text>
-          </ButtonLeave>
-        )}
-      </SettingsItem>
+      <InfoCard>
+        <InfoRow>
+          <InfoLabel>Created</InfoLabel>
+          <InfoValue>{props.dateCreated ? timestampToDate(props.dateCreated) : "N/A"}</InfoValue>
+        </InfoRow>
+        <InfoRow>
+          <InfoLabel>Managed by</InfoLabel>
+          <InfoValue>{props.manager || "—"}</InfoValue>
+        </InfoRow>
+      </InfoCard>
+      {props.isOwner ? (
+        <ActionButton onClick={props.handleDeleteChannel}>
+          Delete Channel
+        </ActionButton>
+      ) : (
+        <ActionButton onClick={props.handleLeaveChannel}>
+          Leave Channel
+        </ActionButton>
+      )}
     </>
   );
 };

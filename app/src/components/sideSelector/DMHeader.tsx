@@ -1,6 +1,8 @@
 import { styled } from "styled-components";
 import StartDMPopup, { type CreateContextResult } from "../popups/StartDMPopup";
 import { useCallback, memo } from "react";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
+import { getGroupId } from "../../constants/config";
 
 const Container = styled.div<{ $isCollapsed?: boolean }>`
   display: flex;
@@ -44,40 +46,42 @@ const PlusButton = styled.div`
 
 interface DMHeaderProps {
   createDM: (value: string) => Promise<CreateContextResult>;
-  chatMembers: Map<string, string>;
+  availableMembers: Map<string, string>;
   isCollapsed?: boolean;
+  onFetchMembers?: () => Promise<void>;
 }
 
 const DMHeader = memo(function DMHeader({
   createDM,
-  chatMembers,
+  availableMembers,
   isCollapsed,
+  onFetchMembers,
 }: DMHeaderProps) {
+  const groupId = getGroupId();
+  const { isAdmin } = useCurrentGroupPermissions(groupId ?? "");
+
   const isValidIdentityId = useCallback(
     (value: string) => {
-      const userEntries =
-        chatMembers instanceof Map
-          ? Array.from(chatMembers.entries())
-          : Object.entries(chatMembers);
-      const usernames = userEntries.map(([_, username]) =>
-        (username as string).toLowerCase(),
-      );
-      const isMember = usernames.includes(value.toLowerCase());
+      const identity = value.trim();
+      const isMember = availableMembers.has(identity);
 
       if (!isMember) {
-        return { isValid: false, error: "User not member of this chat" };
+        return {
+          isValid: false,
+          error: "Cannot create DM: the user is not in the workspace",
+        };
       }
       return { isValid: true, error: "" };
     },
-    [chatMembers],
+    [availableMembers],
   );
 
   return (
     <Container $isCollapsed={isCollapsed}>
       {!isCollapsed && <TextBold>{"Direct Messages"}</TextBold>}
-      <StartDMPopup
+      {isAdmin && <StartDMPopup
         title="Create a new private DM context"
-        placeholder="invite user by entering their name"
+        placeholder="Search by member identity"
         buttonText="Next"
         toggle={
           <PlusButton>
@@ -86,10 +90,11 @@ const DMHeader = memo(function DMHeader({
             </svg>
           </PlusButton>
         }
-        chatMembers={chatMembers}
+        chatMembers={availableMembers}
         validator={isValidIdentityId}
         functionLoader={createDM}
-      />
+        onOpen={onFetchMembers}
+      />}
     </Container>
   );
 });

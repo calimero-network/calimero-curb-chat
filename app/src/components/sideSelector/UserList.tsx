@@ -1,6 +1,5 @@
 import { memo } from "react";
-import type { DMChatInfo } from "../../api/clientApi";
-import type { ActiveChat } from "../../types/Common";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import UserItem from "./UserItem";
 import { styled } from "styled-components";
 
@@ -25,10 +24,10 @@ const ScrollableUserList = styled.div`
 
 interface UserListProps {
   selectedDM: string;
-  onDMSelected: (user?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
-  privateDMs: DMChatInfo[];
+  onDMSelected: (dm: DMContextInfo) => void;
+  privateDMs: DMContextInfo[];
   isCollapsed?: boolean;
-  selectChannel: (channel: ActiveChat) => void;
+  onNoActiveChat: () => void;
 }
 
 const UserList = memo(function UserList({
@@ -36,19 +35,19 @@ const UserList = memo(function UserList({
   onDMSelected,
   privateDMs,
   isCollapsed,
-  selectChannel
+  onNoActiveChat,
 }: UserListProps) {
   return (
     <ScrollableUserList>
       {privateDMs &&
-        privateDMs.map((userDM: DMChatInfo) => (
+        privateDMs.map((dm: DMContextInfo) => (
           <UserItem
-            userDM={userDM}
+            dm={dm}
             onDMSelected={onDMSelected}
-            selected={selectedDM === userDM.other_identity_old}
-            key={userDM.other_identity_old}
+            selected={selectedDM === dm.contextId}
+            key={dm.contextId}
             isCollapsed={isCollapsed}
-            selectChannel={selectChannel}
+            onNoActiveChat={onNoActiveChat}
           />
         ))}
     </ScrollableUserList>

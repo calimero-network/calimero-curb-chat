@@ -2,16 +2,18 @@ import { styled } from "styled-components";
 import { memo, useEffect, useState } from "react";
 import type {
   ActiveChat,
-  ChannelMeta,
+  GroupContextChannel,
   ChatMessagesData,
   ChatMessagesDataWithOlder,
   CurbMessage,
 } from "../../types/Common";
+import type { SubgroupEntry } from "../../api/groupApi";
 import ChannelsContainer from "./ChannelsContainer";
 import CurbNavbar from "../navbar/CurbNavbar";
 import SearchChannelsContainer from "../searchChannels/SearchChannelsContainer";
 import ChatContainer from "../../chat/ChatContainer";
-import type { DMChatInfo, UserId } from "../../api/clientApi";
+import type { UserId } from "../../api/clientApi";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 
 const ContentDivContainer = styled.div`
@@ -38,17 +40,23 @@ interface AppContainerProps {
   openSearchPage: () => void;
   channelUsers: Map<string, string>;
   nonInvitedUserList: UserId[];
-  onDMSelected: (dm?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
+  onDMSelected: (dm: DMContextInfo) => void;
   loadInitialChatMessages: () => Promise<ChatMessagesData>;
   incomingMessages: CurbMessage[];
-  channels: ChannelMeta[];
+  channels: GroupContextChannel[];
+  subgroups: SubgroupEntry[];
+  channelsBySubgroup: Map<string, GroupContextChannel[]>;
   reFetchChannelMembers: () => void;
   fetchChannels: () => void;
+  onChannelCreated?: () => void;
+  onChannelLeft?: (contextId: string) => void;
   onJoinedChat: () => void;
   loadPrevMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
   chatMembers: Map<string, string>;
+  dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
-  privateDMs: DMChatInfo[];
+  privateDMs: DMContextInfo[];
+  onFetchDmMembers?: () => Promise<void>;
   loadInitialThreadMessages: (
     parentMessageId: string,
   ) => Promise<ChatMessagesData>;
@@ -88,13 +96,19 @@ function AppContainer({
   loadInitialChatMessages,
   incomingMessages,
   channels,
+  subgroups,
+  channelsBySubgroup,
   reFetchChannelMembers,
   fetchChannels,
+  onChannelCreated,
+  onChannelLeft,
   onJoinedChat,
   loadPrevMessages,
   chatMembers,
+  dmMembers,
   createDM,
   privateDMs,
+  onFetchDmMembers,
   loadInitialThreadMessages,
   incomingThreadMessages,
   loadPrevThreadMessages,
@@ -134,15 +148,20 @@ function AppContainer({
     <>
       <CurbNavbar
         activeChat={activeChat}
-        setActiveChat={updateSelectedActiveChat}
+        setActiveChat={(chat) => {
+          if (chat) {
+            updateSelectedActiveChat(chat);
+          }
+        }}
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
         isOpenSearchChannel={isOpenSearchChannel}
-        setIsOpenSearchChannel={setIsOpenSearchChannel}
+        setIsOpenSearchChannel={() => setIsOpenSearchChannel(true)}
         channelUserList={channelUsers}
         nonInvitedUserList={nonInvitedUserList}
         reFetchChannelMembers={reFetchChannelMembers}
         fetchChannels={fetchChannels}
+        onChannelLeft={onChannelLeft}
         wsIsSubscribed={wsIsSubscribed}
         wsContextId={wsContextId}
         wsSubscriptionCount={wsSubscriptionCount}
@@ -161,9 +180,15 @@ function AppContainer({
           isOpenSearchChannel={isOpenSearchChannel}
           onDMSelected={onDMSelected}
           channels={channels}
+          subgroups={subgroups}
+          channelsBySubgroup={channelsBySubgroup}
           chatMembers={chatMembers}
+          dmMembers={dmMembers}
           createDM={createDM}
           privateDMs={privateDMs}
+          onChannelCreated={onChannelCreated}
+          onChannelSelected={updateSelectedActiveChat}
+          onFetchDmMembers={onFetchDmMembers}
         />
         {!isSidebarOpen && (
           <Wrapper>
@@ -182,7 +207,6 @@ function AppContainer({
                 openThread={openThread}
                 setOpenThread={setOpenThread}
                 currentOpenThreadRef={currentOpenThreadRef}
-                onDMSelected={onDMSelected}
                 membersList={chatMembers}
                 addOptimisticMessage={addOptimisticMessage}
                 addOptimisticThreadMessage={addOptimisticThreadMessage}

@@ -1,0 +1,214 @@
+import { test, expect } from "@playwright/test";
+import { injectMeroAuthTokens } from "./helpers/auth";
+
+const MOCK_NODE_URL = "http://localhost:2428";
+const MOCK_ACCESS_TOKEN = "eyJhbGciOiJFZERTQSJ9.mock.signature";
+
+/**
+ * Mock: node has no workspaces → popup lands on the no-workspace step.
+ */
+async function mockEmptyNode(page: import("@playwright/test").Page) {
+  await page.route(`${MOCK_NODE_URL}/**`, (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: [] }),
+    });
+  });
+}
+
+/**
+ * Mock: node has one workspace but the member has no alias stored → popup
+ * lands on the enter-name step.
+ */
+async function mockNodeWithWorkspace(page: import("@playwright/test").Page) {
+  await page.route(`${MOCK_NODE_URL}/**`, (route) => {
+    const url = route.request().url();
+
+    // listGroups() calls GET /admin-api/namespaces
+    if (url.includes("/admin-api/namespaces") && !url.includes("/invite") && !url.includes("/join")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [
+            {
+              groupId: "group-abc123",
+              alias: "My Workspace",
+              appKey: "app-key",
+              targetApplicationId: "app-1",
+              upgradePolicy: "Automatic",
+              createdAt: 1700000000,
+            },
+          ],
+        }),
+      });
+    }
+
+    // listMembers() — return identity but no alias so enter-name step shows
+    if (url.includes("/admin-api/groups/group-abc123/members")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [{ identity: "pk-member-xyz", alias: "" }],
+        }),
+      });
+    }
+
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: null }),
+    });
+  });
+}
+
+// ── No-workspace flow ─────────────────────────────────────────────────────────
+
+test.describe("No-workspace flow (node has no workspaces)", () => {
+  test.beforeEach(async ({ page }) => {
+    await injectMeroAuthTokens(page, {
+      nodeUrl: MOCK_NODE_URL,
+      accessToken: MOCK_ACCESS_TOKEN,
+      refreshToken: "mock-refresh",
+    });
+    await mockEmptyNode(page);
+  });
+
+  test("shows Welcome to MeroChat when no workspace exists", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("shows Create workspace button", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /create workspace/i })).toBeVisible();
+  });
+
+  test("shows invitation code textarea", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("label").filter({ hasText: /invitation code/i })).toBeVisible();
+    await expect(page.locator("textarea")).toBeVisible();
+  });
+
+  test("Join with code button is disabled when invitation textarea is empty", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    const joinBtn = page.getByRole("button", { name: /join with code/i });
+    await expect(joinBtn).toBeVisible();
+    await expect(joinBtn).toBeDisabled();
+  });
+
+  test("Join with code button enables when invitation code is pasted", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await page.locator("textarea").fill("eyJpbnZpdGF0aW9uIjoidGVzdCJ9");
+    const joinBtn = page.getByRole("button", { name: /join with code/i });
+    await expect(joinBtn).toBeEnabled({ timeout: 3_000 });
+  });
+
+  test("clicking Create workspace navigates to create form", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /create workspace/i }).click();
+    await expect(page.getByText(/create workspace/i).nth(1).or(
+      page.locator("label").filter({ hasText: /server name/i })
+    )).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("Back button in create form returns to no-workspace step", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /create workspace/i }).click();
+    await expect(page.getByRole("button", { name: /back/i })).toBeVisible({ timeout: 5_000 });
+    await page.getByRole("button", { name: /back/i }).click();
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: /create workspace/i })).toBeVisible();
+  });
+
+  test("shows Disconnect node button", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/disconnect node/i)).toBeVisible();
+  });
+});
+
+// ── Workspace present, no alias → enter-name step ────────────────────────────
+
+test.describe("Enter-name step (workspace exists, no cached username)", () => {
+  test.beforeEach(async ({ page }) => {
+    await injectMeroAuthTokens(page, {
+      nodeUrl: MOCK_NODE_URL,
+      accessToken: MOCK_ACCESS_TOKEN,
+      refreshToken: "mock-refresh",
+    });
+    await mockNodeWithWorkspace(page);
+  });
+
+  test("shows Your name input after identity resolves", async ({ page }) => {
+    await page.goto("/login");
+    await expect(
+      page.locator("label").filter({ hasText: /your name/i }),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Join chat button is disabled when name is empty", async ({ page }) => {
+    await page.goto("/login");
+    const joinBtn = page.getByRole("button", { name: /join chat/i });
+    await joinBtn.waitFor({ timeout: 10_000 });
+    await page.locator("input[type='text'], input:not([type])").first().fill("");
+    await expect(joinBtn).toBeDisabled();
+  });
+
+  test("shows Disconnect node button in enter-name step", async ({ page }) => {
+    await page.goto("/login");
+    await expect(
+      page.locator("label").filter({ hasText: /your name/i }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/disconnect node/i)).toBeVisible();
+  });
+});
+
+// ── Create workspace form ─────────────────────────────────────────────────────
+
+test.describe("Create workspace form", () => {
+  test.beforeEach(async ({ page }) => {
+    await injectMeroAuthTokens(page, {
+      nodeUrl: MOCK_NODE_URL,
+      accessToken: MOCK_ACCESS_TOKEN,
+      refreshToken: "mock-refresh",
+    });
+    await mockEmptyNode(page);
+  });
+
+  test("shows server name input in create form", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /create workspace/i }).click();
+    await expect(
+      page.locator("label").filter({ hasText: /server name/i }),
+    ).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("input[placeholder*='Team']")).toBeVisible();
+  });
+
+  test("Create server button is disabled when name is empty", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /create workspace/i }).click();
+    const createBtn = page.getByRole("button", { name: /create server/i });
+    await createBtn.waitFor({ timeout: 5_000 });
+    await expect(createBtn).toBeDisabled();
+  });
+
+  test("Create server button enables when name is typed", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /create workspace/i }).click();
+    await page.locator("input[placeholder*='Team']").waitFor({ timeout: 5_000 });
+    await page.locator("input[placeholder*='Team']").fill("My Team");
+    await expect(page.getByRole("button", { name: /create server/i })).toBeEnabled();
+  });
+});

@@ -1,18 +1,14 @@
 import { useCallback, memo, useState } from "react";
-import { useEffect } from "react";
 import { styled } from "styled-components";
 import { Avatar } from "@calimero-network/mero-ui";
-import type { DMChatInfo } from "../../api/clientApi";
-import type { ActiveChat } from "../../types/Common";
-import UnreadMessagesBadge from "./UnreadMessageBadge";
-import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
+import type { DMContextInfo } from "../../hooks/useDMs";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { useToast } from "../../contexts/ToastContext";
 import ConfirmPopup from "../popups/ConfirmPopup";
+import { getDmDisplayName } from "../../utils/dmContext";
 
 const UserListItem = styled.div<{
   $selected: boolean;
-  $hasNewMessages: boolean;
   $isCollapsed?: boolean;
 }>`
   display: flex;
@@ -27,12 +23,7 @@ const UserListItem = styled.div<{
   border-left: 2px solid ${(props) => (props.$selected ? "#a5ff11" : "transparent")};
 
   background: ${(props) => (props.$selected ? "rgba(165,255,17,0.07)" : "transparent")};
-  color: ${(props) =>
-    props.$selected
-      ? "#fff"
-      : props.$hasNewMessages
-      ? "#c8c7d1"
-      : "#5e5e6e"};
+  color: ${(props) => (props.$selected ? "#fff" : "#5e5e6e")};
 
   &:hover {
     background: rgba(255, 255, 255, 0.05) !important;
@@ -83,98 +74,102 @@ const TrashButton = styled.button`
 `;
 
 interface UserItemProps {
-  onDMSelected: (user?: DMChatInfo, sc?: ActiveChat, refetch?: boolean) => void;
+  onDMSelected: (dm: DMContextInfo) => void;
   selected: boolean;
-  userDM: DMChatInfo;
+  dm: DMContextInfo;
   isCollapsed?: boolean;
-  selectChannel: (channel: ActiveChat) => void;
+  onNoActiveChat: () => void;
 }
 
 function UserItem({
   onDMSelected,
   selected,
-  userDM,
+  dm,
   isCollapsed,
-  selectChannel,
+  onNoActiveChat,
 }: UserItemProps) {
   const { addToast } = useToast();
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isJoinOpen, setIsJoinOpen] = useState(false);
 
-  useEffect(() => {
-    const key = sessionStorage.getItem("dm-delete-open");
-    if (key && key === userDM.other_identity_old) {
-      setIsDeleteOpen(true);
-    }
-  }, [userDM.other_identity_old]);
+  const displayName = getDmDisplayName({
+    otherUsername: dm.otherUsername,
+    otherAlias: dm.otherAlias,
+    otherIdentity: dm.otherIdentity,
+    contextId: dm.contextId,
+  });
 
   const handleClick = useCallback(() => {
-    onDMSelected(userDM, undefined, true);
-  }, [userDM, onDMSelected]);
+    if (!dm.isJoined) {
+      setIsJoinOpen(true);
+      return;
+    }
+
+    onDMSelected(dm);
+  }, [dm, onDMSelected]);
+
+  const confirmJoin = useCallback(async () => {
+    await onDMSelected(dm);
+  }, [dm, onDMSelected]);
 
   const confirmDelete = useCallback(async () => {
     try {
-      const client = new ClientApiDataSource();
-      const node = new ContextApiDataSource();
-
-      const res = await client.deleteDM({ other_user: userDM.other_identity_old });
-      if (res.error) {
-        addToast({ title: "DM", message: res.error.message || "Failed to delete DM", type: "dm", duration: 3000 });
+      const del = await new ContextApiDataSource().deleteContext({ contextId: dm.contextId });
+      if (del.error) {
+        const msg = del.error.message?.toLowerCase() ?? "";
+        const friendly = msg.includes("not an admin") || msg.includes("requester")
+          ? "Only the creator of this DM can delete it"
+          : del.error.message || "Failed to delete DM";
+        addToast({ title: "DM", message: friendly, type: "dm", duration: 4000 });
         return;
       }
-
-      if (userDM.context_id) {
-        const del = await node.deleteContext({ contextId: userDM.context_id });
-        if (del.error) {
-          addToast({ title: "DM", message: del.error.message || "Failed to delete DM context", type: "dm", duration: 3000 });
-        }
-      }
-
       addToast({ title: "DM", message: "DM deleted", type: "dm", duration: 2500 });
-      selectChannel({ type: "channel", id: "general", name: "general" });
+      onNoActiveChat();
     } catch {
       addToast({ title: "DM", message: "Failed to delete DM", type: "dm", duration: 3000 });
     }
-  }, [userDM, addToast, selectChannel]);
+  }, [dm, addToast, onNoActiveChat]);
 
   return (
     <UserListItem
       $selected={selected}
       onClick={handleClick}
-      $hasNewMessages={userDM.unread_messages > 0}
       $isCollapsed={isCollapsed}
     >
       {isCollapsed ? (
-        <Avatar size="xs" name={userDM.other_username} />
+        <Avatar size="xs" name={displayName} />
       ) : (
         <>
           <UserInfoContainer>
-            <Avatar size="xs" name={userDM.other_username} />
-            <NameContainer>{userDM.other_username}</NameContainer>
+            <Avatar size="xs" name={displayName} />
+            <NameContainer>{displayName}</NameContainer>
           </UserInfoContainer>
           <ActionsContainer>
-            {userDM.unread_messages > 0 && (
-              <UnreadMessagesBadge
-                messageCount={userDM.unread_messages.toString()}
-                backgroundColor="rgba(165,255,17,0.2)"
-                color="rgba(165,255,17,0.9)"
-              />
-            )}
+            <ConfirmPopup
+              title="Join DM"
+              message={`Join the private DM context with ${displayName}?`}
+              confirmLabel="Join DM"
+              cancelLabel="Cancel"
+              onConfirm={confirmJoin}
+              onCancel={() => {}}
+              toggle={<span />}
+              isOpen={isJoinOpen}
+              setIsOpen={setIsJoinOpen}
+              isChild
+            />
             <ConfirmPopup
               title="Delete DM"
-              message="This will delete the DM and its context for you. Are you sure?"
+              message="This will delete the DM context. Are you sure?"
               confirmLabel="Delete"
               cancelLabel="Cancel"
               onConfirm={confirmDelete}
-              onCancel={() => {
-                sessionStorage.removeItem("dm-delete-open");
-              }}
+              onCancel={() => {}}
               toggle={
                 <TrashButton
                   title="Delete DM"
                   aria-label="Delete DM"
                   onClick={(e) => {
                     e.stopPropagation();
-                    sessionStorage.setItem("dm-delete-open", userDM.other_identity_old);
                     setIsDeleteOpen(true);
                   }}
                 >
@@ -187,10 +182,7 @@ function UserItem({
                 </TrashButton>
               }
               isOpen={isDeleteOpen}
-              setIsOpen={(open) => {
-                if (!open) sessionStorage.removeItem("dm-delete-open");
-                setIsDeleteOpen(open);
-              }}
+              setIsOpen={setIsDeleteOpen}
               isChild
             />
           </ActionsContainer>

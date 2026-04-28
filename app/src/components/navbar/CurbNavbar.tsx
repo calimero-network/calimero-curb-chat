@@ -6,7 +6,8 @@ import UsersButtonGroup from "./UsersButtonGroup";
 import { useState } from "react";
 import type { UserId } from "../../api/clientApi";
 import SettingsIcon from "./SettingsIcon";
-import NotificationCenterWidget from "./NotificationCenterWidget";
+import AdminIcon from "./AdminIcon";
+import GroupInviteIcon from "./GroupInviteIcon";
 import { WebSocketStatus } from "../WebSocketStatus";
 import CurbLogoIcon from "/logo.svg";
 
@@ -199,12 +200,13 @@ interface CurbNavbarProps {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (isOpen: boolean) => void;
   isOpenSearchChannel: boolean;
-  setIsOpenSearchChannel: (isOpen: boolean) => void;
+  setIsOpenSearchChannel: () => void;
   channelUserList: Map<string, string>;
   nonInvitedUserList: UserId[];
   reFetchChannelMembers: () => void;
-  setActiveChat: (chat: ActiveChat) => void;
+  setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
+  onChannelLeft?: (contextId: string) => void;
   wsIsSubscribed?: boolean;
   wsContextId?: string | null;
   wsSubscriptionCount?: number;
@@ -222,6 +224,7 @@ export default function CurbNavbar({
   reFetchChannelMembers,
   setActiveChat,
   fetchChannels,
+  onChannelLeft,
   wsIsSubscribed = false,
   wsContextId = null,
   wsSubscriptionCount = 0,
@@ -255,13 +258,14 @@ export default function CurbNavbar({
             reFetchChannelMembers={reFetchChannelMembers}
             setActiveChat={setActiveChat}
             fetchChannels={fetchChannels}
+            onChannelLeft={onChannelLeft}
           />
         )}
       </ItemsContainer>
       <FlexContainer>
         {activeChat &&
           activeChat?.type === "channel" &&
-          Object.keys(channelUserList).length > 0 && (
+          channelUserList.size > 0 && (
             <ItemsContainer $align={false}>
               <ChannelDetailsPopup
                 toggle={
@@ -281,6 +285,7 @@ export default function CurbNavbar({
                 reFetchChannelMembers={reFetchChannelMembers}
                 setActiveChat={setActiveChat}
                 fetchChannels={fetchChannels}
+                onChannelLeft={onChannelLeft}
               />
             </ItemsContainer>
           )}
@@ -297,7 +302,8 @@ export default function CurbNavbar({
         >
           <SearchIcon />
         </SearchButton>
-        <NotificationCenterWidget />
+        <GroupInviteIcon />
+        <AdminIcon />
         <SettingsIcon />
       </FlexContainer>
     </NavigationBar>
