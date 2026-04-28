@@ -56,6 +56,7 @@ interface AppContainerProps {
   dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
   privateDMs: DMContextInfo[];
+  onFetchDmMembers?: () => Promise<void>;
   loadInitialThreadMessages: (
     parentMessageId: string,
   ) => Promise<ChatMessagesData>;
@@ -107,6 +108,7 @@ function AppContainer({
   dmMembers,
   createDM,
   privateDMs,
+  onFetchDmMembers,
   loadInitialThreadMessages,
   incomingThreadMessages,
   loadPrevThreadMessages,
@@ -186,6 +188,7 @@ function AppContainer({
           privateDMs={privateDMs}
           onChannelCreated={onChannelCreated}
           onChannelSelected={updateSelectedActiveChat}
+          onFetchDmMembers={onFetchDmMembers}
         />
         {!isSidebarOpen && (
           <Wrapper>

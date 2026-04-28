@@ -114,7 +114,8 @@ export default function ConfirmPopup({
 }: ConfirmPopupProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleClose = () => {
+  const handleClose = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (isProcessing) return;
     setIsOpen(false);
     onCancel?.();
@@ -142,7 +143,7 @@ export default function ConfirmPopup({
     <Container>
       <Header>
         <Title>{title}</Title>
-        <CloseButton onClick={handleClose} aria-label="Close">
+        <CloseButton onClick={(e) => handleClose(e)} aria-label="Close">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
@@ -150,7 +151,7 @@ export default function ConfirmPopup({
       </Header>
       <Message>{message}</Message>
       <Actions>
-        <ActionButton onClick={handleClose} disabled={isProcessing}>
+        <ActionButton onClick={(e) => handleClose(e)} disabled={isProcessing}>
           {cancelLabel}
         </ActionButton>
         <ActionButton $danger onClick={() => void runConfirm()} disabled={isProcessing}>

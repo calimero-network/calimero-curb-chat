@@ -27,6 +27,7 @@ interface SideSelectorProps {
   privateDMs: DMContextInfo[];
   onChannelCreated?: () => void;
   onChannelSelected?: (chat: ActiveChat) => void;
+  onFetchDmMembers?: () => Promise<void>;
 }
 
 const HorizontalSeparatorLine = styled.div<{ $isMobile: boolean }>`
@@ -219,6 +220,7 @@ interface SideMenuContentProps {
   privateDMs: DMContextInfo[];
   onChannelCreated?: () => void;
   onChannelSelected?: (chat: ActiveChat) => void;
+  onFetchDmMembers?: () => Promise<void>;
 }
 
 const SideMenuContent = memo(function SideMenuContent({
@@ -238,6 +240,7 @@ const SideMenuContent = memo(function SideMenuContent({
   privateDMs,
   onChannelCreated,
   onChannelSelected,
+  onFetchDmMembers,
 }: SideMenuContentProps) {
   const selectedChannelId = activeChat?.type === "channel" ? activeChat.id : "";
 
@@ -292,6 +295,7 @@ const SideMenuContent = memo(function SideMenuContent({
         privateDMs={privateDMs}
         isCollapsed={isCollapsed}
         onNoActiveChat={setIsOpenSearchChannel}
+        onFetchDmMembers={onFetchDmMembers}
       />
     </>
   );
@@ -322,6 +326,7 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
     privateDMs: props.privateDMs,
     onChannelCreated: props.onChannelCreated,
     onChannelSelected: props.onChannelSelected,
+    onFetchDmMembers: props.onFetchDmMembers,
   };
 
   return (

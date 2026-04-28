@@ -226,7 +226,7 @@ export class ContextApiDataSource implements NodeApi {
         `${nodeEndpoint}/admin-api/contexts/${props.contextId}`,
         {
           headers: getAuthHeaders(),
-          data: { executor_public_key: getExecutorPublicKey() },
+          data: { requester: getExecutorPublicKey() },
         },
       );
       if (response.status === 200) {

@@ -72,7 +72,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const [defaultVisibility, setDefaultVisibility] = useState<"public" | "private">("public");
   const [isLoadingDefaultVisibility, setIsLoadingDefaultVisibility] = useState(false);
   const groupId = getGroupId();
-  const { canCreateContext } = useCurrentGroupPermissions(groupId);
+  const { isAdmin } = useCurrentGroupPermissions(groupId);
 
   const channelNameValidator = useCallback(
     (value: string) => {
@@ -220,7 +220,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   return (
     <Container $isCollapsed={props.isCollapsed}>
       {!props.isCollapsed && <TextBold>{props.title}</TextBold>}
-      {(props.targetGroupId ?? groupId) && canCreateContext && (
+      {(props.targetGroupId ?? groupId) && isAdmin && (
         <CreateChannelPopup
           title={"Create new Channel"}
           inputValue={inputValue}

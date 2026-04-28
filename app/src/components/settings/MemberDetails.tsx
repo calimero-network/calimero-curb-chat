@@ -386,13 +386,6 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
 
   return (
     <>
-      {props.isOwner && (
-        <AddUserDialog
-          addMember={props.addMember}
-          channelName={props.channelName}
-          nonChannelMembers={props.nonChannelMembers}
-        />
-      )}
       {optionsOpen !== -1 && <OverLay onClick={() => setOptionsOpen(-1)} />}
       <UserList>
         {userList.size > 0 &&

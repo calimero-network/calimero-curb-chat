@@ -21,6 +21,7 @@ interface DMSideSelectorProps {
   privateDMs: DMContextInfo[];
   isCollapsed?: boolean;
   onNoActiveChat: () => void;
+  onFetchDmMembers?: () => Promise<void>;
 }
 
 function DMSideSelector({
@@ -31,6 +32,7 @@ function DMSideSelector({
   privateDMs,
   isCollapsed,
   onNoActiveChat,
+  onFetchDmMembers,
 }: DMSideSelectorProps) {
   return (
     <DMContainer>
@@ -39,6 +41,7 @@ function DMSideSelector({
         createDM={createDM}
         availableMembers={dmMembers}
         isCollapsed={isCollapsed}
+        onFetchMembers={onFetchDmMembers}
       />
       <UserList
         selectedDM={selectedDM}

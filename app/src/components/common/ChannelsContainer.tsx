@@ -22,6 +22,7 @@ interface ChannelsContainerProps {
   privateDMs: DMContextInfo[];
   onChannelCreated?: () => void;
   onChannelSelected?: (chat: ActiveChat) => void;
+  onFetchDmMembers?: () => Promise<void>;
 }
 
 function ChannelsContainer(props: ChannelsContainerProps) {
@@ -42,6 +43,7 @@ function ChannelsContainer(props: ChannelsContainerProps) {
     privateDMs,
     onChannelCreated,
     onChannelSelected,
+    onFetchDmMembers,
   } = props;
 
   return (
@@ -62,6 +64,7 @@ function ChannelsContainer(props: ChannelsContainerProps) {
       privateDMs={privateDMs}
       onChannelCreated={onChannelCreated}
       onChannelSelected={onChannelSelected}
+      onFetchDmMembers={onFetchDmMembers}
     />
   );
 }

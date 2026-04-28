@@ -170,6 +170,7 @@ interface StartDMPopupProps {
   validator: (value: string) => { isValid: boolean; error: string };
   functionLoader: (value: string) => Promise<CreateContextResult>;
   chatMembers: Map<string, string>;
+  onOpen?: () => Promise<void> | void;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -182,6 +183,7 @@ const StartDMPopup = memo(function StartDMPopup({
   validator,
   functionLoader,
   chatMembers,
+  onOpen,
 }: StartDMPopupProps) {
   const [isOpen, setIsOpen] = usePersistentState("startDMPopupOpen", false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -322,7 +324,12 @@ const StartDMPopup = memo(function StartDMPopup({
       toggle={toggle}
       content={popupContent}
       open={isOpen}
-      onOpenChange={(open) => { if (!isProcessing && open) setIsOpen(open); }}
+      onOpenChange={(open) => {
+        if (!isProcessing && open) {
+          setIsOpen(open);
+          if (onOpen) void onOpen();
+        }
+      }}
       isChild={true}
     />
   );

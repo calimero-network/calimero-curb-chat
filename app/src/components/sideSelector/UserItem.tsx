@@ -116,7 +116,11 @@ function UserItem({
     try {
       const del = await new ContextApiDataSource().deleteContext({ contextId: dm.contextId });
       if (del.error) {
-        addToast({ title: "DM", message: del.error.message || "Failed to delete DM", type: "dm", duration: 3000 });
+        const msg = del.error.message?.toLowerCase() ?? "";
+        const friendly = msg.includes("not an admin") || msg.includes("requester")
+          ? "Only the creator of this DM can delete it"
+          : del.error.message || "Failed to delete DM";
+        addToast({ title: "DM", message: friendly, type: "dm", duration: 4000 });
         return;
       }
       addToast({ title: "DM", message: "DM deleted", type: "dm", duration: 2500 });

@@ -226,16 +226,10 @@ export default function SearchChannelsContainer({
         let blockedReason = "";
 
         if (!canJoin) {
-          if (currentGroupPermissions.isAdmin) {
-            canJoin = true;
-          } else if (!memberIdentity) {
+          if (!memberIdentity) {
             blockedReason = "This node's workspace identity could not be resolved.";
           } else {
-            canJoin = currentGroupPermissions.canJoinOpenSubgroups;
-            if (!canJoin) {
-              blockedReason =
-                "Open channel, but your workspace identity does not have permission to join open contexts.";
-            }
+            canJoin = true;
           }
         }
 

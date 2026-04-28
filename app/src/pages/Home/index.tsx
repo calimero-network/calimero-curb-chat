@@ -765,6 +765,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       dmMembers={dmMembers}
       createDM={createDM}
       privateDMs={privateDMs}
+      onFetchDmMembers={debouncedFetchGroupMembers}
       loadInitialThreadMessages={loadInitialThreadMessages}
       incomingThreadMessages={threadMessages.incomingMessages}
       clearThreadsMessagesOnSwitch={threadMessages.clear}

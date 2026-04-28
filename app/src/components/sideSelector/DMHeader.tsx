@@ -48,12 +48,14 @@ interface DMHeaderProps {
   createDM: (value: string) => Promise<CreateContextResult>;
   availableMembers: Map<string, string>;
   isCollapsed?: boolean;
+  onFetchMembers?: () => Promise<void>;
 }
 
 const DMHeader = memo(function DMHeader({
   createDM,
   availableMembers,
   isCollapsed,
+  onFetchMembers,
 }: DMHeaderProps) {
   const groupId = getGroupId();
   const { isAdmin } = useCurrentGroupPermissions(groupId ?? "");
@@ -77,23 +79,22 @@ const DMHeader = memo(function DMHeader({
   return (
     <Container $isCollapsed={isCollapsed}>
       {!isCollapsed && <TextBold>{"Direct Messages"}</TextBold>}
-      {isAdmin && (
-        <StartDMPopup
-          title="Create a new private DM context"
-          placeholder="Search by member identity"
-          buttonText="Next"
-          toggle={
-            <PlusButton>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </PlusButton>
-          }
-          chatMembers={availableMembers}
-          validator={isValidIdentityId}
-          functionLoader={createDM}
-        />
-      )}
+      {isAdmin && <StartDMPopup
+        title="Create a new private DM context"
+        placeholder="Search by member identity"
+        buttonText="Next"
+        toggle={
+          <PlusButton>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </PlusButton>
+        }
+        chatMembers={availableMembers}
+        validator={isValidIdentityId}
+        functionLoader={createDM}
+        onOpen={onFetchMembers}
+      />}
     </Container>
   );
 });
