@@ -217,7 +217,7 @@ export default function MembersTab({
   const [capToggles, setCapToggles] = useState<GroupCapabilityToggles>({
     canCreateContext: false,
     canInviteMembers: false,
-    canJoinOpenContexts: false,
+    canJoinOpenSubgroups: false,
   });
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
@@ -357,11 +357,11 @@ export default function MembersTab({
                   </CapabilityInfo>
                   <CapabilityToggle
                     type="checkbox"
-                    checked={capToggles.canJoinOpenContexts}
+                    checked={capToggles.canJoinOpenSubgroups}
                     onChange={(e) =>
                       setCapToggles((current) => ({
                         ...current,
-                        canJoinOpenContexts: e.target.checked,
+                        canJoinOpenSubgroups: e.target.checked,
                       }))
                     }
                   />

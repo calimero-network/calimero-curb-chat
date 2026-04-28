@@ -7,7 +7,7 @@ import {
 import {
   canCreateGroupContexts,
   canInviteWorkspaceMembers,
-  canJoinOpenGroupContexts,
+  canJoinOpenSubgroups,
 } from "../utils/groupCapabilities";
 
 interface CurrentGroupPermissionsState {
@@ -18,7 +18,7 @@ interface CurrentGroupPermissionsState {
   capabilities: number | null;
   canCreateContext: boolean;
   canInviteMembers: boolean;
-  canJoinOpenContexts: boolean;
+  canJoinOpenSubgroups: boolean;
 }
 
 const initialState: CurrentGroupPermissionsState = {
@@ -29,7 +29,7 @@ const initialState: CurrentGroupPermissionsState = {
   capabilities: null,
   canCreateContext: false,
   canInviteMembers: false,
-  canJoinOpenContexts: false,
+  canJoinOpenSubgroups: false,
 };
 
 export function useCurrentGroupPermissions(groupId: string) {
@@ -85,7 +85,7 @@ export function useCurrentGroupPermissions(groupId: string) {
           capabilities: null,
           canCreateContext: true,
           canInviteMembers: true,
-          canJoinOpenContexts: true,
+          canJoinOpenSubgroups: true,
         });
         return;
       }
@@ -99,7 +99,7 @@ export function useCurrentGroupPermissions(groupId: string) {
           capabilities: null,
           canCreateContext: true,
           canInviteMembers: true,
-          canJoinOpenContexts: true,
+          canJoinOpenSubgroups: true,
         });
         return;
       }
@@ -123,7 +123,7 @@ export function useCurrentGroupPermissions(groupId: string) {
         capabilities,
         canCreateContext: canCreateGroupContexts(capabilities),
         canInviteMembers: canInviteWorkspaceMembers(capabilities),
-        canJoinOpenContexts: canJoinOpenGroupContexts(capabilities),
+        canJoinOpenSubgroups: canJoinOpenSubgroups(capabilities),
       });
     };
 

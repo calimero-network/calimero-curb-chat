@@ -85,6 +85,7 @@ interface DetailsDropdownProps {
   reFetchChannelMembers: () => void;
   setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
+  onChannelLeft?: (contextId: string) => void;
 }
 
 const IconContainer = styled.div`
@@ -119,6 +120,7 @@ export default function DetailsDropdown({
   reFetchChannelMembers,
   setActiveChat,
   fetchChannels,
+  onChannelLeft,
 }: DetailsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -172,6 +174,7 @@ export default function DetailsDropdown({
         reFetchChannelMembers={reFetchChannelMembers}
         setActiveChat={setActiveChat}
         fetchChannels={fetchChannels}
+        onChannelLeft={onChannelLeft}
       />
     );
   }

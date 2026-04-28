@@ -6,9 +6,7 @@ import { getGroupId } from "../../constants/config";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { scrollbarStyles } from "../../styles/scrollbar";
 import MembersTab from "./MembersTab";
-import ChannelsTab from "./ChannelsTab";
 import SettingsTab from "./SettingsTab";
-import UpgradeTab from "./UpgradeTab";
 
 const fadeIn = keyframes`
   from { opacity: 0; transform: translateY(6px); }
@@ -148,7 +146,7 @@ const LoadingContainer = styled.div`
   font-size: 0.85rem;
 `;
 
-type AdminTab = "members" | "channels" | "settings" | "upgrade";
+type AdminTab = "members" | "settings";
 
 interface AdminPanelProps {
   isOpen: boolean;
@@ -183,9 +181,7 @@ export default function AdminPanel({
 
   const tabs: { id: AdminTab; label: string }[] = [
     { id: "members", label: `Members${admin.members.length ? ` (${admin.members.length})` : ""}` },
-    { id: "channels", label: "Channels" },
     { id: "settings", label: "Settings" },
-    { id: "upgrade", label: "Upgrade" },
   ];
 
   const content = (
@@ -240,33 +236,13 @@ export default function AdminPanel({
               onRefresh={handleRefresh}
             />
           )}
-          {activeTab === "channels" && (
-            <ChannelsTab
-              groupId={groupId}
-              onGetVisibility={admin.getContextVisibility}
-              onSetVisibility={admin.setContextVisibility}
-              onGetAllowlist={admin.getContextAllowlist}
-              onManageAllowlist={admin.manageAllowlist}
-              actionLoading={admin.actionLoading}
-            />
-          )}
           {activeTab === "settings" && (
             <SettingsTab
               groupId={groupId}
               group={admin.group}
               actionLoading={admin.actionLoading}
               onSetDefaultCapabilities={admin.setDefaultCapabilities}
-              onSetDefaultVisibility={admin.setDefaultVisibility}
-            />
-          )}
-          {activeTab === "upgrade" && (
-            <UpgradeTab
-              groupId={groupId}
-              group={admin.group}
-              upgradeStatus={admin.upgradeStatus}
-              actionLoading={admin.actionLoading}
-              onTriggerUpgrade={admin.triggerUpgrade}
-              onRefreshStatus={admin.refreshUpgradeStatus}
+              onSetSubgroupVisibility={admin.setSubgroupVisibility}
             />
           )}
         </>

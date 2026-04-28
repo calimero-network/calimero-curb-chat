@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
 import styled from "styled-components";
 import type { ActiveChat, GroupContextChannel } from "../../types/Common";
+import type { SubgroupEntry } from "../../api/groupApi";
 import ChannelHeader from "./ChannelHeader";
 import ChannelList from "./ChannelList";
 import { CurbLogo } from "../navbar/CurbNavbar";
@@ -11,6 +12,8 @@ import { scrollbarStyles } from "../../styles/scrollbar";
 
 interface SideSelectorProps {
   channels: GroupContextChannel[];
+  subgroups: SubgroupEntry[];
+  channelsBySubgroup: Map<string, GroupContextChannel[]>;
   activeChat: ActiveChat | null;
   onChatSelected: (chat: ActiveChat) => void;
   onDMSelected: (dm: DMContextInfo) => void;
@@ -205,6 +208,8 @@ interface SideMenuContentProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   channels: GroupContextChannel[];
+  subgroups: SubgroupEntry[];
+  channelsBySubgroup: Map<string, GroupContextChannel[]>;
   existingChannelNames: string[];
   activeChat: ActiveChat | null;
   onChatSelected: (chat: ActiveChat) => void;
@@ -222,6 +227,8 @@ const SideMenuContent = memo(function SideMenuContent({
   isCollapsed,
   onToggleCollapse,
   channels,
+  subgroups,
+  channelsBySubgroup,
   existingChannelNames,
   activeChat,
   onChatSelected,
@@ -232,6 +239,34 @@ const SideMenuContent = memo(function SideMenuContent({
   onChannelCreated,
   onChannelSelected,
 }: SideMenuContentProps) {
+  const selectedChannelId = activeChat?.type === "channel" ? activeChat.id : "";
+
+  const joinedChannels = React.useMemo(
+    () =>
+      channels.filter(
+        (ch) => (ch.isJoined ?? false) && (!ch.info || ch.info.context_type === "Channel"),
+      ),
+    [channels],
+  );
+
+  const channelSections = (
+    <>
+      <ChannelHeader
+        title="Channels"
+        isCollapsed={isCollapsed}
+        onChannelCreated={onChannelCreated}
+        onChannelSelected={onChannelSelected}
+        existingChannelNames={existingChannelNames}
+      />
+      <ChannelList
+        channels={joinedChannels}
+        selectChannel={onChatSelected}
+        selectedChannelId={selectedChannelId}
+        isCollapsed={isCollapsed}
+      />
+    </>
+  );
+
   return (
     <>
       <SearchChannels
@@ -242,19 +277,7 @@ const SideMenuContent = memo(function SideMenuContent({
       />
       <HorizontalSeparatorLine $isMobile={false} />
       {isCollapsed && <SectionLabel>CH</SectionLabel>}
-      <ChannelHeader
-        title="Channels"
-        isCollapsed={isCollapsed}
-        onChannelCreated={onChannelCreated}
-        onChannelSelected={onChannelSelected}
-        existingChannelNames={existingChannelNames}
-      />
-      <ChannelList
-        channels={channels}
-        selectChannel={onChatSelected}
-        selectedChannelId={activeChat?.type === "channel" ? activeChat.id : ""}
-        isCollapsed={isCollapsed}
-      />
+      {channelSections}
       <HorizontalSeparatorLine $isMobile={true} />
       {isCollapsed && <SectionLabel>DM</SectionLabel>}
       <DMSideSelector
@@ -288,6 +311,8 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
     isCollapsed,
     onToggleCollapse: toggleCollapse,
     channels,
+    subgroups: props.subgroups,
+    channelsBySubgroup: props.channelsBySubgroup,
     existingChannelNames,
     activeChat: props.activeChat,
     onChatSelected: props.onChatSelected,

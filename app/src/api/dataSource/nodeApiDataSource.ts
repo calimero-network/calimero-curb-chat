@@ -2,6 +2,7 @@ import axios from "axios";
 import {
   getAppEndpointKey,
   getAuthConfig,
+  getExecutorPublicKey,
   type ApiResponse,
 } from "@calimero-network/calimero-client";
 import { getApplicationId } from "../../constants/config";
@@ -225,6 +226,7 @@ export class ContextApiDataSource implements NodeApi {
         `${nodeEndpoint}/admin-api/contexts/${props.contextId}`,
         {
           headers: getAuthHeaders(),
+          data: { executor_public_key: getExecutorPublicKey() },
         },
       );
       if (response.status === 200) {

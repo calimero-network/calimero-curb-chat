@@ -18,11 +18,11 @@ describe("SettingsTab", () => {
           contextCount: 1,
           activeUpgrade: null,
           defaultCapabilities: 2,
-          defaultVisibility: "open",
+          subgroupVisibility: "open",
         }}
         actionLoading={false}
         onSetDefaultCapabilities={onSetDefaultCapabilities}
-        onSetDefaultVisibility={vi.fn().mockResolvedValue(true)}
+        onSetSubgroupVisibility={vi.fn().mockResolvedValue(true)}
       />,
     );
 

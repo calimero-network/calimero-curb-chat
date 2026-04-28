@@ -39,6 +39,7 @@ import {
   type UpdateReactionProps,
   type UserId,
 } from "../clientApi";
+import { getMessengerDisplayName } from "../../utils/messengerName";
 
 export function getJsonRpcClient() {
   const appEndpointKey = getAppEndpointKey();
@@ -574,7 +575,7 @@ export class ClientApiDataSource implements ClientApi {
             mentions_usernames: props.usernames,
             parent_message: props.parent_message,
             timestamp: props.timestamp,
-            sender_username: "",
+            sender_username: getMessengerDisplayName(),
             ...(props.files && props.files.length > 0
               ? { files: props.files }
               : {}),

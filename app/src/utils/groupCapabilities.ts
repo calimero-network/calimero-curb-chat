@@ -1,11 +1,11 @@
 export const CAN_CREATE_CONTEXT = 1 << 0;
 export const CAN_INVITE_MEMBERS = 1 << 1;
-export const CAN_JOIN_OPEN_CONTEXTS = 1 << 2;
+export const CAN_JOIN_OPEN_SUBGROUPS = 1 << 2;
 
 export interface GroupCapabilityToggles {
   canCreateContext: boolean;
   canInviteMembers: boolean;
-  canJoinOpenContexts: boolean;
+  canJoinOpenSubgroups: boolean;
 }
 
 export function hasGroupCapability(
@@ -28,8 +28,8 @@ export function buildGroupCapabilitiesMask(
     mask |= CAN_INVITE_MEMBERS;
   }
 
-  if (toggles.canJoinOpenContexts) {
-    mask |= CAN_JOIN_OPEN_CONTEXTS;
+  if (toggles.canJoinOpenSubgroups) {
+    mask |= CAN_JOIN_OPEN_SUBGROUPS;
   }
 
   return mask;
@@ -41,7 +41,7 @@ export function readGroupCapabilitiesMask(
   return {
     canCreateContext: hasGroupCapability(capabilities, CAN_CREATE_CONTEXT),
     canInviteMembers: hasGroupCapability(capabilities, CAN_INVITE_MEMBERS),
-    canJoinOpenContexts: hasGroupCapability(capabilities, CAN_JOIN_OPEN_CONTEXTS),
+    canJoinOpenSubgroups: hasGroupCapability(capabilities, CAN_JOIN_OPEN_SUBGROUPS),
   };
 }
 
@@ -57,8 +57,8 @@ export function canCreateGroupContexts(
   return hasGroupCapability(capabilities, CAN_CREATE_CONTEXT);
 }
 
-export function canJoinOpenGroupContexts(
+export function canJoinOpenSubgroups(
   capabilities: number | null | undefined,
 ): boolean {
-  return hasGroupCapability(capabilities, CAN_JOIN_OPEN_CONTEXTS);
+  return hasGroupCapability(capabilities, CAN_JOIN_OPEN_SUBGROUPS);
 }

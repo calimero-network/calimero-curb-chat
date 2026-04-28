@@ -76,7 +76,7 @@ describe("AdminPanel", () => {
       getContextAllowlist: vi.fn(),
       manageAllowlist: vi.fn(),
       setDefaultCapabilities: vi.fn(),
-      setDefaultVisibility: vi.fn(),
+      setSubgroupVisibility: vi.fn(),
       triggerUpgrade: vi.fn(),
       refreshUpgradeStatus: vi.fn(),
     });
@@ -141,7 +141,7 @@ describe("AdminPanel", () => {
       getContextAllowlist: vi.fn(),
       manageAllowlist: vi.fn(),
       setDefaultCapabilities: vi.fn(),
-      setDefaultVisibility: vi.fn(),
+      setSubgroupVisibility: vi.fn(),
       triggerUpgrade: vi.fn(),
       refreshUpgradeStatus: vi.fn(),
     }));

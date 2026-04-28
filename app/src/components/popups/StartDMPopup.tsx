@@ -186,6 +186,7 @@ const StartDMPopup = memo(function StartDMPopup({
   const [isOpen, setIsOpen] = usePersistentState("startDMPopupOpen", false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [inputValue, setInputValue] = usePersistentState("startDMInputValue", "");
+  const [selectedIdentity, setSelectedIdentity] = useState("");
   const [validInput, setValidInput] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [suggestions, setSuggestions] = useState<MemberSuggestion[]>([]);
@@ -229,9 +230,11 @@ const StartDMPopup = memo(function StartDMPopup({
   const runProcess = async () => {
     setIsProcessing(true);
     setErrorMessage("");
-    const result = await functionLoader(inputValue.trim());
+    const identity = selectedIdentity || inputValue.trim();
+    const result = await functionLoader(identity);
     if (result.data) {
       setInputValue("");
+      setSelectedIdentity("");
       setIsOpen(false);
     } else {
       setErrorMessage(result.error);
@@ -244,6 +247,7 @@ const StartDMPopup = memo(function StartDMPopup({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
+    setSelectedIdentity("");
     setErrorMessage("");
     const filtered = filterSuggestions(value);
     setSuggestions(filtered);
@@ -252,8 +256,9 @@ const StartDMPopup = memo(function StartDMPopup({
   };
 
   const handleSuggestionClick = (s: MemberSuggestion) => {
+    setSelectedIdentity(s.identity);
     updateValidation(s.identity);
-    setInputValue(s.identity);
+    setInputValue(s.label || s.identity);
     setShowSuggestions(false);
     setSuggestions([]);
   };

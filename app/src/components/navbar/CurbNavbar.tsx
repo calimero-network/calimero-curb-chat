@@ -207,6 +207,7 @@ interface CurbNavbarProps {
   reFetchChannelMembers: () => void;
   setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
+  onChannelLeft?: (contextId: string) => void;
   wsIsSubscribed?: boolean;
   wsContextId?: string | null;
   wsSubscriptionCount?: number;
@@ -224,6 +225,7 @@ export default function CurbNavbar({
   reFetchChannelMembers,
   setActiveChat,
   fetchChannels,
+  onChannelLeft,
   wsIsSubscribed = false,
   wsContextId = null,
   wsSubscriptionCount = 0,
@@ -257,6 +259,7 @@ export default function CurbNavbar({
             reFetchChannelMembers={reFetchChannelMembers}
             setActiveChat={setActiveChat}
             fetchChannels={fetchChannels}
+            onChannelLeft={onChannelLeft}
           />
         )}
       </ItemsContainer>
@@ -283,6 +286,7 @@ export default function CurbNavbar({
                 reFetchChannelMembers={reFetchChannelMembers}
                 setActiveChat={setActiveChat}
                 fetchChannels={fetchChannels}
+                onChannelLeft={onChannelLeft}
               />
             </ItemsContainer>
           )}

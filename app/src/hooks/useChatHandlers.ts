@@ -67,6 +67,9 @@ interface ChatHandlersRefs {
   fetchChannels: React.MutableRefObject<() => Promise<void>>;
   fetchDMs: React.MutableRefObject<() => Promise<void>>;
   fetchMembers: React.MutableRefObject<() => Promise<void>>;
+  fetchGroupMembers: React.MutableRefObject<() => Promise<void>>;
+  onLeftChannel: React.MutableRefObject<(contextId: string) => void>;
+  subscribeToContext: React.MutableRefObject<(contextId: string) => void>;
 }
 
 export function useChatHandlers(
@@ -129,13 +132,20 @@ export function useChatHandlers(
           if (useDM) {
             if (!shouldNotifyMessage) {
               messagesBelongToActiveChat = true;
+            } else if (contextId && activeChatRef.current?.contextId) {
+              messagesBelongToActiveChat = contextId === activeChatRef.current.contextId;
             } else {
               messagesBelongToActiveChat =
                 lastMessageTest.senderUsername === activeDMName;
             }
           } else {
-            messagesBelongToActiveChat =
-              lastMessageTest.group === activeChatName;
+            // Prefer contextId match (reliable) over channel name string comparison
+            // which can silently mismatch when display name differs from event bytes
+            if (contextId && activeChatRef.current?.contextId) {
+              messagesBelongToActiveChat = contextId === activeChatRef.current.contextId;
+            } else {
+              messagesBelongToActiveChat = group === activeChatName;
+            }
           }
 
           // Always show notifications for all messages (even if not in active chat)
@@ -210,13 +220,6 @@ export function useChatHandlers(
                 }
               }
             }
-          } else {
-            console.log(
-              "Messages received but not appended - they don't belong to the active chat. Active:",
-              activeChatName,
-              "Message group:",
-              newMessages[0]?.group
-            );
           }
         }
       } catch (error) {
@@ -323,19 +326,13 @@ export function useChatHandlers(
             if (executionEvent.data) {
               try {
                 const asciiString = bytesParser(executionEvent.data);
-
-                // Parse the JSON to get channel/group and message_id
                 const parsed = JSON.parse(asciiString);
                 if (parsed.channel) {
                   actions.fetchMessageGroup = parsed.channel;
                   actions.isDM = parsed.channel === "private_dm";
                 }
               } catch (e) {
-                console.log(
-                  `MessageSent - Couldn't decode data:`,
-                  executionEvent.data,
-                  e
-                );
+                log.warn("ChatHandlers", "Couldn't decode MessageSent data", e);
               }
             }
             break;
@@ -354,11 +351,7 @@ export function useChatHandlers(
                   actions.shouldNotifyMessage = false;
                 }
               } catch (e) {
-                console.log(
-                  `MessageSent - Couldn't decode data:`,
-                  executionEvent.data,
-                  e
-                );
+                log.warn("ChatHandlers", "Couldn't decode MessageSentThread data", e);
               }
             }
             break;
@@ -390,43 +383,51 @@ export function useChatHandlers(
             break;
 
           case "ChannelJoined":
-            // Refresh channel list and members
             actions.fetchChannels = true;
             actions.fetchMembers = true;
-            log.debug(
-              "ChatHandlers",
-              "Channel joined, refreshing channel list and members"
-            );
+            if (executionEvent.data) {
+              try {
+                const parsed = JSON.parse(bytesParser(executionEvent.data));
+                if (parsed.context_id) refs.subscribeToContext.current(parsed.context_id);
+              } catch { /* ignore parse errors */ }
+            }
+            log.debug("ChatHandlers", "Channel joined, refreshing channel list and members");
             break;
 
           case "ChannelLeft":
-            // Refresh channel list and members
             actions.fetchChannels = true;
             actions.fetchMembers = true;
-            log.debug(
-              "ChatHandlers",
-              "Channel left, refreshing channel list and members"
-            );
+            if (contextId === activeChatRef.current?.contextId) {
+              refs.onLeftChannel.current(contextId);
+            }
+            log.debug("ChatHandlers", "Channel left, refreshing channel list and members");
             break;
 
           case "ChannelInvited":
-            // Refresh channel list and members
             actions.fetchChannels = true;
             actions.fetchMembers = true;
-            log.debug(
-              "ChatHandlers",
-              "User invited to channel, refreshing channel list and members"
-            );
+            if (executionEvent.data) {
+              try {
+                const parsed = JSON.parse(bytesParser(executionEvent.data));
+                if (parsed.context_id) refs.subscribeToContext.current(parsed.context_id);
+              } catch { /* ignore parse errors */ }
+            }
+            log.debug("ChatHandlers", "User invited to channel, refreshing channel list and members");
             break;
 
           case "ChatJoined":
-            // When a new user joins the chat, refresh members list
             actions.fetchMembers = true;
+            refs.fetchGroupMembers.current();
             break;
 
           case "DMCreated":
-            // Refresh DM list and potentially trigger DM selection
             actions.fetchDMs = true;
+            if (executionEvent.data) {
+              try {
+                const parsed = JSON.parse(bytesParser(executionEvent.data));
+                if (parsed.context_id) refs.subscribeToContext.current(parsed.context_id);
+              } catch { /* ignore parse errors */ }
+            }
             log.debug("ChatHandlers", "DM created, refreshing DM list");
             break;
           case "DMDeleted":
@@ -464,12 +465,20 @@ export function useChatHandlers(
       }
       // Execute only the necessary actions with proper sequencing
       if (actions.fetchMessages) {
-        handleMessageUpdates(
-          actions.isDM,
-          actions.fetchMessageGroup,
-          contextId,
-          actions.shouldNotifyMessage
-        );
+        // Fall back to active chat name/type when the event data didn't carry a channel name
+        // (e.g. MessageReceived, or MessageSent whose data bytes couldn't be parsed)
+        let messageGroup = actions.fetchMessageGroup;
+        let isDM = actions.isDM;
+        if (!messageGroup && activeChatRef.current) {
+          if (activeChatRef.current.type === "channel") {
+            messageGroup = activeChatRef.current.name;
+            isDM = false;
+          } else if (activeChatRef.current.type === "direct_message") {
+            messageGroup = "private_dm";
+            isDM = true;
+          }
+        }
+        handleMessageUpdates(isDM, messageGroup, contextId, actions.shouldNotifyMessage);
       }
       if (actions.fetchChannels) {
         refs.fetchChannels.current();
@@ -525,20 +534,9 @@ export function useChatHandlers(
    */
   const handleStateMutation = useCallback(
     async (event: WebSocketEvent) => {
-      console.log("[SSE] handleStateMutation called:", {
-        contextId: event.contextId,
-        type: event.type,
-        hasData: !!event.data,
-        dataKeys: event.data ? Object.keys(event.data) : [],
-        eventsCount: event.data?.events?.length ?? 0,
-        rawData: event.data,
-      });
-
       if (event.data?.events && event.data.events.length > 0) {
-        console.log("[SSE] Processing", event.data.events.length, "execution events:", event.data.events.map((e: ExecutionEventData) => e.kind));
+        log.info("useChatHandlers", `[SSE] handleStateMutation contextId=${event.contextId} events=${event.data.events.length}`, event.data.events);
         handleExecutionEvents(event.contextId, event.data.events);
-      } else {
-        console.log("[SSE] No execution events in data — StateMutation without events or unknown format");
       }
     },
     [handleExecutionEvents]

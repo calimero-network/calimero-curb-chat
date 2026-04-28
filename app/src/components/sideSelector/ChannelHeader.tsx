@@ -11,7 +11,6 @@ import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissio
 import { log } from "../../utils/logger";
 import {
   getChannelVisibilityOption,
-  getContextVisibilityModeFromOption,
 } from "../../utils/channelVisibility";
 import { buildChannelEntryChat } from "../../utils/channelEntry";
 import { getMessengerDisplayName } from "../../utils/messengerName";
@@ -64,6 +63,7 @@ interface ChannelHeaderProps {
   onChannelCreated?: () => void;
   onChannelSelected?: (chat: ActiveChat) => void;
   existingChannelNames?: string[];
+  targetGroupId?: string;
 }
 
 const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
@@ -108,19 +108,58 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     }
 
     const nodeApi = new ContextApiDataSource();
-    const initParams = {
-      name: channelName,
-      context_type: "Channel",
-      description: "",
-      created_at: Math.floor(Date.now() / 1000),
-    };
+    const groupApi = new GroupApiDataSource();
+
+    let contextGroupId = props.targetGroupId;
+    if (!contextGroupId) {
+      if (isPublic) {
+        // Open channels go directly in the namespace, same as "general"
+        contextGroupId = groupId;
+      } else {
+        // Restricted channels need a subgroup — reuse the existing restricted one or create it
+        const sgListResp = await groupApi.listSubgroups(groupId);
+        if (sgListResp.data && sgListResp.data.length > 0) {
+          const checks = await Promise.all(
+            sgListResp.data.map(async (sg) => {
+              const info = await groupApi.getGroup(sg.groupId);
+              return { groupId: sg.groupId, visibility: info.data?.subgroupVisibility };
+            }),
+          );
+          const match = checks.find((sg) => sg.visibility === "restricted");
+          if (match) {
+            contextGroupId = match.groupId;
+            log.info("ChannelHeader", `Reusing restricted subgroup ${contextGroupId}`);
+          }
+        }
+
+        if (!contextGroupId) {
+          const sgResp = await groupApi.createSubgroup(groupId, { groupAlias: "private" });
+          if (sgResp.error || !sgResp.data) {
+            log.error("ChannelHeader", "Failed to create private subgroup", sgResp.error);
+            return;
+          }
+          contextGroupId = sgResp.data.groupId;
+          const visResp = await groupApi.setSubgroupVisibility(contextGroupId, {
+            subgroupVisibility: "restricted",
+          });
+          if (visResp.error) {
+            log.warn("ChannelHeader", "Failed to set subgroup visibility", visResp.error);
+          }
+        }
+      }
+    }
 
     const createResp = await nodeApi.createGroupContext({
       applicationId: getApplicationId(),
       protocol: "near",
-      groupId,
+      groupId: contextGroupId,
       alias: channelName,
-      initializationParams: initParams,
+      initializationParams: {
+        name: channelName,
+        context_type: "Channel",
+        description: "",
+        created_at: Math.floor(Date.now() / 1000),
+      },
     });
 
     if (createResp.error || !createResp.data) {
@@ -132,29 +171,12 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     const memberKey = createResp.data.memberPublicKey ?? "";
     if (memberKey) {
       setContextMemberIdentity(contextId, memberKey);
-      // Register creator's profile in the new WASM context so get_profiles returns them
       const username = getMessengerDisplayName();
       if (username) {
         new ClientApiDataSource()
           .joinChat({ contextId, executorPublicKey: memberKey, username })
           .catch((e) => log.warn("ChannelHeader", "set_profile failed on new channel", e));
       }
-    }
-    const groupApi = new GroupApiDataSource();
-    const visibilityMode = getContextVisibilityModeFromOption(
-      isPublic ? "public" : "private",
-    );
-
-    const visibilityResp = await groupApi.setContextVisibility(groupId, contextId, {
-      mode: visibilityMode,
-    });
-
-    if (visibilityResp.error && visibilityResp.error.code !== 404) {
-      log.error(
-        "ChannelHeader",
-        `Failed to set channel visibility to ${visibilityMode}`,
-        visibilityResp.error,
-      );
     }
 
     setInputValue("");
@@ -169,16 +191,17 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   };
 
   const prepareCreateChannelModal = useCallback(async () => {
-    if (!groupId || isLoadingDefaultVisibility) {
+    const targetGroupId = props.targetGroupId ?? groupId;
+    if (!targetGroupId || isLoadingDefaultVisibility) {
       return;
     }
 
     setIsLoadingDefaultVisibility(true);
     const groupApi = new GroupApiDataSource();
-    const groupResp = await groupApi.getGroup(groupId);
+    const groupResp = await groupApi.getGroup(targetGroupId);
 
-    if (groupResp.data?.defaultVisibility) {
-      setDefaultVisibility(getChannelVisibilityOption(groupResp.data.defaultVisibility));
+    if (groupResp.data?.subgroupVisibility) {
+      setDefaultVisibility(getChannelVisibilityOption(groupResp.data.subgroupVisibility));
     } else {
       setDefaultVisibility("public");
       if (groupResp.error) {
@@ -197,7 +220,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   return (
     <Container $isCollapsed={props.isCollapsed}>
       {!props.isCollapsed && <TextBold>{props.title}</TextBold>}
-      {groupId && canCreateContext && (
+      {(props.targetGroupId ?? groupId) && canCreateContext && (
         <CreateChannelPopup
           title={"Create new Channel"}
           inputValue={inputValue}

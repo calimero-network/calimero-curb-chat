@@ -1,9 +1,9 @@
 import React, { useCallback, useState } from "react";
 import styled from "styled-components";
 import type { User } from "../../types/Common";
-import MultipleInputPopup from "../common/popups/MultipleInputPopup";
-import { Avatar } from "@calimero-network/mero-ui";
+import { Avatar, Button, Input } from "@calimero-network/mero-ui";
 import type { UserId } from "../../api/clientApi";
+import BaseModal from "../common/popups/BaseModal";
 
 const AddMemberButton = styled.div`
   display: flex;
@@ -160,52 +160,163 @@ const OverLay = styled.div`
 //   }
 // `;
 
+const SuggestionsDropdown = styled.div`
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 8px;
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  position: absolute;
+  top: calc(100% + 4px);
+  width: 100%;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+`;
+
+const SuggestionItem = styled.div`
+  padding: 0.55rem 0.875rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #fff;
+  transition: background 0.1s ease;
+  &:hover { background: rgba(255, 255, 255, 0.06); }
+`;
+
+const InviteField = styled.div`
+  margin-bottom: 1rem;
+  position: relative;
+`;
+
+const InviteLabel = styled.div`
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+`;
+
+const ModalContent = styled.div`
+  min-width: 280px;
+  padding: 0.25rem 0;
+`;
+
+const ModalTitle = styled.h3`
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 1.25rem;
+`;
+
 interface AddUserDialogProps {
   addMember: (account: string, channel: string) => void;
   channelName: string;
-  getNonInvitedUsers: (value: string) => UserId[];
-  nonInvitedUserList: UserId[];
+  nonChannelMembers?: Map<string, string>;
 }
 
 const AddUserDialog = ({
   addMember,
   channelName,
-  getNonInvitedUsers,
-  nonInvitedUserList,
+  nonChannelMembers,
 }: AddUserDialogProps) => {
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const addUser = useCallback(() => {
-    selectedUsers.forEach((account) => {
-      const identityId = Object.keys(nonInvitedUserList).find(
-        // @ts-expect-error - nonInvitedUserList is a Map
-        (u) => nonInvitedUserList[u] === account,
-      ) as string;
-      addMember(identityId, channelName);
-    });
-  }, [addMember, channelName, selectedUsers]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [selectedIdentity, setSelectedIdentity] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const updateUsers = useCallback((value: string) => {
-    getNonInvitedUsers(value);
-  }, []);
+  const memberOptions = nonChannelMembers
+    ? Array.from(nonChannelMembers.entries()).map(([identity, label]) => ({ identity, label }))
+    : [];
+
+  const filteredSuggestions = inputValue.trim()
+    ? memberOptions.filter(({ identity, label }) => {
+        const q = inputValue.toLowerCase();
+        return identity.toLowerCase().includes(q) || label.toLowerCase().includes(q);
+      })
+    : memberOptions;
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+    setSelectedIdentity("");
+    setShowSuggestions(true);
+  };
+
+  const handleInputContainerClick = () => {
+    if (!selectedIdentity) setShowSuggestions(filteredSuggestions.length > 0);
+  };
+
+  const handleSuggestionClick = (identity: string, label: string) => {
+    setSelectedIdentity(identity);
+    setInputValue(label || identity);
+    setShowSuggestions(false);
+  };
+
+  const handleInvite = useCallback(async () => {
+    const identity = selectedIdentity || inputValue.trim();
+    if (!identity) return;
+    setIsProcessing(true);
+    addMember(identity, channelName);
+    setInputValue("");
+    setSelectedIdentity("");
+    setIsOpen(false);
+    setIsProcessing(false);
+  }, [selectedIdentity, inputValue, addMember, channelName]);
+
+  const content = (
+    <ModalContent>
+      <ModalTitle>Add member to #{channelName}</ModalTitle>
+      <InviteField>
+        <InviteLabel>Member</InviteLabel>
+        <div style={{ position: "relative" }} onClick={handleInputContainerClick}>
+          <Input
+            value={inputValue}
+            placeholder="Search by username..."
+            onChange={handleInputChange}
+          />
+          {showSuggestions && filteredSuggestions.length > 0 && (
+            <SuggestionsDropdown>
+              {filteredSuggestions.map((s) => (
+                <SuggestionItem
+                  key={s.identity}
+                  onMouseDown={(e) => { e.preventDefault(); handleSuggestionClick(s.identity, s.label); }}
+                >
+                  {s.label || s.identity}
+                </SuggestionItem>
+              ))}
+            </SuggestionsDropdown>
+          )}
+        </div>
+      </InviteField>
+      <Button
+        type="button"
+        variant="primary"
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
+        onClick={() => void handleInvite()}
+        disabled={isProcessing || !(selectedIdentity || inputValue.trim())}
+      >
+        Invite
+      </Button>
+    </ModalContent>
+  );
 
   return (
-    <MultipleInputPopup
-      title={`Invite user to #${channelName}`}
-      placeholder={"ex: John Doe"}
-      buttonText={"Invite"}
-      functionLoader={addUser}
+    <BaseModal
       toggle={
-        <AddMemberButton>
-          <i className="bi bi-plus-circle-fill" />
-          Add new member
+        <AddMemberButton onClick={() => setIsOpen(true)}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add member
         </AddMemberButton>
       }
-      updateUsers={updateUsers}
+      content={content}
+      open={isOpen}
+      onOpenChange={setIsOpen}
       isChild={true}
-      autocomplete={true}
-      nonInvitedUserList={nonInvitedUserList}
-      selectedUsers={selectedUsers}
-      setSelectedUsers={setSelectedUsers}
     />
   );
 };
@@ -229,13 +340,12 @@ interface MemberDetailsProps {
   channelName: string;
   getNonInvitedUsers: (value: string) => UserId[];
   nonInvitedUserList: UserId[];
+  nonChannelMembers?: Map<string, string>;
+  isOwner?: boolean;
 }
 
 const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
   const userList = props.userList;
-  // const promoteModerator = props.promoteModerator;
-  // const removeUserFromChannel = props.removeUserFromChannel;
-  // const channelOwner = props.channelOwner;
 
   const [optionsOpen, setOptionsOpen] = useState(-1);
 
@@ -276,12 +386,13 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
 
   return (
     <>
-      <AddUserDialog
-        addMember={props.addMember}
-        channelName={props.channelName}
-        getNonInvitedUsers={props.getNonInvitedUsers}
-        nonInvitedUserList={props.nonInvitedUserList}
-      />
+      {props.isOwner && (
+        <AddUserDialog
+          addMember={props.addMember}
+          channelName={props.channelName}
+          nonChannelMembers={props.nonChannelMembers}
+        />
+      )}
       {optionsOpen !== -1 && <OverLay onClick={() => setOptionsOpen(-1)} />}
       <UserList>
         {userList.size > 0 &&

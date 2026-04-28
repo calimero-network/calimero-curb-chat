@@ -267,25 +267,25 @@ export function useGroupAdmin() {
     [group],
   );
 
-  const setDefaultVisibility = useCallback(
+  const setSubgroupVisibility = useCallback(
     async (groupId: string, mode: VisibilityMode): Promise<boolean> => {
       setActionLoading(true);
       setError(null);
       try {
-        const resp = await api.setDefaultVisibility(groupId, {
-          defaultVisibility: mode,
+        const resp = await api.setSubgroupVisibility(groupId, {
+          subgroupVisibility: mode,
         });
         if (resp.error) {
           setError(resp.error.message);
           return false;
         }
         if (group) {
-          setGroup({ ...group, defaultVisibility: mode });
+          setGroup({ ...group, subgroupVisibility: mode });
         }
         return true;
       } catch (err) {
-        log.error("useGroupAdmin", "Failed to set default visibility", err);
-        setError("Failed to set default visibility");
+        log.error("useGroupAdmin", "Failed to set subgroup visibility", err);
+        setError("Failed to set subgroup visibility");
         return false;
       } finally {
         setActionLoading(false);
@@ -353,7 +353,7 @@ export function useGroupAdmin() {
     getContextAllowlist,
     manageAllowlist,
     setDefaultCapabilities,
-    setDefaultVisibility,
+    setSubgroupVisibility,
     triggerUpgrade,
     refreshUpgradeStatus,
   };

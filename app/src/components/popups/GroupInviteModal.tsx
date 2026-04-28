@@ -357,33 +357,13 @@ export default function GroupInviteModal({
 
           {!loading && invitationPayload && (
             <>
-              <SuccessBanner>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                {successMessage}
-              </SuccessBanner>
+              <CopyBtn $copied={copiedTarget === "web"} onClick={() => void handleCopy("web")}>
+                {copiedTarget === "web" ? "✓ Copied!" : "Copy web link"}
+              </CopyBtn>
 
-              <Field>
-                <FieldLabel>Workspace ID</FieldLabel>
-                <CodeBox>{groupId}</CodeBox>
-              </Field>
-
-              <Field>
-                <FieldLabel>Web invite link</FieldLabel>
-                <CodeBox>{webUrl}</CodeBox>
-                <CopyBtn $copied={copiedTarget === "web"} onClick={() => void handleCopy("web")}>
-                  {copiedTarget === "web" ? "✓ Copied!" : "Copy web link"}
-                </CopyBtn>
-              </Field>
-
-              <Field>
-                <FieldLabel>Desktop invite link</FieldLabel>
-                <CodeBox>{desktopUrl}</CodeBox>
-                <CopyBtn $copied={copiedTarget === "desktop"} onClick={() => void handleCopy("desktop")}>
-                  {copiedTarget === "desktop" ? "✓ Copied!" : "Copy desktop link"}
-                </CopyBtn>
-              </Field>
+              <CopyBtn $copied={copiedTarget === "desktop"} onClick={() => void handleCopy("desktop")}>
+                {copiedTarget === "desktop" ? "✓ Copied!" : "Copy desktop link"}
+              </CopyBtn>
             </>
           )}
 

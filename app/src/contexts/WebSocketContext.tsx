@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useSubscription, useMero } from "@calimero-network/mero-react";
+import { useSubscription } from "@calimero-network/mero-react";
 import type { SseEventData } from "@calimero-network/mero-react";
 import type { WebSocketEvent, StateMutationData } from "../types/WebSocketTypes";
 import { log } from "../utils/logger";
@@ -33,29 +33,14 @@ interface WebSocketProviderProps {
 }
 
 export function WebSocketProvider({ children }: WebSocketProviderProps) {
-  const { mero, isAuthenticated, isOnline } = useMero();
   const [subscribedContextIds, setSubscribedContextIds] = useState<string[]>([]);
   const subscribedContextIdsRef = useRef<string[]>([]);
   subscribedContextIdsRef.current = subscribedContextIds;
 
-  useEffect(() => {
-    console.log("[SSE] mero status:", { hasMero: !!mero, isAuthenticated, isOnline });
-  }, [mero, isAuthenticated, isOnline]);
-
-  useEffect(() => {
-    if (subscribedContextIds.length > 0) {
-      console.log("[SSE] useSubscription will subscribe to", subscribedContextIds.length, "contexts, mero ready:", !!mero);
-    }
-  }, [subscribedContextIds, mero]);
-
   const eventListenersRef = useRef<Set<WebSocketEventListener>>(new Set());
 
   const eventCallbackFn = useCallback((event: SseEventData) => {
-    console.log("[SSE] Raw event received:", {
-      contextId: event.contextId,
-      data: event.data,
-      listenerCount: eventListenersRef.current.size,
-    });
+    log.info("WebSocketContext", `[SSE] event received contextId=${event.contextId}`, event.data);
     const wsEvent: WebSocketEvent = {
       contextId: event.contextId,
       type: "StateMutation",
@@ -74,7 +59,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
   const subscribeToContexts = useCallback((contextIds: string[]) => {
     const valid = contextIds.filter(Boolean);
-    console.log("[SSE] subscribeToContexts called with", valid.length, "contexts:", valid);
     setSubscribedContextIds(valid);
     log.info("WebSocketContext", `Subscribing to ${valid.length} contexts`);
   }, []);

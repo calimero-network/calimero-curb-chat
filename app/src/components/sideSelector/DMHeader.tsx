@@ -1,6 +1,8 @@
 import { styled } from "styled-components";
 import StartDMPopup, { type CreateContextResult } from "../popups/StartDMPopup";
 import { useCallback, memo } from "react";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
+import { getGroupId } from "../../constants/config";
 
 const Container = styled.div<{ $isCollapsed?: boolean }>`
   display: flex;
@@ -53,6 +55,9 @@ const DMHeader = memo(function DMHeader({
   availableMembers,
   isCollapsed,
 }: DMHeaderProps) {
+  const groupId = getGroupId();
+  const { isAdmin } = useCurrentGroupPermissions(groupId ?? "");
+
   const isValidIdentityId = useCallback(
     (value: string) => {
       const identity = value.trim();
@@ -72,21 +77,23 @@ const DMHeader = memo(function DMHeader({
   return (
     <Container $isCollapsed={isCollapsed}>
       {!isCollapsed && <TextBold>{"Direct Messages"}</TextBold>}
-      <StartDMPopup
-        title="Create a new private DM context"
-        placeholder="Search by member identity"
-        buttonText="Next"
-        toggle={
-          <PlusButton>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </PlusButton>
-        }
-        chatMembers={availableMembers}
-        validator={isValidIdentityId}
-        functionLoader={createDM}
-      />
+      {isAdmin && (
+        <StartDMPopup
+          title="Create a new private DM context"
+          placeholder="Search by member identity"
+          buttonText="Next"
+          toggle={
+            <PlusButton>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </PlusButton>
+          }
+          chatMembers={availableMembers}
+          validator={isValidIdentityId}
+          functionLoader={createDM}
+        />
+      )}
     </Container>
   );
 });

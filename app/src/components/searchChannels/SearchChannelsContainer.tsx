@@ -189,95 +189,104 @@ export default function SearchChannelsContainer({
       const groupApi = new GroupApiDataSource();
       const clientApi = new ClientApiDataSource();
 
+      const enrichContext = async (
+        ctxId: string,
+        alias: string | undefined,
+        visibility: "open" | "restricted",
+      ): Promise<BrowsableChannel | null> => {
+        const entry = { contextId: ctxId, alias };
+        if (isDmContextCandidate({ entry })) return null;
+
+        let isJoined = false;
+        let info = null;
+        let joinedIdentity = "";
+
+        try {
+          const idResp: ResponseData<FetchContextIdentitiesResponse> =
+            await apiClient.node().fetchContextIdentities(ctxId);
+          const identities = idResp.data?.data?.identities;
+          if (identities && identities.length > 0) {
+            isJoined = true;
+            joinedIdentity = identities[0];
+            const infoResp = await clientApi.getContextInfo(ctxId, identities[0]);
+            if (infoResp.data) info = infoResp.data;
+          }
+        } catch {
+          log.debug("SearchChannels", `Could not fetch info for ${ctxId}`);
+        }
+
+        if (isDmContextCandidate({ entry, info })) return null;
+        if (info && info.context_type !== "Channel") return null;
+
+        // Restricted channel the user is not in → hide completely
+        if (!isJoined && visibility === "restricted") return null;
+
+        const memberIdentity = currentGroupPermissions.memberIdentity;
+        let canJoin = isJoined;
+        let blockedReason = "";
+
+        if (!canJoin) {
+          if (currentGroupPermissions.isAdmin) {
+            canJoin = true;
+          } else if (!memberIdentity) {
+            blockedReason = "This node's workspace identity could not be resolved.";
+          } else {
+            canJoin = currentGroupPermissions.canJoinOpenSubgroups;
+            if (!canJoin) {
+              blockedReason =
+                "Open channel, but your workspace identity does not have permission to join open contexts.";
+            }
+          }
+        }
+
+        return { contextId: ctxId, alias, info, isJoined, visibility, canJoin, blockedReason, joinedIdentity };
+      };
+
+      const collected: (BrowsableChannel | null)[] = [];
+
+      // Namespace-level contexts (e.g. "general")
       const listResp = await groupApi.listGroupContexts(groupId);
-      if (!listResp.data) return;
+      if (listResp.data) {
+        const results = await Promise.all(
+          listResp.data.map(async (entry) => {
+            const visResp = await groupApi.getContextVisibility(groupId, entry.contextId);
+            const vis: "open" | "restricted" =
+              visResp.data?.mode ?? (visResp.error?.code === 404 ? "open" : "restricted");
+            return enrichContext(entry.contextId, entry.alias, vis);
+          }),
+        );
+        collected.push(...results);
+      }
 
-      const enriched: (BrowsableChannel | null)[] = await Promise.all(
-        listResp.data.map(async (entry) => {
-          const { contextId: ctxId, alias } = entry;
-          if (isDmContextCandidate({ entry })) {
-            return null;
-          }
+      // Subgroup contexts
+      const sgResp = await groupApi.listSubgroups(groupId);
+      if (sgResp.data && sgResp.data.length > 0) {
+        await Promise.all(
+          sgResp.data.map(async (sg) => {
+            const groupInfoResp = await groupApi.getGroup(sg.groupId);
+            // If we can't read the subgroup info, default to restricted (fail closed)
+            const sgVisibility: "open" | "restricted" =
+              groupInfoResp.data?.subgroupVisibility === "open" ? "open" : "restricted";
 
-          let isJoined = false;
-          let info = null;
-          let joinedIdentity = "";
+            const sgListResp = await groupApi.listGroupContexts(sg.groupId);
+            if (!sgListResp.data) return;
 
-          try {
-            const idResp: ResponseData<FetchContextIdentitiesResponse> =
-              await apiClient.node().fetchContextIdentities(ctxId);
-            const identities = idResp.data?.data?.identities;
-            if (identities && identities.length > 0) {
-              isJoined = true;
-              joinedIdentity = identities[0];
-              const infoResp = await clientApi.getContextInfo(ctxId, identities[0]);
-              if (infoResp.data) info = infoResp.data;
-            }
-          } catch {
-            log.debug("SearchChannels", `Could not fetch info for ${ctxId}`);
-          }
+            const results = await Promise.all(
+              sgListResp.data.map((entry) =>
+                enrichContext(entry.contextId, entry.alias, sgVisibility),
+              ),
+            );
+            collected.push(...results);
+          }),
+        );
+      }
 
-          if (isDmContextCandidate({ entry, info })) {
-            return null;
-          }
-
-          const visibilityResponse = await groupApi.getContextVisibility(groupId, ctxId);
-          const visibility = visibilityResponse.data?.mode ?? "restricted";
-          const memberIdentity = currentGroupPermissions.memberIdentity;
-
-          let canJoin = isJoined;
-          let blockedReason = "";
-
-          if (!canJoin) {
-            if (visibilityResponse.error && visibilityResponse.error.code !== 404) {
-              blockedReason =
-                "This channel's visibility could not be loaded, so join access cannot be determined yet.";
-            } else if (currentGroupPermissions.isAdmin) {
-              canJoin = true;
-            } else if (!memberIdentity) {
-              blockedReason =
-                "This node's workspace identity could not be resolved for the selected workspace.";
-            } else if (visibility === "open") {
-              canJoin = currentGroupPermissions.canJoinOpenContexts;
-              if (!canJoin) {
-                blockedReason =
-                  "Open channel, but your workspace identity does not have permission to join open contexts.";
-              }
-            } else {
-              const allowlistResponse = await groupApi.getContextAllowlist(groupId, ctxId);
-              const allowlist = allowlistResponse.data ?? [];
-              canJoin = allowlist.includes(memberIdentity);
-              if (!canJoin) {
-                blockedReason =
-                  "Restricted channel. Your workspace identity is not on the allowlist.";
-              }
-            }
-          }
-
-          return {
-            contextId: ctxId,
-            alias,
-            info,
-            isJoined,
-            visibility,
-            canJoin,
-            blockedReason,
-            joinedIdentity,
-          };
-        }),
-      );
-
-      setAllChannels(
-        enriched.filter(
-          (ch): ch is BrowsableChannel =>
-            ch !== null && (!ch.info || ch.info.context_type === "Channel"),
-        ),
-      );
+      setAllChannels(collected.filter((ch): ch is BrowsableChannel => ch !== null));
     };
 
     void loadChannels();
   }, [
-    currentGroupPermissions.canJoinOpenContexts,
+    currentGroupPermissions.canJoinOpenSubgroups,
     currentGroupPermissions.isAdmin,
     currentGroupPermissions.memberIdentity,
     groupId,

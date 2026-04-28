@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAN_CREATE_CONTEXT,
   CAN_INVITE_MEMBERS,
-  CAN_JOIN_OPEN_CONTEXTS,
+  CAN_JOIN_OPEN_SUBGROUPS,
   buildGroupCapabilitiesMask,
   canCreateGroupContexts,
   readGroupCapabilitiesMask,
@@ -14,18 +14,18 @@ describe("groupCapabilities", () => {
       buildGroupCapabilitiesMask({
         canCreateContext: true,
         canInviteMembers: false,
-        canJoinOpenContexts: true,
+        canJoinOpenSubgroups: true,
       }),
-    ).toBe(CAN_CREATE_CONTEXT + CAN_JOIN_OPEN_CONTEXTS);
+    ).toBe(CAN_CREATE_CONTEXT + CAN_JOIN_OPEN_SUBGROUPS);
   });
 
   it("reads the three toggle states from a bitmask", () => {
     expect(
-      readGroupCapabilitiesMask(CAN_INVITE_MEMBERS + CAN_JOIN_OPEN_CONTEXTS),
+      readGroupCapabilitiesMask(CAN_INVITE_MEMBERS + CAN_JOIN_OPEN_SUBGROUPS),
     ).toEqual({
       canCreateContext: false,
       canInviteMembers: true,
-      canJoinOpenContexts: true,
+      canJoinOpenSubgroups: true,
     });
   });
 

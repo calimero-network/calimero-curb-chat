@@ -96,7 +96,7 @@ describe("SearchChannelsContainer", () => {
     });
     mockUseCurrentGroupPermissions.mockReturnValue({
       isAdmin: false,
-      canJoinOpenContexts: false,
+      canJoinOpenSubgroups: false,
       memberIdentity: "member-1",
     });
     mockGetContextInfo.mockResolvedValue({

@@ -27,7 +27,10 @@ import type {
   RemoveMemberRequest,
   SetContextVisibilityRequest,
   SetDefaultCapabilitiesRequest,
-  SetDefaultVisibilityRequest,
+  SetSubgroupVisibilityRequest,
+  SubgroupEntry,
+  CreateSubgroupRequest,
+  CreateSubgroupResponse,
   SetMemberAliasRequest,
   SetMemberCapabilitiesRequest,
   SyncGroupResponse,
@@ -749,13 +752,13 @@ export class GroupApiDataSource implements GroupApi {
     }
   }
 
-  async setDefaultVisibility(
+  async setSubgroupVisibility(
     groupId: string,
-    request: SetDefaultVisibilityRequest,
+    request: SetSubgroupVisibilityRequest,
   ): ApiResponse<void> {
     try {
       const response = await axios.put(
-        `${this.base()}/groups/${groupId}/settings/default-visibility`,
+        `${this.base()}/groups/${groupId}/settings/subgroup-visibility`,
         request,
         { headers: getAuthHeaders() },
       );
@@ -763,7 +766,42 @@ export class GroupApiDataSource implements GroupApi {
         ? ok(undefined as void)
         : httpFail(response.status, response.statusText);
     } catch (error) {
-      return catchError("setDefaultVisibility", error);
+      return catchError("setSubgroupVisibility", error);
+    }
+  }
+
+  async listSubgroups(namespaceId: string): ApiResponse<SubgroupEntry[]> {
+    try {
+      const response = await axios.get(
+        `${this.base()}/groups/${namespaceId}/subgroups`,
+        { headers: getAuthHeaders() },
+      );
+      return response.status === 200
+        ? ok((response.data.subgroups as Array<{ group_id?: string; groupId?: string; alias?: string }>).map(s => ({
+            groupId: (s.group_id ?? s.groupId) as string,
+            alias: s.alias,
+          })))
+        : httpFail(response.status, response.statusText);
+    } catch (error) {
+      return catchError("listSubgroups", error);
+    }
+  }
+
+  async createSubgroup(
+    namespaceId: string,
+    request: CreateSubgroupRequest,
+  ): ApiResponse<CreateSubgroupResponse> {
+    try {
+      const response = await axios.post(
+        `${this.base()}/namespaces/${namespaceId}/groups`,
+        { groupAlias: request.groupAlias },
+        { headers: getAuthHeaders() },
+      );
+      return response.status === 200
+        ? ok({ groupId: response.data.data.groupId as string })
+        : httpFail(response.status, response.statusText);
+    } catch (error) {
+      return catchError("createSubgroup", error);
     }
   }
 

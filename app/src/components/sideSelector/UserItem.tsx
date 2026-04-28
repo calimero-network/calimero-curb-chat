@@ -114,10 +114,9 @@ function UserItem({
 
   const confirmDelete = useCallback(async () => {
     try {
-      const node = new ContextApiDataSource();
-      const del = await node.deleteContext({ contextId: dm.contextId });
+      const del = await new ContextApiDataSource().deleteContext({ contextId: dm.contextId });
       if (del.error) {
-        addToast({ title: "DM", message: del.error.message || "Failed to delete DM context", type: "dm", duration: 3000 });
+        addToast({ title: "DM", message: del.error.message || "Failed to delete DM", type: "dm", duration: 3000 });
         return;
       }
       addToast({ title: "DM", message: "DM deleted", type: "dm", duration: 2500 });

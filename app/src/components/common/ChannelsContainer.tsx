@@ -3,6 +3,7 @@ import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import SideSelector from "../sideSelector/SideSelector";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
+import type { SubgroupEntry } from "../../api/groupApi";
 
 interface ChannelsContainerProps {
   onChatSelected: (chat: ActiveChat) => void;
@@ -13,6 +14,8 @@ interface ChannelsContainerProps {
   isOpenSearchChannel: boolean;
   onDMSelected: (dm: DMContextInfo) => void;
   channels: GroupContextChannel[];
+  subgroups: SubgroupEntry[];
+  channelsBySubgroup: Map<string, GroupContextChannel[]>;
   chatMembers: Map<string, string>;
   dmMembers: Map<string, string>;
   createDM: (value: string) => Promise<CreateContextResult>;
@@ -31,6 +34,8 @@ function ChannelsContainer(props: ChannelsContainerProps) {
     isOpenSearchChannel,
     onDMSelected,
     channels,
+    subgroups,
+    channelsBySubgroup,
     chatMembers,
     dmMembers,
     createDM,
@@ -49,6 +54,8 @@ function ChannelsContainer(props: ChannelsContainerProps) {
       setIsOpenSearchChannel={setIsOpenSearchChannel}
       isOpenSearchChannel={isOpenSearchChannel}
       channels={channels || []}
+      subgroups={subgroups}
+      channelsBySubgroup={channelsBySubgroup}
       chatMembers={chatMembers}
       dmMembers={dmMembers}
       createDM={createDM}

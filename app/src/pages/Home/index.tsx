@@ -257,6 +257,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     mainMessages.clear();
     threadMessages.clear();
 
+    // Subscribe immediately to the stored context so SSE events arrive before
+    // fetchGroupContexts completes (which drives the bulk subscription)
+    if (storedSession.contextId) {
+      webSocket.subscribeToContext(storedSession.contextId);
+    }
+
     const timer = setTimeout(() => {
       void updateSelectedActiveChat(storedSession);
     }, SUBSCRIPTION_INIT_DELAY_MS);
@@ -353,6 +359,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   notifyDMRef.current = notifyDM;
   notifyChannelRef.current = notifyChannel;
 
+  const onLeftChannelRef = useRef<(contextId: string) => void>(() => {});
+  const subscribeToContextRef = useRef<(contextId: string) => void>(() => {});
+  onLeftChannelRef.current = (_contextId: string) => {
+    setActiveChat(null);
+    activeChatRef.current = null;
+    setIsOpenSearchChannel(true);
+  };
+  subscribeToContextRef.current = webSocket.subscribeToContext;
+
   const chatHandlersRefs = useRef({
     mainMessages: mainMessagesRef,
     threadMessages: threadMessagesRef,
@@ -366,6 +381,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     fetchDMs: { current: debouncedFetchDMs },
     fetchMembers: { current: debouncedFetchMembers },
     fetchGroupMembers: { current: debouncedFetchGroupMembers },
+    onLeftChannel: onLeftChannelRef,
+    subscribeToContext: subscribeToContextRef,
   }).current;
 
   const updateSelectedActiveChatRef = useRef(updateSelectedActiveChat);
@@ -504,7 +521,6 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   } = useChatHandlers(activeChatRef, activeChat, chatHandlersRefs);
 
   useWebSocketEvents(useCallback(async (event: WebSocketEvent) => {
-    console.log("[SSE] WebSocket event listener fired in Home:", { contextId: event.contextId, type: event.type });
     try {
       await handleStateMutation(event);
 
@@ -563,13 +579,30 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
   // Subscribe to ALL group contexts + DM contexts for real-time updates
   useEffect(() => {
-    console.log("[SSE] subscription effect — app:", !!app, "allContextIdsKey:", allContextIdsKey);
     if (!app || !allContextIdsKey) return;
 
     const contextIds = allContextIdsKey.split(",");
     log.info("Home", `Subscribing to ${contextIds.length} contexts`, { totalContexts: contextIds.length });
     webSocket.subscribeToContexts(contextIds);
   }, [app, allContextIdsKey, webSocket]);
+
+  // Poll DMs every 30s — catches deletions and new DMs on both nodes
+  useEffect(() => {
+    const interval = setInterval(() => { void fetchDmsRef.current(); }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll channel list every 30s — catches channel deletions for all members
+  useEffect(() => {
+    const interval = setInterval(() => { void fetchChannelsRef.current(); }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll namespace members every 60s — catches new members joining the workspace
+  useEffect(() => {
+    const interval = setInterval(() => { void debouncedFetchGroupMembers(); }, 60000);
+    return () => clearInterval(interval);
+  }, [debouncedFetchGroupMembers]);
 
   const onJoinedChat = async () => {
     fetchGroupChannels();
@@ -721,8 +754,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       loadInitialChatMessages={loadInitialChatMessages}
       incomingMessages={mainMessages.incomingMessages}
       channels={channels}
+      subgroups={groupContextsHook.subgroups}
+      channelsBySubgroup={groupContextsHook.channelsBySubgroup}
       fetchChannels={fetchGroupChannels}
       onChannelCreated={fetchGroupChannels}
+      onChannelLeft={groupContextsHook.removeChannel}
       onJoinedChat={onJoinedChat}
       loadPrevMessages={loadPrevMessages}
       chatMembers={chatMembers}

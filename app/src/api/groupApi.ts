@@ -42,7 +42,7 @@ export interface GroupInfo {
   contextCount: number;
   activeUpgrade: GroupUpgradeStatus | null;
   defaultCapabilities: number;
-  defaultVisibility: VisibilityMode;
+  subgroupVisibility: VisibilityMode;
 }
 
 export interface GroupSummary {
@@ -147,8 +147,21 @@ export interface SetDefaultCapabilitiesRequest {
   defaultCapabilities: number;
 }
 
-export interface SetDefaultVisibilityRequest {
-  defaultVisibility: VisibilityMode;
+export interface SubgroupEntry {
+  groupId: string;
+  alias?: string;
+}
+
+export interface CreateSubgroupRequest {
+  groupAlias?: string;
+}
+
+export interface CreateSubgroupResponse {
+  groupId: string;
+}
+
+export interface SetSubgroupVisibilityRequest {
+  subgroupVisibility: VisibilityMode;
 }
 
 export interface SetContextVisibilityRequest {
@@ -232,10 +245,15 @@ export interface GroupApi {
     groupId: string,
     request: SetDefaultCapabilitiesRequest,
   ): ApiResponse<void>;
-  setDefaultVisibility(
+  setSubgroupVisibility(
     groupId: string,
-    request: SetDefaultVisibilityRequest,
+    request: SetSubgroupVisibilityRequest,
   ): ApiResponse<void>;
+  listSubgroups(namespaceId: string): ApiResponse<SubgroupEntry[]>;
+  createSubgroup(
+    namespaceId: string,
+    request: CreateSubgroupRequest,
+  ): ApiResponse<CreateSubgroupResponse>;
 
   triggerUpgrade(
     groupId: string,

@@ -7,6 +7,7 @@ import type {
   ChatMessagesDataWithOlder,
   CurbMessage,
 } from "../../types/Common";
+import type { SubgroupEntry } from "../../api/groupApi";
 import ChannelsContainer from "./ChannelsContainer";
 import CurbNavbar from "../navbar/CurbNavbar";
 import SearchChannelsContainer from "../searchChannels/SearchChannelsContainer";
@@ -43,9 +44,12 @@ interface AppContainerProps {
   loadInitialChatMessages: () => Promise<ChatMessagesData>;
   incomingMessages: CurbMessage[];
   channels: GroupContextChannel[];
+  subgroups: SubgroupEntry[];
+  channelsBySubgroup: Map<string, GroupContextChannel[]>;
   reFetchChannelMembers: () => void;
   fetchChannels: () => void;
   onChannelCreated?: () => void;
+  onChannelLeft?: (contextId: string) => void;
   onJoinedChat: () => void;
   loadPrevMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
   chatMembers: Map<string, string>;
@@ -91,9 +95,12 @@ function AppContainer({
   loadInitialChatMessages,
   incomingMessages,
   channels,
+  subgroups,
+  channelsBySubgroup,
   reFetchChannelMembers,
   fetchChannels,
   onChannelCreated,
+  onChannelLeft,
   onJoinedChat,
   loadPrevMessages,
   chatMembers,
@@ -152,6 +159,7 @@ function AppContainer({
         nonInvitedUserList={nonInvitedUserList}
         reFetchChannelMembers={reFetchChannelMembers}
         fetchChannels={fetchChannels}
+        onChannelLeft={onChannelLeft}
         wsIsSubscribed={wsIsSubscribed}
         wsContextId={wsContextId}
         wsSubscriptionCount={wsSubscriptionCount}
@@ -170,6 +178,8 @@ function AppContainer({
           isOpenSearchChannel={isOpenSearchChannel}
           onDMSelected={onDMSelected}
           channels={channels}
+          subgroups={subgroups}
+          channelsBySubgroup={channelsBySubgroup}
           chatMembers={chatMembers}
           dmMembers={dmMembers}
           createDM={createDM}

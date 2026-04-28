@@ -172,7 +172,6 @@ export default function CreateChannelPopup({
   const [validInput, setValidInput] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [visibility, setVisibility] = useState<ChannelVisibilityOption>(defaultVisibility);
-  const [readOnly, setReadOnly] = useState("no");
 
   useEffect(() => {
     if (isOpen) setVisibility(defaultVisibility);
@@ -180,7 +179,7 @@ export default function CreateChannelPopup({
 
   const runProcess = async () => {
     setIsProcessing(true);
-    await createChannel(inputValue, visibility === "public", readOnly === "yes");
+    await createChannel(inputValue, visibility === "public", false);
     setInputValue("");
     setIsProcessing(false);
     setIsOpen(false);
@@ -246,14 +245,6 @@ export default function CreateChannelPopup({
           <OptionButton $active={visibility === "private"} onClick={() => setVisibility("private")}>
             {getChannelVisibilityOptionLabel("private")}
           </OptionButton>
-        </OptionRow>
-      </Field>
-
-      <Field>
-        <Label>Read-only</Label>
-        <OptionRow>
-          <OptionButton $active={readOnly === "yes"} onClick={() => setReadOnly("yes")}>Yes</OptionButton>
-          <OptionButton $active={readOnly === "no"} onClick={() => setReadOnly("no")}>No</OptionButton>
         </OptionRow>
       </Field>
 
