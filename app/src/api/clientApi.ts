@@ -210,11 +210,6 @@ export interface ReadMessageProps {
   timestamp: number;
 }
 
-export interface UpdateDmHashProps {
-  sender_id: UserId;
-  other_user_id: UserId;
-  new_hash: string;
-}
 
 export interface ReadDmProps {
   other_user_id: UserId;
@@ -260,11 +255,9 @@ export enum ClientMethod {
   GET_USERNAME = "get_username",
   GET_CHAT_USERNAMES = "get_chat_usernames",
   READ_MESSAGE = "mark_messages_as_read",
-  UPDATE_DM_HASH = "update_dm_hashes",
   READ_DM = "mark_dm_as_read",
   GET_DM_UNREAD_COUNT = "get_dm_unread_count",
   GET_TOTAL_DM_UNREAD_COUNT = "get_total_dm_unread_count",
-  GET_DM_IDENTITY_BY_CONTEXT = "get_dm_identity_by_context",
   MARK_ALL_DMS_AS_READ = "mark_all_dms_as_read",
 }
 
@@ -296,8 +289,6 @@ export interface ClientApi {
   acceptInvitation(props: AcceptInvitationProps): ApiResponse<string>;
   deleteDM(props: DeleteDMProps): ApiResponse<string>;
   readMessage(props: ReadMessageProps): ApiResponse<string>;
-  updateDmHash(props: UpdateDmHashProps): ApiResponse<string>;
   readDm(props: ReadDmProps): ApiResponse<string>;
   getUsername(props: GetUsernameProps): ApiResponse<string>;
-  getDmIdentityByContext(props: { context_id: string }): ApiResponse<string>;
 }
