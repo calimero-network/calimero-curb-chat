@@ -50,6 +50,8 @@ interface AppContainerProps {
   fetchChannels: () => void;
   onChannelCreated?: () => void;
   onChannelLeft?: (contextId: string) => void;
+  onChannelJoined?: (contextId: string) => void;
+  getSubgroupForContext?: (contextId: string) => string | undefined;
   onJoinedChat: () => void;
   loadPrevMessages: (id: string) => Promise<ChatMessagesDataWithOlder>;
   chatMembers: Map<string, string>;
@@ -102,6 +104,8 @@ function AppContainer({
   fetchChannels,
   onChannelCreated,
   onChannelLeft,
+  onChannelJoined,
+  getSubgroupForContext,
   onJoinedChat,
   loadPrevMessages,
   chatMembers,
@@ -162,6 +166,7 @@ function AppContainer({
         reFetchChannelMembers={reFetchChannelMembers}
         fetchChannels={fetchChannels}
         onChannelLeft={onChannelLeft}
+        getSubgroupForContext={getSubgroupForContext}
         wsIsSubscribed={wsIsSubscribed}
         wsContextId={wsContextId}
         wsSubscriptionCount={wsSubscriptionCount}
@@ -228,6 +233,7 @@ function AppContainer({
               <SearchChannelsContainer
                 onChatSelected={updateSelectedActiveChat}
                 fetchChannels={fetchChannels}
+                onChannelJoined={onChannelJoined}
               />
             )}
           </Wrapper>

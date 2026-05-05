@@ -197,6 +197,7 @@ export interface GroupApi {
     request: JoinGroupRequest,
   ): ApiResponse<JoinGroupResponse>;
   listMembers(groupId: string): ApiResponse<{ members: GroupMember[]; selfIdentity?: string }>;
+  addGroupMember(groupId: string, identity: string): ApiResponse<void>;
   removeMember(
     groupId: string,
     memberIdentity: string,

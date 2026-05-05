@@ -150,17 +150,6 @@ export function useMessages() {
 
       // Removed throttling to allow real-time message updates
 
-      // If it's a DM, fetch the DM identity for this context
-      let refetchIdentity: string | undefined = undefined;
-      if (isDM && contextId) {
-        const identityResponse = await new ClientApiDataSource().getDmIdentityByContext({
-          context_id: contextId,
-        });
-        if (identityResponse.data) {
-          refetchIdentity = identityResponse.data;
-        }
-      }
-
       const response: ResponseData<FullMessageResponse> =
         await new ClientApiDataSource().getMessages({
           group: {
@@ -169,7 +158,7 @@ export function useMessages() {
           limit: RECENT_MESSAGES_CHECK_SIZE,
           offset: 0,
           is_dm: isDM,
-          dm_identity: refetchIdentity || activeChat.contextIdentity,
+          dm_identity: activeChat.contextIdentity,
           parent_message: undefined, // Only get main chat messages, not thread messages
         });
 

@@ -8,6 +8,7 @@ import type { UserId } from "../../api/clientApi";
 import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { isRestrictedChannelType } from "../../utils/channelVisibility";
+import { useToast } from "../../contexts/ToastContext";
 
 const Wrapper = styled.div``;
 
@@ -48,17 +49,15 @@ interface DetailsContainerProps {
   channelName: string;
   groupId?: string;
   contextId?: string;
+  contextSubgroupId?: string;
   selectedTabIndex?: number;
   userList: Map<string, string>;
   nonInvitedUserList: UserId[];
   nonChannelMembers?: Map<string, string>;
   channelMeta: ChannelMeta;
   isOwner?: boolean;
-  handleLeaveChannel: () => void;
   handleDeleteChannel?: () => void;
-  addMember: (user: string) => void;
   promoteModerator: (user: string) => void;
-  removeUserFromChannel: (user: string) => void;
   reFetchChannelMembers: () => void;
 }
 
@@ -68,15 +67,14 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
   const userList = props.userList;
   const channelMeta = props.channelMeta;
   const isOwner = props.isOwner ?? false;
-  const handleLeaveChannel = props.handleLeaveChannel;
   const handleDeleteChannel = props.handleDeleteChannel;
   const promoteModerator = props.promoteModerator;
-  const removeUserFromChannel = props.removeUserFromChannel;
   const nonInvitedUserList = props.nonInvitedUserList;
   const reFetchChannelMembers = props.reFetchChannelMembers;
   const userCount = userList.size;
 
   const [selectedTabIndex, setSelectedTabIndex] = useState(initialTabIndex);
+  const { addToast } = useToast();
 
   const ChannelName = () => {
     const isPrivateChannel = isRestrictedChannelType(channelMeta.channelType);
@@ -99,12 +97,27 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
     );
   };
 
+  const targetGroupId = props.contextSubgroupId ?? props.groupId;
+
   const addMember = async (account: string, _channel: string) => {
-    const gId = props.groupId;
-    const ctxId = props.contextId;
-    if (gId && ctxId) {
-      await new GroupApiDataSource().manageContextAllowlist(gId, ctxId, { add: [account] });
+    if (!targetGroupId) return;
+    const result = await new GroupApiDataSource().addGroupMember(targetGroupId, account);
+    if (result.error) {
+      addToast({ title: "Add member", message: result.error.message || "Failed to add member", type: "channel", duration: 4000 });
+      return;
     }
+    addToast({ title: "Add member", message: "Member added", type: "channel", duration: 2500 });
+    await reFetchChannelMembers();
+  };
+
+  const removeUserFromChannel = async (identity: string) => {
+    if (!targetGroupId) return;
+    const result = await new GroupApiDataSource().removeMember(targetGroupId, identity);
+    if (result.error) {
+      addToast({ title: "Remove member", message: result.error.message || "Failed to remove member", type: "channel", duration: 4000 });
+      return;
+    }
+    addToast({ title: "Remove member", message: "Member removed", type: "channel", duration: 2500 });
     await reFetchChannelMembers();
   };
 
@@ -133,7 +146,6 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
             channelMeta.createdBy
           }
           isOwner={isOwner}
-          handleLeaveChannel={handleLeaveChannel}
           handleDeleteChannel={handleDeleteChannel}
           channelName={channelName}
         />
@@ -143,7 +155,7 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
           id={0}
           user={getExecutorPublicKey() as unknown as UserId}
           promoteModerator={() => {}}
-          removeUserFromChannel={() => {}}
+          removeUserFromChannel={removeUserFromChannel}
           channelOwner={channelMeta.createdBy}
           optionsOpen={0}
           setOptionsOpen={() => {}}

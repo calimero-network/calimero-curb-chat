@@ -9,9 +9,9 @@ import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import type { ResponseData } from "@calimero-network/calimero-client";
 import { getExecutorPublicKey } from "@calimero-network/calimero-client";
 import { useGroupAdmin } from "../../hooks/useGroupAdmin";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { getGroupId } from "../../constants/config";
 import type { GroupMember } from "../../api/groupApi";
-import { isRestrictedChannelType } from "../../utils/channelVisibility";
 
 interface ChannelDetailsPopupProps {
   toggle: React.ReactNode;
@@ -25,6 +25,7 @@ interface ChannelDetailsPopupProps {
   setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
   onChannelLeft?: (contextId: string) => void;
+  getSubgroupForContext?: (contextId: string) => string | undefined;
 }
 
 export default function ChannelDetailsPopup({
@@ -39,6 +40,7 @@ export default function ChannelDetailsPopup({
   setActiveChat,
   fetchChannels,
   onChannelLeft,
+  getSubgroupForContext,
 }: ChannelDetailsPopupProps) {
   const [channelMeta, setChannelMeta] = useState<ChannelMeta>({
     name: chat.name,
@@ -58,6 +60,7 @@ export default function ChannelDetailsPopup({
 
   const groupId = getGroupId();
   const { members: groupMembers, fetchAll } = useGroupAdmin();
+  const { isAdmin } = useCurrentGroupPermissions(groupId ?? "");
 
   const channelName = chat.type === "channel" ? chat.name : chat.id;
 
@@ -89,26 +92,16 @@ export default function ChannelDetailsPopup({
 
   const currentIdentity = getExecutorPublicKey() as string;
   const isOwner = !!channelMeta.createdBy && channelMeta.createdBy === currentIdentity;
-  const isRestricted = isRestrictedChannelType(channelMeta.channelType);
-
-  const handleLeaveChannel = async () => {
-    if (chat.contextId && groupId && isRestricted) {
-      await new GroupApiDataSource().manageContextAllowlist(groupId, chat.contextId, {
-        remove: [currentIdentity],
-      });
-    }
-    if (chat.contextId) {
-      onChannelLeft?.(chat.contextId);
-    }
-    setActiveChat(null);
-    fetchChannels();
-    setIsOpen(false);
-  };
+  const canDelete = isOwner || isAdmin;
+  const contextSubgroupId = chat.contextId ? getSubgroupForContext?.(chat.contextId) : undefined;
 
   const handleDeleteChannel = async () => {
     if (!chat.contextId) return;
     const result = await new ContextApiDataSource().deleteContext({ contextId: chat.contextId });
     if (result.error) return;
+    if (contextSubgroupId) {
+      await new GroupApiDataSource().deleteGroup(contextSubgroupId).catch(() => {});
+    }
     onChannelLeft?.(chat.contextId);
     setActiveChat(null);
     fetchChannels();
@@ -132,17 +125,15 @@ export default function ChannelDetailsPopup({
       channelName={channelName}
       groupId={groupId ?? undefined}
       contextId={chat.contextId ?? undefined}
+      contextSubgroupId={contextSubgroupId}
       selectedTabIndex={selectedTabIndex}
       userList={channelUserList ?? new Map()}
       nonInvitedUserList={nonInvitedUserList}
       nonChannelMembers={nonChannelMembers}
       channelMeta={channelMeta}
-      isOwner={isOwner}
-      handleLeaveChannel={handleLeaveChannel}
+      isOwner={canDelete}
       handleDeleteChannel={handleDeleteChannel}
-      addMember={() => {}}
       promoteModerator={() => {}}
-      removeUserFromChannel={() => {}}
       reFetchChannelMembers={reFetchChannelMembers}
     />
   );

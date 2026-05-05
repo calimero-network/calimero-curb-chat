@@ -86,6 +86,7 @@ interface DetailsDropdownProps {
   setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
   onChannelLeft?: (contextId: string) => void;
+  getSubgroupForContext?: (contextId: string) => string | undefined;
 }
 
 const IconContainer = styled.div`
@@ -121,6 +122,7 @@ export default function DetailsDropdown({
   setActiveChat,
   fetchChannels,
   onChannelLeft,
+  getSubgroupForContext,
 }: DetailsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -175,6 +177,7 @@ export default function DetailsDropdown({
         setActiveChat={setActiveChat}
         fetchChannels={fetchChannels}
         onChannelLeft={onChannelLeft}
+        getSubgroupForContext={getSubgroupForContext}
       />
     );
   }

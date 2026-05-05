@@ -5,27 +5,6 @@ import { Avatar, Button, Input } from "@calimero-network/mero-ui";
 import type { UserId } from "../../api/clientApi";
 import BaseModal from "../common/popups/BaseModal";
 
-const AddMemberButton = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  margin-bottom: 0.5rem;
-  color: rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: rgba(165, 255, 17, 0.06);
-    border-color: rgba(165, 255, 17, 0.2);
-    color: #a5ff11;
-  }
-`;
 
 const UserListItem = styled.div`
   display: flex;
@@ -131,34 +110,51 @@ const Text = styled.div<{ $isSelected?: boolean }>`
 //   }
 // `;
 
-const OverLay = styled.div`
-  position: absolute;
-  z-index: 10;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  right: 0;
+const RemoveButton = styled.button`
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  opacity: 0;
+
+  ${UserListItem}:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background: rgba(255, 80, 80, 0.1);
+    color: rgba(255, 100, 100, 0.8);
+  }
 `;
 
-// const TopOverlay = styled.div<{ bottomPadding: boolean }>`
-//   position: fixed;
-//   z-index: 20;
-//   @media (max-width: 1024px) {
-//     position: absolute;
-//     right: 0;
-//     ${({ bottomPadding }) =>
-//       bottomPadding
-//         ? `
-//       bottom: 100%;
-//     `
-//         : `
-//       top: 100%;
-//     `}
-//   }
-// `;
+const AddMemberButton = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(165, 255, 17, 0.06);
+    border-color: rgba(165, 255, 17, 0.2);
+    color: #a5ff11;
+  }
+`;
 
 const SuggestionsDropdown = styled.div`
   max-height: 180px;
@@ -321,6 +317,36 @@ const AddUserDialog = ({
   );
 };
 
+const OverLay = styled.div`
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+`;
+
+// const TopOverlay = styled.div<{ bottomPadding: boolean }>`
+//   position: fixed;
+//   z-index: 20;
+//   @media (max-width: 1024px) {
+//     position: absolute;
+//     right: 0;
+//     ${({ bottomPadding }) =>
+//       bottomPadding
+//         ? `
+//       bottom: 100%;
+//     `
+//         : `
+//       top: 100%;
+//     `}
+//   }
+// `;
+
+
 // const OptionsWrapper = styled.div`
 //   position: relative;
 // `;
@@ -329,7 +355,7 @@ interface MemberDetailsProps {
   id: number;
   user: UserId;
   promoteModerator: (userId: string, isModerator: boolean) => void;
-  removeUserFromChannel: (userId: string) => void;
+  removeUserFromChannel: (userId: string) => void | Promise<void>;
   channelOwner: string;
   optionsOpen: number;
   setOptionsOpen: (id: number) => void;
@@ -387,6 +413,13 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
   return (
     <>
       {optionsOpen !== -1 && <OverLay onClick={() => setOptionsOpen(-1)} />}
+      {props.isOwner && (
+        <AddUserDialog
+          addMember={props.addMember}
+          channelName={props.channelName}
+          nonChannelMembers={props.nonChannelMembers}
+        />
+      )}
       <UserList>
         {userList.size > 0 &&
           Array.from(userList.entries()).map(([identity, username], id) => (
@@ -397,6 +430,17 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
                   {username}
                 </Text>
               </UserInfo>
+              {props.isOwner && identity !== props.channelOwner && (
+                <RemoveButton
+                  title="Remove from channel"
+                  aria-label="Remove from channel"
+                  onClick={() => void props.removeUserFromChannel(identity)}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </RemoveButton>
+              )}
               {/* TODO: Add moderator options */}
               {/* <ModeratorOptions>
                 {(user.moderator || channelOwner === user.id) && (

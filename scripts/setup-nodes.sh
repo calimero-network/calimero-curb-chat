@@ -317,7 +317,34 @@ else
 
   GROUP_ID="$NS_ID"
 
-  # ── Create #general channel on node-1 (linked to namespace) ─────────────────
+  # ── Create "general" subgroup inside the namespace ───────────────────────────
+
+  step "Creating general channel subgroup on node-1"
+  SG_RES=$(curl -sf -X POST "${NODE_1_URL}/admin-api/namespaces/${GROUP_ID}/groups" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_1}" \
+    -H "Content-Type: application/json" \
+    -d '{"groupAlias":"general"}' \
+    2>/dev/null) || SG_RES="{}"
+  GENERAL_GROUP_ID=$(echo "$SG_RES" | jq -r '.data.groupId // empty' 2>/dev/null || true)
+
+  if [ -z "$GENERAL_GROUP_ID" ]; then
+    yellow "Fetching existing general subgroup from node-1"
+    GENERAL_GROUP_ID=$(curl -sf "${NODE_1_URL}/admin-api/groups/${GROUP_ID}/subgroups" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null \
+      | jq -r '(.subgroups // .data // .) | if type=="array" then .[0].group_id // .[0].groupId else empty end' \
+      2>/dev/null || true)
+  fi
+  [ -n "$GENERAL_GROUP_ID" ] || { red "ERROR: could not create or find general subgroup"; exit 1; }
+  green "GENERAL_GROUP_ID: $GENERAL_GROUP_ID"
+
+  # Set subgroup visibility to open (public channel)
+  curl -sf -X PUT "${NODE_1_URL}/admin-api/groups/${GENERAL_GROUP_ID}/settings/subgroup-visibility" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_1}" -H "Content-Type: application/json" \
+    -d '{"subgroupVisibility":"open"}' &>/dev/null \
+    && green "General subgroup visibility set to open" \
+    || yellow "Could not set subgroup visibility (non-fatal)"
+
+  # ── Create #general channel on node-1 (linked to general subgroup) ───────────
 
   step "Creating #general channel on node-1"
 
@@ -331,7 +358,7 @@ else
     -H "Content-Type: application/json" \
     -d "$(jq -n \
           --arg appId "$APP_ID" \
-          --arg groupId "$GROUP_ID" \
+          --arg groupId "$GENERAL_GROUP_ID" \
           --argjson initParams "$INIT_BYTES" \
           '{applicationId: $appId, protocol: "near", groupId: $groupId, alias: "general", initializationParams: $initParams}')" \
     2>/dev/null) || CTX_RES="{}"
@@ -340,8 +367,8 @@ else
   MEMBER_KEY_1=$(echo "$CTX_RES" | jq -r '.data.memberPublicKey // .data.member_public_key // empty' 2>/dev/null || true)
 
   if [ -z "$CONTEXT_ID" ]; then
-    yellow "Listing existing contexts in namespace"
-    CONTEXT_ID=$(curl -sf "${NODE_1_URL}/admin-api/groups/${GROUP_ID}/contexts" \
+    yellow "Listing existing contexts in general subgroup"
+    CONTEXT_ID=$(curl -sf "${NODE_1_URL}/admin-api/groups/${GENERAL_GROUP_ID}/contexts" \
       -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null \
       | jq -r '(.data // .) | if type=="array" then .[0].contextId // .[0].id else empty end' 2>/dev/null || true)
   fi
@@ -349,7 +376,7 @@ else
   green "CONTEXT_ID: $CONTEXT_ID"
 
   # Set channel visibility to public (open)
-  curl -sf -X PUT "${NODE_1_URL}/admin-api/groups/${GROUP_ID}/contexts/${CONTEXT_ID}/visibility" \
+  curl -sf -X PUT "${NODE_1_URL}/admin-api/groups/${GENERAL_GROUP_ID}/contexts/${CONTEXT_ID}/visibility" \
     -H "Authorization: Bearer ${ACCESS_TOKEN_1}" -H "Content-Type: application/json" \
     -d '{"mode":"open"}' &>/dev/null \
     && green "Channel visibility set to public" \
@@ -393,12 +420,20 @@ else
   curl -sf -X POST "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/sync" \
     -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
     -H "Content-Type: application/json" -d '{}' &>/dev/null \
-    && green "Sync triggered" || yellow "Sync failed (non-fatal)"
+    && green "Namespace sync triggered" || yellow "Namespace sync failed (non-fatal)"
 
-  # ── Node-2 joins all contexts in the namespace ────────────────────────────
+  # ── Sync general subgroup to node-2 ──────────────────────────────────────
 
-  step "Node-2 joining namespace contexts"
-  CTXS_LIST=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/contexts" \
+  step "Syncing general subgroup to node-2"
+  curl -sf -X POST "${NODE_2_URL}/admin-api/groups/${GENERAL_GROUP_ID}/sync" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
+    -H "Content-Type: application/json" -d '{}' &>/dev/null \
+    && green "General subgroup sync triggered" || yellow "General subgroup sync failed (non-fatal)"
+
+  # ── Node-2 joins all contexts in the general subgroup ────────────────────
+
+  step "Node-2 joining general subgroup contexts"
+  CTXS_LIST=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GENERAL_GROUP_ID}/contexts" \
     -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null \
     | jq -r '(.data // .) | if type=="array" then .[].contextId // .[].id else empty end' 2>/dev/null || true)
 
@@ -425,7 +460,7 @@ else
 
   step "Waiting for context to be accessible on node-2"
   for i in $(seq 1 30); do
-    CTXS_2=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/contexts" \
+    CTXS_2=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GENERAL_GROUP_ID}/contexts" \
       -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null) || CTXS_2="{}"
     if echo "$CTXS_2" | jq -e \
         --arg id "$CONTEXT_ID" \

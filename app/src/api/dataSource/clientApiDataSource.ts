@@ -33,7 +33,6 @@ import {
   type ReadDmProps,
   type ReadMessageProps,
   type SendMessageProps,
-  type UpdateDmHashProps,
   type UpdateInvitationPayloadProps,
   type UpdateNewIdentityProps,
   type UpdateReactionProps,
@@ -626,60 +625,6 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async getDmIdentityByContext(props: { context_id: string }): ApiResponse<string> {
-    try {
-      const response = await getJsonRpcClient().execute<
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        any,
-        string
-      >(
-        {
-          contextId: getContextId() || "",
-          method: ClientMethod.GET_DM_IDENTITY_BY_CONTEXT,
-          argsJson: {
-            context_id: props.context_id,
-          },
-          executorPublicKey: getExecutorPublicKey() || "",
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 10000,
-        },
-      );
-
-      if (response?.error) {
-        return {
-          data: null,
-          error: {
-            code: response?.error.code,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            message: (response?.error.error.cause.info as any).message,
-          },
-        };
-      }
-
-      return {
-        data: response?.result.output as string,
-        error: null,
-      };
-    } catch (error) {
-      console.error("getDmIdentityByContext failed:", error);
-      let errorMessage = "An unexpected error occurred during getDmIdentityByContext";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      }
-      return {
-        error: {
-          code: 500,
-          message: errorMessage,
-        },
-      };
-    }
-  }
 
   async getDms(): ApiResponse<DMChatInfo[]> {
     try {
@@ -1222,57 +1167,6 @@ export class ClientApiDataSource implements ClientApi {
     }
   }
 
-  async updateDmHash(props: UpdateDmHashProps): ApiResponse<string> {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await getJsonRpcClient().execute<any, string>(
-        {
-          contextId: getContextId() || "",
-          method: ClientMethod.UPDATE_DM_HASH,
-          argsJson: {
-            sender_id: props.sender_id,
-            other_user_id: props.other_user_id,
-            new_hash: props.new_hash,
-          },
-          executorPublicKey: getExecutorPublicKey() || "",
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 10000,
-        },
-      );
-      if (response?.error) {
-        return {
-          data: null,
-          error: {
-            code: response?.error.code,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            message: (response?.error.error.cause.info as any).message,
-          },
-        };
-      }
-      return {
-        data: response?.result.output as string,
-        error: null,
-      };
-    } catch (error) {
-      console.error("updateDmHash failed:", error);
-      let errorMessage = "An unexpected error occurred during updateDmHash";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      }
-      return {
-        error: {
-          code: 500,
-          message: errorMessage,
-        },
-      };
-    }
-  }
 
   async readDm(props: ReadDmProps): ApiResponse<string> {
     try {

@@ -207,6 +207,7 @@ interface CurbNavbarProps {
   setActiveChat: (chat: ActiveChat | null) => void;
   fetchChannels: () => void;
   onChannelLeft?: (contextId: string) => void;
+  getSubgroupForContext?: (contextId: string) => string | undefined;
   wsIsSubscribed?: boolean;
   wsContextId?: string | null;
   wsSubscriptionCount?: number;
@@ -225,6 +226,7 @@ export default function CurbNavbar({
   setActiveChat,
   fetchChannels,
   onChannelLeft,
+  getSubgroupForContext,
   wsIsSubscribed = false,
   wsContextId = null,
   wsSubscriptionCount = 0,
@@ -259,6 +261,7 @@ export default function CurbNavbar({
             setActiveChat={setActiveChat}
             fetchChannels={fetchChannels}
             onChannelLeft={onChannelLeft}
+            getSubgroupForContext={getSubgroupForContext}
           />
         )}
       </ItemsContainer>
@@ -286,6 +289,7 @@ export default function CurbNavbar({
                 setActiveChat={setActiveChat}
                 fetchChannels={fetchChannels}
                 onChannelLeft={onChannelLeft}
+                getSubgroupForContext={getSubgroupForContext}
               />
             </ItemsContainer>
           )}

@@ -523,6 +523,21 @@ export class GroupApiDataSource implements GroupApi {
     return ok({ memberIdentity: resolvedIdentity, members });
   }
 
+  async addGroupMember(groupId: string, identity: string): ApiResponse<void> {
+    try {
+      const response = await axios.post(
+        `${this.base()}/groups/${groupId}/members`,
+        { members: [{ identity, role: "Member" }] },
+        { headers: getAuthHeaders() },
+      );
+      return response.status === 200
+        ? ok(undefined as void)
+        : httpFail(response.status, response.statusText);
+    } catch (error) {
+      return catchError("addGroupMember", error);
+    }
+  }
+
   async removeMember(
     groupId: string,
     memberIdentity: string,

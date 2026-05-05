@@ -7,7 +7,6 @@ interface AboutDetailsProps {
   dateCreated: string;
   manager: string;
   isOwner?: boolean;
-  handleLeaveChannel: () => void;
   handleDeleteChannel?: () => void;
 }
 
@@ -80,13 +79,9 @@ const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
           <InfoValue>{props.manager || "—"}</InfoValue>
         </InfoRow>
       </InfoCard>
-      {props.isOwner ? (
+      {props.isOwner && (
         <ActionButton onClick={props.handleDeleteChannel}>
           Delete Channel
-        </ActionButton>
-      ) : (
-        <ActionButton onClick={props.handleLeaveChannel}>
-          Leave Channel
         </ActionButton>
       )}
     </>

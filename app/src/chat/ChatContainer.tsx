@@ -17,7 +17,6 @@ import JoinChannel from "./JoinChannel";
 import ChatDisplaySplit from "./ChatDisplaySplit";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import {
-  apiClient,
   getContextId,
   getExecutorPublicKey,
   type ResponseData,
@@ -402,17 +401,6 @@ function ChatContainer({
       }
 
       optimisticFunction(updatedMessage);
-    }
-
-    if (isDM) {
-      const fetchContextResponse = await apiClient
-        .node()
-        .getContext(activeChatRef.current?.contextId || "");
-      await new ClientApiDataSource().updateDmHash({
-        sender_id: getExecutorPublicKey() || "",
-        other_user_id: activeChatRef.current?.name || "",
-        new_hash: (fetchContextResponse.data?.rootHash as string) || "",
-      });
     }
 
     if (isThread && currentOpenThreadRef.current) {

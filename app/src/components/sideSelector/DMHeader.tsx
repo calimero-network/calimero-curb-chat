@@ -1,8 +1,6 @@
 import { styled } from "styled-components";
 import StartDMPopup, { type CreateContextResult } from "../popups/StartDMPopup";
 import { useCallback, memo } from "react";
-import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
-import { getGroupId } from "../../constants/config";
 
 const Container = styled.div<{ $isCollapsed?: boolean }>`
   display: flex;
@@ -57,9 +55,6 @@ const DMHeader = memo(function DMHeader({
   isCollapsed,
   onFetchMembers,
 }: DMHeaderProps) {
-  const groupId = getGroupId();
-  const { isAdmin } = useCurrentGroupPermissions(groupId ?? "");
-
   const isValidIdentityId = useCallback(
     (value: string) => {
       const identity = value.trim();
@@ -79,7 +74,7 @@ const DMHeader = memo(function DMHeader({
   return (
     <Container $isCollapsed={isCollapsed}>
       {!isCollapsed && <TextBold>{"Direct Messages"}</TextBold>}
-      {isAdmin && <StartDMPopup
+      <StartDMPopup
         title="Create a new private DM context"
         placeholder="Search by member identity"
         buttonText="Next"
@@ -94,7 +89,7 @@ const DMHeader = memo(function DMHeader({
         validator={isValidIdentityId}
         functionLoader={createDM}
         onOpen={onFetchMembers}
-      />}
+      />
     </Container>
   );
 });

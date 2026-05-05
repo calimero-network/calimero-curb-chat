@@ -594,7 +594,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
 
       const { groupId } = createRes.data;
 
-      await api.current.setDefaultCapabilities(groupId, { defaultCapabilities: 0x0b }).catch(() => {});
+      await api.current.setDefaultCapabilities(groupId, { defaultCapabilities: 0x0F }).catch(() => {});
 
       // Create initial "general" channel so the namespace has something to chat in
       try {

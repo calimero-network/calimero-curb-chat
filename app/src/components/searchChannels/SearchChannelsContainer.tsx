@@ -151,6 +151,7 @@ interface BrowsableChannel extends GroupContextChannel {
 interface SearchChannelsContainerProps {
   onChatSelected: (chat: ActiveChat) => void;
   fetchChannels: () => void;
+  onChannelJoined?: (contextId: string) => void;
 }
 
 function getChannelListName(channel: Pick<GroupContextChannel, "contextId" | "alias" | "info">) {
@@ -166,6 +167,7 @@ function getActiveChannelName(
 export default function SearchChannelsContainer({
   onChatSelected,
   fetchChannels,
+  onChannelJoined,
 }: SearchChannelsContainerProps) {
   const groupId = getGroupId();
   const currentGroupPermissions = useCurrentGroupPermissions(groupId);
@@ -316,6 +318,7 @@ export default function SearchChannelsContainer({
               : ch,
           ),
         );
+        onChannelJoined?.(contextId);
         fetchChannels();
         if (channel) {
           onChatSelected(

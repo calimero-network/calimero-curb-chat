@@ -7,7 +7,6 @@ import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import { getApplicationId, getGroupId, setContextMemberIdentity } from "../../constants/config";
 import { memo, useCallback, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
-import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { log } from "../../utils/logger";
 import {
   getChannelVisibilityOption,
@@ -72,7 +71,6 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const [defaultVisibility, setDefaultVisibility] = useState<"public" | "private">("public");
   const [isLoadingDefaultVisibility, setIsLoadingDefaultVisibility] = useState(false);
   const groupId = getGroupId();
-  const { isAdmin } = useCurrentGroupPermissions(groupId);
 
   const channelNameValidator = useCallback(
     (value: string) => {
@@ -108,46 +106,10 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     }
 
     const nodeApi = new ContextApiDataSource();
-    const groupApi = new GroupApiDataSource();
 
-    let contextGroupId = props.targetGroupId;
-    if (!contextGroupId) {
-      if (isPublic) {
-        // Open channels go directly in the namespace, same as "general"
-        contextGroupId = groupId;
-      } else {
-        // Restricted channels need a subgroup — reuse the existing restricted one or create it
-        const sgListResp = await groupApi.listSubgroups(groupId);
-        if (sgListResp.data && sgListResp.data.length > 0) {
-          const checks = await Promise.all(
-            sgListResp.data.map(async (sg) => {
-              const info = await groupApi.getGroup(sg.groupId);
-              return { groupId: sg.groupId, visibility: info.data?.subgroupVisibility };
-            }),
-          );
-          const match = checks.find((sg) => sg.visibility === "restricted");
-          if (match) {
-            contextGroupId = match.groupId;
-            log.info("ChannelHeader", `Reusing restricted subgroup ${contextGroupId}`);
-          }
-        }
-
-        if (!contextGroupId) {
-          const sgResp = await groupApi.createSubgroup(groupId, { groupAlias: "private" });
-          if (sgResp.error || !sgResp.data) {
-            log.error("ChannelHeader", "Failed to create private subgroup", sgResp.error);
-            return;
-          }
-          contextGroupId = sgResp.data.groupId;
-          const visResp = await groupApi.setSubgroupVisibility(contextGroupId, {
-            subgroupVisibility: "restricted",
-          });
-          if (visResp.error) {
-            log.warn("ChannelHeader", "Failed to set subgroup visibility", visResp.error);
-          }
-        }
-      }
-    }
+    // Create context directly in the namespace group — subgroup creation requires
+    // namespace admin rights which regular members don't have.
+    const contextGroupId = props.targetGroupId ?? groupId;
 
     const createResp = await nodeApi.createGroupContext({
       applicationId: getApplicationId(),
@@ -220,7 +182,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   return (
     <Container $isCollapsed={props.isCollapsed}>
       {!props.isCollapsed && <TextBold>{props.title}</TextBold>}
-      {(props.targetGroupId ?? groupId) && isAdmin && (
+      {(props.targetGroupId ?? groupId) && (
         <CreateChannelPopup
           title={"Create new Channel"}
           inputValue={inputValue}

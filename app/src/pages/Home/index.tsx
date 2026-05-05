@@ -759,6 +759,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       fetchChannels={fetchGroupChannels}
       onChannelCreated={fetchGroupChannels}
       onChannelLeft={groupContextsHook.removeChannel}
+      onChannelJoined={groupContextsHook.unblockChannel}
+      getSubgroupForContext={groupContextsHook.getSubgroupForContext}
       onJoinedChat={onJoinedChat}
       loadPrevMessages={loadPrevMessages}
       chatMembers={chatMembers}

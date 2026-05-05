@@ -8,6 +8,22 @@ import type { GroupContextChannel } from "../types/Common";
 import type { SubgroupEntry } from "../api/groupApi";
 import { log } from "../utils/logger";
 
+const LEFT_CONTEXTS_KEY = "curb:left_contexts";
+
+function readLeftContexts(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LEFT_CONTEXTS_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch { /* */ }
+  return new Set();
+}
+
+function writeLeftContexts(ids: Set<string>) {
+  try {
+    localStorage.setItem(LEFT_CONTEXTS_KEY, JSON.stringify([...ids]));
+  } catch { /* */ }
+}
+
 export interface ContextIdentityMap {
   [contextId: string]: string;
 }
@@ -21,6 +37,7 @@ export function useGroupContexts() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const identitiesRef = useRef<ContextIdentityMap>({});
+  const leftContextIdsRef = useRef<Set<string>>(readLeftContexts());
 
   const fetchGroupContexts = useCallback(async (groupId: string) => {
     if (!groupId) return;
@@ -35,7 +52,8 @@ export function useGroupContexts() {
       async function enrichEntries(
         entries: { contextId: string; alias?: string }[]
       ): Promise<GroupContextChannel[]> {
-        const ids = entries.map((e) => e.contextId);
+        const filtered = entries.filter((e) => !leftContextIdsRef.current.has(e.contextId));
+        const ids = filtered.map((e) => e.contextId);
         await Promise.all(
           ids.filter((id) => !idMap[id]).map(async (ctxId) => {
             try {
@@ -49,7 +67,7 @@ export function useGroupContexts() {
           })
         );
         return Promise.all(
-          entries.map(async ({ contextId: ctxId, alias }) => {
+          filtered.map(async ({ contextId: ctxId, alias }) => {
             const executor = idMap[ctxId];
             if (!executor) {
               return {
@@ -134,6 +152,18 @@ export function useGroupContexts() {
     }
   }, []);
 
+  const getSubgroupForContext = useCallback(
+    (contextId: string): string | undefined => {
+      for (const [subgroupId, sgChannels] of channelsBySubgroup.entries()) {
+        if (sgChannels.some((ch) => ch.contextId === contextId)) {
+          return subgroupId;
+        }
+      }
+      return undefined;
+    },
+    [channelsBySubgroup],
+  );
+
   const getIdentity = useCallback(
     (contextId: string): string | undefined => identitiesRef.current[contextId],
     [],
@@ -141,6 +171,8 @@ export function useGroupContexts() {
 
   const removeChannel = useCallback((contextId: string) => {
     delete identitiesRef.current[contextId];
+    leftContextIdsRef.current.add(contextId);
+    writeLeftContexts(leftContextIdsRef.current);
     setChannels((prev) => prev.filter((ch) => ch.contextId !== contextId));
     setContextIds((prev) => prev.filter((id) => id !== contextId));
     setIdentities((prev) => {
@@ -148,6 +180,11 @@ export function useGroupContexts() {
       delete next[contextId];
       return next;
     });
+  }, []);
+
+  const unblockChannel = useCallback((contextId: string) => {
+    leftContextIdsRef.current.delete(contextId);
+    writeLeftContexts(leftContextIdsRef.current);
   }, []);
 
   return {
@@ -160,6 +197,8 @@ export function useGroupContexts() {
     error,
     fetchGroupContexts,
     getIdentity,
+    getSubgroupForContext,
     removeChannel,
+    unblockChannel,
   };
 }
