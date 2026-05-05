@@ -63,7 +63,7 @@ describe("useDMs", () => {
 
     mockGetGroupMemberIdentity.mockReturnValue("member-me");
     mockListMembers.mockResolvedValue({
-      data: [],
+      data: { members: [] },
       error: null,
     });
     mockResolveCurrentMemberIdentity.mockResolvedValue({
@@ -178,10 +178,12 @@ describe("useDMs", () => {
       error: null,
     });
     mockListMembers.mockResolvedValue({
-      data: [
-        { identity: "member-me", role: "Member" },
-        { identity: "member-you", alias: "Taylor", role: "Member" },
-      ],
+      data: {
+        members: [
+          { identity: "member-me", role: "Member" },
+          { identity: "member-you", alias: "Taylor", role: "Member" },
+        ],
+      },
       error: null,
     });
     mockFetchContextIdentities.mockResolvedValue({

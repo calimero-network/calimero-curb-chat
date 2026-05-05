@@ -24,7 +24,7 @@ steps:
   - name: Install Application
     type: install_application
     node: calimero-node-1
-    path: "../logic/res/curb.wasm"
+    path: "logic/res/curb.wasm"
     dev: true
     outputs:
       app_id: applicationId
@@ -32,7 +32,7 @@ steps:
   - name: Install Application on Node 2
     type: install_application
     node: calimero-node-2
-    path: "../logic/res/curb.wasm"
+    path: "logic/res/curb.wasm"
     dev: true
 
   - name: Create Namespace

@@ -49,6 +49,16 @@ vi.mock("../../api/dataSource/groupApiDataSource", () => ({
   },
 }));
 
+vi.mock("@calimero-network/calimero-client", () => ({
+  getAppEndpointKey: vi.fn(),
+  getAuthConfig: vi.fn(),
+  getContextId: vi.fn(),
+  getExecutorPublicKey: vi.fn(),
+  setExecutorPublicKey: vi.fn(),
+  apiClient: { node: () => ({}) },
+  getJsonRpcClient: vi.fn(() => ({ execute: vi.fn() })),
+}));
+
 vi.mock("../popups/CreateChannelPopup", () => ({
   default: ({
     toggle,
@@ -96,7 +106,7 @@ describe("ChannelHeader", () => {
     });
   });
 
-  it("hides the create channel action for members without create-context permission", () => {
+  it("shows the create channel action for all members (admin check removed)", () => {
     mockUseCurrentGroupPermissions.mockReturnValue({
       loading: false,
       isAdmin: false,
@@ -105,7 +115,7 @@ describe("ChannelHeader", () => {
 
     render(<ChannelHeader title="Channels" />);
 
-    expect(screen.queryByTestId("create-channel-toggle")).not.toBeInTheDocument();
+    expect(screen.getByTestId("create-channel-toggle")).toBeInTheDocument();
   });
 
   it("passes the channel name as the group-context alias when creating a channel", async () => {

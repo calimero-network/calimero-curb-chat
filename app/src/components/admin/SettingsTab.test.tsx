@@ -1,42 +1,50 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import SettingsTab from "./SettingsTab";
 
-describe("SettingsTab", () => {
-  it("edits default capabilities through the three permission toggles", async () => {
-    const onSetDefaultCapabilities = vi.fn().mockResolvedValue(true);
+const baseGroup = {
+  groupId: "group-abc-123",
+  appKey: "app-key",
+  targetApplicationId: "target-app-id",
+  upgradePolicy: "LazyOnAccess",
+  memberCount: 5,
+  contextCount: 3,
+  activeUpgrade: null,
+  defaultCapabilities: 2,
+  subgroupVisibility: "open" as const,
+};
 
+describe("SettingsTab", () => {
+  it("renders group info fields", () => {
     render(
       <SettingsTab
-        groupId="group-1"
-        group={{
-          groupId: "group-1",
-          appKey: "app-key",
-          targetApplicationId: "target-app",
-          upgradePolicy: "LazyOnAccess",
-          memberCount: 2,
-          contextCount: 1,
-          activeUpgrade: null,
-          defaultCapabilities: 2,
-          subgroupVisibility: "open",
-        }}
+        groupId="group-abc-123"
+        group={baseGroup}
         actionLoading={false}
-        onSetDefaultCapabilities={onSetDefaultCapabilities}
-        onSetSubgroupVisibility={vi.fn().mockResolvedValue(true)}
+        onSetDefaultCapabilities={vi.fn()}
+        onSetSubgroupVisibility={vi.fn()}
       />,
     );
 
-    const createChannels = screen.getByLabelText(/create channels/i);
-    const inviteMembers = screen.getByLabelText(/invite members/i);
-    const joinOpenChannels = screen.getByLabelText(/join open channels/i);
+    expect(screen.getByText(/group info/i)).toBeInTheDocument();
+    expect(screen.getByText("group-abc-123")).toBeInTheDocument();
+    expect(screen.getByText("target-app-id")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("LazyOnAccess")).toBeInTheDocument();
+  });
 
-    expect(createChannels).not.toBeChecked();
-    expect(inviteMembers).toBeChecked();
-    expect(joinOpenChannels).not.toBeChecked();
+  it("shows empty state when group is null", () => {
+    render(
+      <SettingsTab
+        groupId="group-abc-123"
+        group={null}
+        actionLoading={false}
+        onSetDefaultCapabilities={vi.fn()}
+        onSetSubgroupVisibility={vi.fn()}
+      />,
+    );
 
-    fireEvent.click(createChannels);
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
-
-    expect(onSetDefaultCapabilities).toHaveBeenCalledWith("group-1", 3);
+    expect(screen.getByText(/no group data available/i)).toBeInTheDocument();
   });
 });

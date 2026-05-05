@@ -35,7 +35,7 @@ describe("GroupInviteModal", () => {
     mockSerializeGroupInvitationPayload.mockReset();
   });
 
-  it("shows the returned group id as the workspace id", () => {
+  it("renders the modal title and copy buttons when given an initial payload", () => {
     render(
       <GroupInviteModal
         groupId="12738d49b49b73f5fa471deb839a70c8a939778d3c0e5a2171203f965232a4a4"
@@ -45,12 +45,9 @@ describe("GroupInviteModal", () => {
       />,
     );
 
-    expect(screen.getByText(/workspace id/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "12738d49b49b73f5fa471deb839a70c8a939778d3c0e5a2171203f965232a4a4",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/invite to workspace/i)).toBeInTheDocument();
+    expect(screen.getByText(/copy web link/i)).toBeInTheDocument();
+    expect(screen.getByText(/copy desktop link/i)).toBeInTheDocument();
   });
 
   it("serializes the wrapped invitation payload when it loads an invite", async () => {

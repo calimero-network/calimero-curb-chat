@@ -98,7 +98,7 @@ test.describe("group contexts", () => {
 
     const data = await adminGet<
       ContextEntry[] | { contexts?: ContextEntry[]; items?: ContextEntry[] }
-    >(`/groups/${env.groupId}/contexts`);
+    >(`/groups/${env.contextGroupId}/contexts`);
 
     const contexts = Array.isArray(data)
       ? data
@@ -110,11 +110,11 @@ test.describe("group contexts", () => {
 
   test("GET /admin-api/groups/:id/contexts contains the seeded contextId", async () => {
     const env = getEnv();
-    if (!env.groupId || !env.contextId) { test.skip(); return; }
+    if (!env.contextGroupId || !env.contextId) { test.skip(); return; }
 
     const data = await adminGet<
       ContextEntry[] | { contexts?: ContextEntry[]; items?: ContextEntry[] }
-    >(`/groups/${env.groupId}/contexts`);
+    >(`/groups/${env.contextGroupId}/contexts`);
 
     const contexts = Array.isArray(data)
       ? data

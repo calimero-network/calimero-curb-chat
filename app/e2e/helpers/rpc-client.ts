@@ -124,23 +124,26 @@ export interface IntegrationEnv {
   accessToken2:   string;
   refreshToken2:  string;
   groupId:        string;
+  contextGroupId: string;
   contextId:      string;
   memberKey:      string;
   memberKey2:     string;
 }
 
 export function getEnv(): IntegrationEnv {
+  const groupId = process.env.E2E_GROUP_ID ?? "";
   return {
-    nodeUrl:       process.env.E2E_NODE_URL        ?? "",
-    nodeUrl2:      process.env.E2E_NODE_URL_2      ?? "",
-    accessToken:   process.env.E2E_ACCESS_TOKEN    ?? "",
-    refreshToken:  process.env.E2E_REFRESH_TOKEN   ?? "",
-    accessToken2:  process.env.E2E_ACCESS_TOKEN_2  ?? "",
-    refreshToken2: process.env.E2E_REFRESH_TOKEN_2 ?? "",
-    groupId:       process.env.E2E_GROUP_ID        ?? "",
-    contextId:     process.env.E2E_CONTEXT_ID      ?? "",
-    memberKey:     process.env.E2E_MEMBER_KEY      ?? "",
-    memberKey2:    process.env.E2E_MEMBER_KEY_2    ?? "",
+    nodeUrl:        process.env.E2E_NODE_URL        ?? "",
+    nodeUrl2:       process.env.E2E_NODE_URL_2      ?? "",
+    accessToken:    process.env.E2E_ACCESS_TOKEN    ?? "",
+    refreshToken:   process.env.E2E_REFRESH_TOKEN   ?? "",
+    accessToken2:   process.env.E2E_ACCESS_TOKEN_2  ?? "",
+    refreshToken2:  process.env.E2E_REFRESH_TOKEN_2 ?? "",
+    groupId,
+    contextGroupId: process.env.E2E_CONTEXT_GROUP_ID ?? groupId,
+    contextId:      process.env.E2E_CONTEXT_ID      ?? "",
+    memberKey:      process.env.E2E_MEMBER_KEY      ?? "",
+    memberKey2:     process.env.E2E_MEMBER_KEY_2    ?? "",
   };
 }
 

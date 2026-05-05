@@ -29,10 +29,32 @@ vi.mock("react-router-dom", () => ({
 vi.mock("../../utils/session", () => ({
   clearStoredSession: mockClearStoredSession,
   clearSessionActivity: mockClearSessionActivity,
+  clearNamespaceReady: vi.fn(),
 }));
 
 vi.mock("../../constants/config", () => ({
   clearWorkspaceSelection: mockClearWorkspaceSelection,
+  getGroupId: () => "group-1",
+  getStoredGroupAlias: () => "Test Workspace",
+}));
+
+vi.mock("@calimero-network/calimero-client", () => ({
+  getAppEndpointKey: vi.fn(),
+  getAuthConfig: vi.fn(),
+  getContextId: vi.fn(),
+  getExecutorPublicKey: vi.fn(),
+  apiClient: { node: () => ({}) },
+  getJsonRpcClient: vi.fn(() => ({ execute: vi.fn() })),
+}));
+
+vi.mock("../../hooks/useCurrentGroupPermissions", () => ({
+  useCurrentGroupPermissions: () => ({ isAdmin: false, canCreateContext: false }),
+}));
+
+vi.mock("../../api/dataSource/groupApiDataSource", () => ({
+  GroupApiDataSource: class {
+    leaveGroup = vi.fn();
+  },
 }));
 
 vi.mock("../common/popups/BaseModal", () => ({
@@ -75,7 +97,6 @@ describe("SettingsPopup", () => {
   });
 
   it("changes workspace without performing a full logout", () => {
-    sessionStorage.setItem("curb_is_context_owner", "true");
     const setIsOpen = vi.fn();
 
     render(
@@ -88,10 +109,9 @@ describe("SettingsPopup", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /change workspace/i }));
 
-    expect(mockClearStoredSession).toHaveBeenCalled();
-    expect(mockClearSessionActivity).toHaveBeenCalled();
     expect(mockClearWorkspaceSelection).toHaveBeenCalled();
     expect(mockLogout).not.toHaveBeenCalled();
+    expect(mockClearStoredSession).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith("/login");
     expect(setIsOpen).toHaveBeenCalledWith(false);
   });

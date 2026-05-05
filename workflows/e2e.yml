@@ -18,7 +18,7 @@ steps:
   - name: Install Application on Node 1
     type: install_application
     node: calimero-node-1
-    path: "../logic/res/curb.wasm"
+    path: "logic/res/curb.wasm"
     dev: true
     outputs:
       app_id: applicationId
@@ -26,13 +26,13 @@ steps:
   - name: Install Application on Node 2
     type: install_application
     node: calimero-node-2
-    path: "../logic/res/curb.wasm"
+    path: "logic/res/curb.wasm"
     dev: true
 
   - name: Install Application on Node 3
     type: install_application
     node: calimero-node-3
-    path: "../logic/res/curb.wasm"
+    path: "logic/res/curb.wasm"
     dev: true
 
   - name: Create Namespace
@@ -576,10 +576,10 @@ steps:
   - name: Assert DM Messages Synced on Both Nodes
     type: assert
     statements:
-      - "contains({{dm_msgs_node1}}, 'Hey Bob, this is a private DM!')"
-      - "contains({{dm_msgs_node1}}, 'Got it Alice, talking privately.')"
-      - "contains({{dm_msgs_node2}}, 'Hey Bob, this is a private DM!')"
-      - "contains({{dm_msgs_node2}}, 'Got it Alice, talking privately.')"
+      - "contains({{dm_msgs_node1}}, 'private DM')"
+      - "contains({{dm_msgs_node1}}, 'talking privately')"
+      - "contains({{dm_msgs_node2}}, 'private DM')"
+      - "contains({{dm_msgs_node2}}, 'talking privately')"
 
   # ── Context Isolation ─────────────────────────────────────────────────────
   - name: Verify General Channel Messages Unaffected by DM

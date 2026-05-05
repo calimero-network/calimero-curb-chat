@@ -4,35 +4,18 @@ import { render, renderHook, act } from "@testing-library/react";
 import { WebSocketProvider, useWebSocket, useWebSocketEvents } from "./WebSocketContext";
 import type { WebSocketEvent } from "../types/WebSocketTypes";
 
-// ── Hoisted mocks (must be defined before vi.mock factories are evaluated) ────
+// Capture the event-callback passed to useSubscription so tests can fire events directly.
+let capturedEventCallback: ((event: WebSocketEvent) => void) | null = null;
 
-const mockSubscription = vi.hoisted(() => ({
-  subscribeToContexts: vi.fn(),
-  subscribeToContext: vi.fn(),
-  unsubscribeFromContext: vi.fn(),
-  unsubscribeAll: vi.fn(),
-  getSubscribedContexts: vi.fn().mockReturnValue([]),
-  isSubscribed: vi.fn().mockReturnValue(false),
-  getSubscriptionCount: vi.fn().mockReturnValue(0),
-}));
-
-// Capture the event-callback passed to useSseSubscription so tests
-// can fire events through it directly.
-let capturedEventCallback: ((event: WebSocketEvent) => Promise<void>) | null = null;
-
-vi.mock("../hooks/useSseSubscription", () => ({
-  useSseSubscription: vi.fn((callback: unknown) => {
-    capturedEventCallback = callback as (event: WebSocketEvent) => Promise<void>;
-    return mockSubscription;
+vi.mock("@calimero-network/mero-react", () => ({
+  useSubscription: vi.fn((_contextIds: unknown, callback: unknown) => {
+    capturedEventCallback = callback as (event: WebSocketEvent) => void;
   }),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   capturedEventCallback = null;
-  mockSubscription.getSubscribedContexts.mockReturnValue([]);
-  mockSubscription.isSubscribed.mockReturnValue(false);
-  mockSubscription.getSubscriptionCount.mockReturnValue(0);
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -69,10 +52,10 @@ describe("WebSocketProvider", () => {
   it("exposes subscription methods via useWebSocket", () => {
     const { result } = renderHook(() => useWebSocket(), { wrapper });
 
-    expect(result.current.subscribeToContexts).toBe(mockSubscription.subscribeToContexts);
-    expect(result.current.subscribeToContext).toBe(mockSubscription.subscribeToContext);
-    expect(result.current.unsubscribeFromContext).toBe(mockSubscription.unsubscribeFromContext);
-    expect(result.current.unsubscribeAll).toBe(mockSubscription.unsubscribeAll);
+    expect(typeof result.current.subscribeToContexts).toBe("function");
+    expect(typeof result.current.subscribeToContext).toBe("function");
+    expect(typeof result.current.unsubscribeFromContext).toBe("function");
+    expect(typeof result.current.unsubscribeAll).toBe("function");
   });
 });
 

@@ -112,10 +112,10 @@ test: unit e2e
 # Build WASM, spin up 2 nodes, run all RPC+admin tests, tear down.
 # Nodes are stopped even if tests fail (trap EXIT in ci.sh).
 ci:
-	@bash scripts/ci.sh
+	@NODE_1_P2P_PORT=$${NODE_1_P2P_PORT:-3628} NODE_2_P2P_PORT=$${NODE_2_P2P_PORT:-3629} bash scripts/ci.sh
 
 ci-no-build:
-	@bash scripts/ci.sh --no-build
+	@NODE_1_P2P_PORT=$${NODE_1_P2P_PORT:-3628} NODE_2_P2P_PORT=$${NODE_2_P2P_PORT:-3629} bash scripts/ci.sh --no-build
 
 ci-stop:
 	@bash scripts/setup-nodes.sh --stop

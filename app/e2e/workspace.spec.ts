@@ -87,29 +87,6 @@ test.describe("No-workspace flow (node has no workspaces)", () => {
     await expect(page.getByRole("button", { name: /create workspace/i })).toBeVisible();
   });
 
-  test("shows invitation code textarea", async ({ page }) => {
-    await page.goto("/login");
-    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator("label").filter({ hasText: /invitation code/i })).toBeVisible();
-    await expect(page.locator("textarea")).toBeVisible();
-  });
-
-  test("Join with code button is disabled when invitation textarea is empty", async ({ page }) => {
-    await page.goto("/login");
-    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
-    const joinBtn = page.getByRole("button", { name: /join with code/i });
-    await expect(joinBtn).toBeVisible();
-    await expect(joinBtn).toBeDisabled();
-  });
-
-  test("Join with code button enables when invitation code is pasted", async ({ page }) => {
-    await page.goto("/login");
-    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
-    await page.locator("textarea").fill("eyJpbnZpdGF0aW9uIjoidGVzdCJ9");
-    const joinBtn = page.getByRole("button", { name: /join with code/i });
-    await expect(joinBtn).toBeEnabled({ timeout: 3_000 });
-  });
-
   test("clicking Create workspace navigates to create form", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
@@ -150,6 +127,8 @@ test.describe("Enter-name step (workspace exists, no cached username)", () => {
 
   test("shows Your name input after identity resolves", async ({ page }) => {
     await page.goto("/login");
+    await expect(page.getByText("Select workspace")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /^continue$/i }).click();
     await expect(
       page.locator("label").filter({ hasText: /your name/i }),
     ).toBeVisible({ timeout: 10_000 });
@@ -157,6 +136,8 @@ test.describe("Enter-name step (workspace exists, no cached username)", () => {
 
   test("Join chat button is disabled when name is empty", async ({ page }) => {
     await page.goto("/login");
+    await expect(page.getByText("Select workspace")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /^continue$/i }).click();
     const joinBtn = page.getByRole("button", { name: /join chat/i });
     await joinBtn.waitFor({ timeout: 10_000 });
     await page.locator("input[type='text'], input:not([type])").first().fill("");
@@ -165,6 +146,8 @@ test.describe("Enter-name step (workspace exists, no cached username)", () => {
 
   test("shows Disconnect node button in enter-name step", async ({ page }) => {
     await page.goto("/login");
+    await expect(page.getByText("Select workspace")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /^continue$/i }).click();
     await expect(
       page.locator("label").filter({ hasText: /your name/i }),
     ).toBeVisible({ timeout: 10_000 });
@@ -194,21 +177,21 @@ test.describe("Create workspace form", () => {
     await expect(page.locator("input[placeholder*='Team']")).toBeVisible();
   });
 
-  test("Create server button is disabled when name is empty", async ({ page }) => {
+  test("Create button is disabled when name is empty", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: /create workspace/i }).click();
-    const createBtn = page.getByRole("button", { name: /create server/i });
+    const createBtn = page.getByRole("button", { name: "Create" });
     await createBtn.waitFor({ timeout: 5_000 });
     await expect(createBtn).toBeDisabled();
   });
 
-  test("Create server button enables when name is typed", async ({ page }) => {
+  test("Create button enables when name is typed", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByText("Welcome to MeroChat")).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: /create workspace/i }).click();
     await page.locator("input[placeholder*='Team']").waitFor({ timeout: 5_000 });
     await page.locator("input[placeholder*='Team']").fill("My Team");
-    await expect(page.getByRole("button", { name: /create server/i })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Create" })).toBeEnabled();
   });
 });

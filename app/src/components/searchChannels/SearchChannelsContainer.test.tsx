@@ -5,12 +5,16 @@ import SearchChannelsContainer from "./SearchChannelsContainer";
 const {
   mockListGroupContexts,
   mockGetContextVisibility,
+  mockListSubgroups,
+  mockGetGroup,
   mockUseCurrentGroupPermissions,
   mockGetContextInfo,
   mockFetchContextIdentities,
 } = vi.hoisted(() => ({
   mockListGroupContexts: vi.fn(),
   mockGetContextVisibility: vi.fn(),
+  mockListSubgroups: vi.fn(),
+  mockGetGroup: vi.fn(),
   mockUseCurrentGroupPermissions: vi.fn(),
   mockGetContextInfo: vi.fn(),
   mockFetchContextIdentities: vi.fn(),
@@ -62,6 +66,8 @@ vi.mock("../../api/dataSource/groupApiDataSource", () => ({
   GroupApiDataSource: class MockGroupApiDataSource {
     listGroupContexts = mockListGroupContexts;
     getContextVisibility = mockGetContextVisibility;
+    listSubgroups = mockListSubgroups;
+    getGroup = mockGetGroup;
   },
 }));
 
@@ -83,6 +89,8 @@ describe("SearchChannelsContainer", () => {
   beforeEach(() => {
     mockListGroupContexts.mockReset();
     mockGetContextVisibility.mockReset();
+    mockListSubgroups.mockReset();
+    mockGetGroup.mockReset();
     mockUseCurrentGroupPermissions.mockReset();
     mockGetContextInfo.mockReset();
     mockFetchContextIdentities.mockReset();
@@ -90,6 +98,8 @@ describe("SearchChannelsContainer", () => {
     mockListGroupContexts.mockResolvedValue({
       data: [],
     });
+    mockListSubgroups.mockResolvedValue({ data: [] });
+    mockGetGroup.mockResolvedValue({ data: null, error: null });
     mockGetContextVisibility.mockResolvedValue({
       data: { mode: "open" },
       error: null,
