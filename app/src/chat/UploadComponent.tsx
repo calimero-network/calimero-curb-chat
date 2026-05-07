@@ -92,7 +92,7 @@ export default function UploadComponent({
   text,
   onError,
   onUploaded,
-  expectedHash = "",
+  expectedHash: _expectedHash = "",
   onReplace,
 }: UploadComponentProps) {
   const [uploading, setUploading] = useState(false);

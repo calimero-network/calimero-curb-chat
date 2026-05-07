@@ -56,7 +56,9 @@ interface DetailsContainerProps {
   nonChannelMembers?: Map<string, string>;
   channelMeta: ChannelMeta;
   isOwner?: boolean;
+  canLeave?: boolean;
   handleDeleteChannel?: () => void;
+  handleLeaveChannel?: () => void;
   promoteModerator: (user: string) => void;
   reFetchChannelMembers: () => void;
 }
@@ -67,8 +69,9 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
   const userList = props.userList;
   const channelMeta = props.channelMeta;
   const isOwner = props.isOwner ?? false;
+  const canLeave = props.canLeave ?? false;
   const handleDeleteChannel = props.handleDeleteChannel;
-  const promoteModerator = props.promoteModerator;
+  const handleLeaveChannel = props.handleLeaveChannel;
   const nonInvitedUserList = props.nonInvitedUserList;
   const reFetchChannelMembers = props.reFetchChannelMembers;
   const userCount = userList.size;
@@ -146,7 +149,9 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
             channelMeta.createdBy
           }
           isOwner={isOwner}
+          canLeave={canLeave}
           handleDeleteChannel={handleDeleteChannel}
+          handleLeaveChannel={handleLeaveChannel}
           channelName={channelName}
         />
       )}

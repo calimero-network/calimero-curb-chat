@@ -93,6 +93,7 @@ export default function ChannelDetailsPopup({
   const currentIdentity = getExecutorPublicKey() as string;
   const isOwner = !!channelMeta.createdBy && channelMeta.createdBy === currentIdentity;
   const canDelete = isOwner || isAdmin;
+  const canLeave = !!chat.contextId && !isOwner;
   const contextSubgroupId = chat.contextId ? getSubgroupForContext?.(chat.contextId) : undefined;
 
   const handleDeleteChannel = async () => {
@@ -102,6 +103,16 @@ export default function ChannelDetailsPopup({
     if (contextSubgroupId) {
       await new GroupApiDataSource().deleteGroup(contextSubgroupId).catch(() => {});
     }
+    onChannelLeft?.(chat.contextId);
+    setActiveChat(null);
+    fetchChannels();
+    setIsOpen(false);
+  };
+
+  const handleLeaveChannel = async () => {
+    if (!chat.contextId) return;
+    const result = await new GroupApiDataSource().leaveContext(chat.contextId);
+    if (result.error) return;
     onChannelLeft?.(chat.contextId);
     setActiveChat(null);
     fetchChannels();
@@ -132,7 +143,9 @@ export default function ChannelDetailsPopup({
       nonChannelMembers={nonChannelMembers}
       channelMeta={channelMeta}
       isOwner={canDelete}
+      canLeave={canLeave}
       handleDeleteChannel={handleDeleteChannel}
+      handleLeaveChannel={handleLeaveChannel}
       promoteModerator={() => {}}
       reFetchChannelMembers={reFetchChannelMembers}
     />

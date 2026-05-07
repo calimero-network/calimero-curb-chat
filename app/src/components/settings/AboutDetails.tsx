@@ -8,6 +8,8 @@ interface AboutDetailsProps {
   manager: string;
   isOwner?: boolean;
   handleDeleteChannel?: () => void;
+  handleLeaveChannel?: () => void;
+  canLeave?: boolean;
 }
 
 const InfoCard = styled.div`
@@ -64,6 +66,10 @@ const ActionButton = styled.button<{ $danger?: boolean }>`
     border-color: rgba(255, 59, 59, 0.35);
     color: #ff8585;
   }
+
+  & + & {
+    margin-top: 0.5rem;
+  }
 `;
 
 const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
@@ -82,6 +88,11 @@ const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
       {props.isOwner && (
         <ActionButton onClick={props.handleDeleteChannel}>
           Delete Channel
+        </ActionButton>
+      )}
+      {props.canLeave && (
+        <ActionButton onClick={props.handleLeaveChannel}>
+          Leave Channel
         </ActionButton>
       )}
     </>

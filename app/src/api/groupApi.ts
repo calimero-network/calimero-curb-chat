@@ -109,6 +109,21 @@ export interface JoinGroupContextResponse {
   memberPublicKey: string;
 }
 
+export interface LeaveContextResponse {
+  contextId: string;
+  memberPublicKey: string;
+}
+
+export interface LeaveGroupResponse {
+  groupId: string;
+  memberPublicKey: string;
+}
+
+export interface LeaveNamespaceResponse {
+  namespaceId: string;
+  memberPublicKey: string;
+}
+
 export interface SyncGroupResponse {
   groupId: string;
   appKey: string;
@@ -207,6 +222,9 @@ export interface GroupApi {
     groupId: string,
     request: JoinGroupContextRequest,
   ): ApiResponse<JoinGroupContextResponse>;
+  leaveContext(contextId: string): ApiResponse<LeaveContextResponse>;
+  leaveGroup(groupId: string): ApiResponse<LeaveGroupResponse>;
+  leaveNamespace(namespaceId: string): ApiResponse<LeaveNamespaceResponse>;
   syncGroup(groupId: string): ApiResponse<SyncGroupResponse>;
 
   getContextVisibility(

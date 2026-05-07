@@ -22,6 +22,9 @@ import type {
   JoinGroupContextResponse,
   JoinGroupRequest,
   JoinGroupResponse,
+  LeaveContextResponse,
+  LeaveGroupResponse,
+  LeaveNamespaceResponse,
   ManageAllowlistRequest,
   MemberCapabilities,
   RemoveMemberRequest,
@@ -603,6 +606,67 @@ export class GroupApiDataSource implements GroupApi {
       });
     } catch (error) {
       return catchError("joinGroupContext", error);
+    }
+  }
+
+  async leaveContext(contextId: string): ApiResponse<LeaveContextResponse> {
+    try {
+      const normalizedId = normalizeContextId(contextId);
+      const response = await axios.post(
+        `${this.base()}/contexts/${normalizedId}/leave`,
+        {},
+        { headers: getAuthHeaders() },
+      );
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+      const data = response.data.data;
+      return ok({
+        contextId: data?.contextId ?? normalizedId,
+        memberPublicKey: data?.memberPublicKey ?? "",
+      });
+    } catch (error) {
+      return catchError("leaveContext", error);
+    }
+  }
+
+  async leaveGroup(groupId: string): ApiResponse<LeaveGroupResponse> {
+    try {
+      const response = await axios.post(
+        `${this.base()}/groups/${groupId}/leave`,
+        {},
+        { headers: getAuthHeaders() },
+      );
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+      const data = response.data.data;
+      return ok({
+        groupId: data?.groupId ?? groupId,
+        memberPublicKey: data?.memberPublicKey ?? "",
+      });
+    } catch (error) {
+      return catchError("leaveGroup", error);
+    }
+  }
+
+  async leaveNamespace(namespaceId: string): ApiResponse<LeaveNamespaceResponse> {
+    try {
+      const response = await axios.post(
+        `${this.base()}/namespaces/${namespaceId}/leave`,
+        {},
+        { headers: getAuthHeaders() },
+      );
+      if (response.status !== 200) {
+        return httpFail(response.status, response.statusText);
+      }
+      const data = response.data.data;
+      return ok({
+        namespaceId: data?.namespaceId ?? namespaceId,
+        memberPublicKey: data?.memberPublicKey ?? "",
+      });
+    } catch (error) {
+      return catchError("leaveNamespace", error);
     }
   }
 

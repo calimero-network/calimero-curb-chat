@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import { styled, keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
 import BaseModal from "../common/popups/BaseModal";
@@ -16,12 +16,7 @@ import {
 import { clearMessengerDisplayName } from "../../utils/messengerName";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
-import {
-  generateInvitationDeepLink,
-  generateInvitationUrl,
-  serializeGroupInvitationPayload,
-} from "../../utils/invitation";
-
+import { useToast } from "../../contexts/ToastContext";
 // ─── Animations ────────────────────────────────────────────────────────────────
 
 const fadeIn = keyframes`
@@ -153,88 +148,71 @@ const RoleBadge = styled.span<{ $admin: boolean; $mod?: boolean }>`
     $admin ? "#a5ff11" : $mod ? "#a78bfa" : "rgba(255, 255, 255, 0.55)"};
 `;
 
-// ─── Invite section ────────────────────────────────────────────────────────────
+// ─── Danger zone ────────────────────────────────────────────────────────────
 
-const Section = styled.div`
-  margin-bottom: 1.25rem;
-`;
-
-const SectionLabel = styled.div`
-  font-size: 0.68rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 0.6rem;
-`;
-
-const InviteBox = styled.div`
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
+const DangerZone = styled.div`
+  margin-top: 0.75rem;
   padding: 0.75rem 0.875rem;
-`;
-
-const InviteRow = styled.div`
+  background: rgba(255, 59, 59, 0.04);
+  border: 1px solid rgba(255, 59, 59, 0.18);
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: space-between;
+  gap: 0.75rem;
 `;
 
-const InviteDescription = styled.p`
+const DangerLabel = styled.span`
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.4);
-  margin: 0 0 0.75rem;
-  line-height: 1.4;
+  font-weight: 500;
+  color: rgba(255, 100, 100, 0.7);
 `;
 
-const CopyRow = styled.div`
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.625rem;
-`;
-
-const InviteStatusText = styled.span`
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.35);
-`;
-
-const ActionButton = styled.button<{ $variant?: "primary" | "secondary" | "ghost" }>`
+const LeaveWorkspaceButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.375rem;
   padding: 0.4rem 0.875rem;
   border-radius: 7px;
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
-  flex: 1;
-  justify-content: center;
+  border: 1px solid rgba(255, 80, 80, 0.3);
+  background: rgba(255, 80, 80, 0.08);
+  color: rgba(255, 110, 110, 0.85);
 
-  ${({ $variant = "secondary" }) =>
-    $variant === "primary"
-      ? `
-    border: 1px solid rgba(165, 255, 17, 0.35);
-    background: rgba(165, 255, 17, 0.08);
-    color: #a5ff11;
-    &:hover { background: rgba(165, 255, 17, 0.14); border-color: rgba(165, 255, 17, 0.55); }
-    &:disabled { opacity: 0.4; cursor: default; }
-  `
-      : $variant === "ghost"
-      ? `
-    border: 1px solid rgba(255,255,255,0.09);
-    background: transparent;
-    color: rgba(255,255,255,0.55);
-    &:hover { background: rgba(255,255,255,0.06); color: #fff; }
-  `
-      : `
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(255, 255, 255, 0.72);
-    &:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.08); color: #fff; }
-    &:disabled { opacity: 0.4; cursor: default; }
-  `}
+  &:hover {
+    border-color: rgba(255, 80, 80, 0.55);
+    background: rgba(255, 80, 80, 0.16);
+    color: #ff7a7a;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const ConfirmActions = styled.div`
+  display: flex;
+  gap: 0.4rem;
+`;
+
+const CancelLeaveButton = styled.button`
+  padding: 0.4rem 0.75rem;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
 `;
 
 // ─── Session section ────────────────────────────────────────────────────────────
@@ -313,62 +291,12 @@ export default function SettingsPopup({
 }: SettingsPopupProps) {
   const { logout } = useMero();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const groupId = getGroupId();
   const namespaceName = getStoredGroupAlias(groupId) || groupId.slice(0, 12) + "…";
   const { isAdmin, isModerator } = useCurrentGroupPermissions(groupId);
-
-  // ── Invitation state ────────────────────────────────────────────────────────
-  const [invitePayload, setInvitePayload] = useState("");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteError, setInviteError] = useState("");
-  const [copiedTarget, setCopiedTarget] = useState<"web" | "desktop" | "">("");
-
-  const webUrl = useMemo(
-    () => (invitePayload ? generateInvitationUrl(invitePayload) : ""),
-    [invitePayload],
-  );
-  const desktopUrl = useMemo(
-    () => (invitePayload ? generateInvitationDeepLink(invitePayload) : ""),
-    [invitePayload],
-  );
-
-  // Reset invite state when popup closes
-  useEffect(() => {
-    if (!isOpen) {
-      setInvitePayload("");
-      setInviteError("");
-      setCopiedTarget("");
-    }
-  }, [isOpen]);
-
-  const handleGenerateInvite = async () => {
-    setInviteLoading(true);
-    setInviteError("");
-    const response = await new GroupApiDataSource().createInvitation(groupId);
-    setInviteLoading(false);
-    if (response.error || !response.data) {
-      setInviteError(response.error?.message ?? "Failed to generate invitation");
-      return;
-    }
-    setInvitePayload(
-      serializeGroupInvitationPayload({
-        invitation: response.data.invitation,
-        groupAlias: response.data.groupAlias,
-      }),
-    );
-  };
-
-  const handleCopy = async (target: "web" | "desktop") => {
-    const value = target === "web" ? webUrl : desktopUrl;
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedTarget(target);
-      setTimeout(() => setCopiedTarget(""), 2000);
-    } catch {
-      prompt("Copy this invite link:", value);
-    }
-  };
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   // ── Session handlers ────────────────────────────────────────────────────────
 
@@ -390,6 +318,33 @@ export default function SettingsPopup({
     logout();
     if (nodeUrl) localStorage.setItem("mero:node_url", nodeUrl);
     setIsOpen(false);
+  };
+
+  const handleLeaveWorkspace = async () => {
+    if (!groupId || leaving) return;
+    setLeaving(true);
+    const result = await new GroupApiDataSource().leaveNamespace(groupId);
+    setLeaving(false);
+    if (result.error) {
+      addToast({
+        title: "Leave workspace",
+        message: result.error.message || "Failed to leave workspace",
+        type: "channel",
+        duration: 5000,
+      });
+      return;
+    }
+    addToast({
+      title: "Left workspace",
+      message: "You have left the workspace.",
+      type: "channel",
+      duration: 3000,
+    });
+    clearWorkspaceSelection();
+    clearNamespaceReady();
+    setConfirmLeave(false);
+    setIsOpen(false);
+    navigate("/login");
   };
 
   const popupContent = (
@@ -420,6 +375,29 @@ export default function SettingsPopup({
         <RoleBadge $admin={isAdmin} $mod={isModerator}>{isAdmin ? "Admin" : isModerator ? "Moderator" : "Member"}</RoleBadge>
       </WorkspaceCard>
 
+      {/* Leave workspace (danger) */}
+      <DangerZone>
+        {confirmLeave ? (
+          <>
+            <DangerLabel>Leave this workspace? You'll need a new invitation to return.</DangerLabel>
+            <ConfirmActions>
+              <CancelLeaveButton onClick={() => setConfirmLeave(false)} disabled={leaving}>
+                Cancel
+              </CancelLeaveButton>
+              <LeaveWorkspaceButton onClick={handleLeaveWorkspace} disabled={leaving}>
+                {leaving ? "Leaving…" : "Confirm leave"}
+              </LeaveWorkspaceButton>
+            </ConfirmActions>
+          </>
+        ) : (
+          <>
+            <DangerLabel>Leave workspace</DangerLabel>
+            <LeaveWorkspaceButton onClick={() => setConfirmLeave(true)}>
+              Leave workspace
+            </LeaveWorkspaceButton>
+          </>
+        )}
+      </DangerZone>
 
       <LogoutSection>
         <LogoutLabel>Session</LogoutLabel>

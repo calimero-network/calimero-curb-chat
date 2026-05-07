@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import SettingsTab from "./SettingsTab";
+import type { GroupInfo } from "../../api/groupApi";
 
-const baseGroup = {
+const baseGroup: GroupInfo = {
   groupId: "group-abc-123",
   appKey: "app-key",
   targetApplicationId: "target-app-id",
@@ -11,7 +12,7 @@ const baseGroup = {
   contextCount: 3,
   activeUpgrade: null,
   defaultCapabilities: 2,
-  subgroupVisibility: "open" as const,
+  subgroupVisibility: "open",
 };
 
 describe("SettingsTab", () => {

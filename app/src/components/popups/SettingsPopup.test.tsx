@@ -54,7 +54,12 @@ vi.mock("../../hooks/useCurrentGroupPermissions", () => ({
 vi.mock("../../api/dataSource/groupApiDataSource", () => ({
   GroupApiDataSource: class {
     leaveGroup = vi.fn();
+    leaveNamespace = vi.fn().mockResolvedValue({ data: null, error: null });
   },
+}));
+
+vi.mock("../../contexts/ToastContext", () => ({
+  useToast: () => ({ addToast: vi.fn() }),
 }));
 
 vi.mock("../common/popups/BaseModal", () => ({
