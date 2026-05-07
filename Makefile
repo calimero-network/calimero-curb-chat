@@ -135,19 +135,19 @@ workflows: logic-build
 	@for yml in $(WORKFLOW_FILES); do \
 		echo ""; \
 		echo "▶  Running $$yml ..."; \
-		merobox stop --all 2>/dev/null || true; \
-		merobox nuke --force 2>/dev/null || true; \
-		if ! merobox bootstrap run $$yml; then \
+		(cd workflows && merobox stop --all) 2>/dev/null || true; \
+		(cd workflows && merobox nuke --force) 2>/dev/null || true; \
+		if ! (cd workflows && merobox bootstrap run $$(basename $$yml)); then \
 			echo ""; \
 			echo "  ✗  $$yml failed"; \
-			merobox stop --all 2>/dev/null || true; \
-			merobox nuke --force 2>/dev/null || true; \
+			(cd workflows && merobox stop --all) 2>/dev/null || true; \
+			(cd workflows && merobox nuke --force) 2>/dev/null || true; \
 			exit 1; \
 		fi; \
 		echo "  ✓  $$yml passed"; \
 	done
-	@merobox stop --all 2>/dev/null || true
-	@merobox nuke --force 2>/dev/null || true
+	@(cd workflows && merobox stop --all) 2>/dev/null || true
+	@(cd workflows && merobox nuke --force) 2>/dev/null || true
 	@echo ""
 	@echo "  ✓  All workflow tests passed"
 

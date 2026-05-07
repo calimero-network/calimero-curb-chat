@@ -10,7 +10,7 @@ force_pull_image: true
 nodes:
   chain_id: testnet-1
   count: 3
-  image: ghcr.io/calimero-network/merod:prerelease
+  image: ghcr.io/calimero-network/merod:0.10.1-rc.32
   prefix: calimero-node
 
 steps:
@@ -18,29 +18,29 @@ steps:
   - name: Install Application on Node 1
     type: install_application
     node: calimero-node-1
-    path: "logic/res/curb.wasm"
+    path: "../logic/res/curb.wasm"
     dev: true
     outputs:
-      app_id: applicationId
+      app_id: id
 
   - name: Install Application on Node 2
     type: install_application
     node: calimero-node-2
-    path: "logic/res/curb.wasm"
+    path: "../logic/res/curb.wasm"
     dev: true
 
   - name: Install Application on Node 3
     type: install_application
     node: calimero-node-3
-    path: "logic/res/curb.wasm"
+    path: "../logic/res/curb.wasm"
     dev: true
 
   - name: Create Namespace
-    type: create_namespace
+    type: create_group
     node: calimero-node-1
     application_id: "{{app_id}}"
     outputs:
-      namespace_id: namespaceId
+      namespace_id: id
 
   - name: Assert Namespace Created
     type: assert
@@ -54,7 +54,7 @@ steps:
     group_id: "{{namespace_id}}"
     params: '{"name": "General", "context_type": "Channel", "description": "Main channel", "created_at": 1751953000}'
     outputs:
-      channel_id: contextId
+      channel_id: id
       alice_key: memberPublicKey
 
   - name: Assert Channel Created
@@ -80,9 +80,9 @@ steps:
 
   # ── Namespace Invitations ─────────────────────────────────────────────────
   - name: Invite Node 2 (Private)
-    type: invite_identity
+    type: create_group_invitation
     node: calimero-node-1
-    namespace_id: "{{namespace_id}}"
+    group_id: "{{namespace_id}}"
     outputs:
       invite_bob: invitation
 
@@ -93,9 +93,9 @@ steps:
       - "{{invite_bob}} != ''"
 
   - name: Create Open Invitation for Node 3
-    type: invite_open
+    type: create_group_invitation
     node: calimero-node-1
-    namespace_id: "{{namespace_id}}"
+    group_id: "{{namespace_id}}"
     outputs:
       invite_carol: invitation
 
@@ -106,25 +106,27 @@ steps:
       - "{{invite_carol}} != ''"
 
   - name: Node 2 Joins Namespace (Private Invite)
-    type: join_namespace
+    type: join_group
     node: calimero-node-2
-    namespace_id: "{{namespace_id}}"
+    group_id: "{{namespace_id}}"
     invitation: "{{invite_bob}}"
 
   - name: Node 3 Joins Namespace (Open Invite)
-    type: join_namespace
+    type: join_group
     node: calimero-node-3
-    namespace_id: "{{namespace_id}}"
+    group_id: "{{namespace_id}}"
     invitation: "{{invite_carol}}"
 
   - name: Node 2 Joins General Channel
-    type: join_context
+    type: join_group_context
     node: calimero-node-2
+    group_id: "{{namespace_id}}"
     context_id: "{{channel_id}}"
 
   - name: Node 3 Joins General Channel
-    type: join_context
+    type: join_group_context
     node: calimero-node-3
+    group_id: "{{namespace_id}}"
     context_id: "{{channel_id}}"
 
   - name: Wait for 3-Node Channel Sync
@@ -466,17 +468,29 @@ steps:
     group_id: "{{namespace_id}}"
     params: '{"name": "Alice-Bob DM", "context_type": "Dm", "description": "", "created_at": 1751953100}'
     outputs:
-      dm_id: contextId
+      dm_id: id
 
   - name: Assert DM Context Created
     type: assert
     statements:
       - "is_set({{dm_id}})"
 
+  - name: Invite Bob to DM Context
+    type: invite_identity
+    node: calimero-node-1
+    context_id: "{{dm_id}}"
+    capability: member
+    grantee_id: "{{bob_key}}"
+    granter_id: "{{alice_key}}"
+    outputs:
+      bob_dm_invite: invitation
+
   - name: Node 2 Joins DM Context
     type: join_context
     node: calimero-node-2
     context_id: "{{dm_id}}"
+    invitee_id: "{{bob_key}}"
+    invitation: "{{bob_dm_invite}}"
 
   - name: Wait for DM Context Sync
     type: wait_for_sync
