@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import BaseModal from "../common/popups/BaseModal";
 import Loader from "../loader/Loader";
-import { styled, keyframes } from "styled-components";
+import { styled } from "styled-components";
 import { usePersistentState } from "../../hooks/usePersistentState";
 import { Button, Input } from "@calimero-network/mero-ui";
 
 // ─── Animations ────────────────────────────────────────────────────────────────
 
-const spin = keyframes`to { transform: rotate(360deg); }`;
+
 
 // ─── Layout ────────────────────────────────────────────────────────────────────
 
@@ -139,15 +139,6 @@ const SuggestionId = styled.div`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-`;
-
-const BtnSpinner = styled.div`
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(165, 255, 17, 0.3);
-  border-top-color: #a5ff11;
-  border-radius: 50%;
-  animation: ${spin} 0.7s linear infinite;
 `;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────

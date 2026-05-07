@@ -1,5 +1,5 @@
 import { styled, keyframes } from "styled-components";
-import Loader from "../loader/Loader";
+
 import { useEffect, useState } from "react";
 import BaseModal from "../common/popups/BaseModal";
 import { Button, Input } from "@calimero-network/mero-ui";

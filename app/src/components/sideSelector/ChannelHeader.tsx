@@ -88,7 +88,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
 
   const createChannel = async (
     channelName: string,
-    isPublic: boolean,
+    _isPublic: boolean,
     _isReadOnly: boolean,
   ) => {
     if (!groupId) {

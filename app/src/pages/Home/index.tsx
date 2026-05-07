@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppContainer from "../../components/common/AppContainer";
 import {
   type ActiveChat,
-  type GroupContextChannel,
   type ChatMessagesData,
   type ChatMessagesDataWithOlder,
   type CurbMessage,

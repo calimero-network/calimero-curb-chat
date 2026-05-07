@@ -144,7 +144,7 @@ export function useMessages() {
       activeChat: ActiveChat | null,
       isDM: boolean,
       group: string,
-      contextId: string,
+      _contextId: string,
     ): Promise<CurbMessage[]> => {
       if (!activeChat) return [];
 

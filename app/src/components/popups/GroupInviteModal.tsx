@@ -133,51 +133,6 @@ const ErrorBanner = styled.div`
   line-height: 1.4;
 `;
 
-const SuccessBanner = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.6rem 0.875rem;
-  background: rgba(165, 255, 17, 0.06);
-  border: 1px solid rgba(165, 255, 17, 0.15);
-  border-radius: 8px;
-  color: #a5ff11;
-  font-size: 0.78rem;
-  font-weight: 500;
-`;
-
-const Field = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-`;
-
-const FieldLabel = styled.div`
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.3);
-`;
-
-const CodeBox = styled.div`
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  padding: 0.65rem 0.875rem;
-  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.55);
-  word-break: break-all;
-  line-height: 1.5;
-  max-height: 80px;
-  overflow-y: auto;
-
-  &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
-`;
-
 const CopyBtn = styled.button<{ $copied: boolean }>`
   width: 100%;
   padding: 0.6rem 1rem;
@@ -233,7 +188,6 @@ export default function GroupInviteModal({
   initialInvitationPayload,
   title = "Invite to workspace",
   subtitle = "Share this link with anyone you want to invite.",
-  successMessage = "Invitation ready to share",
   doneLabel = "Done",
 }: GroupInviteModalProps) {
   const [invitationPayload, setInvitationPayload] = useState(
