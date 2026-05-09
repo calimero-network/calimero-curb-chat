@@ -12,18 +12,27 @@ description: >
       CAN_JOIN_OPEN_SUBGROUPS) sees it via parent-walk and joins it.
     - Both nodes exchange messages in the channel that node-2 created.
 
-  ⚠️ Requires merod ≥ rc.36 (or master). The "Node 2 creates a channel
-  context" step fails on **rc.35 and earlier** with `application not found`
-  because the group-invitation payload didn't carry `application_id` until
-  core commit b21acfda (PR-pending), tagged 82 minutes after 0.10.1-rc.35.
-  Without that fix, node-2's local copy of the namespace metadata has
-  `target_application_id = 0x0…0` and create_context aborts.
+  ⚠️ Requires merod ≥ rc.36 (or master). On rc.35, BOTH paths to making
+  node-2 a non-admin namespace member fail downstream:
+
+    1. Invitation flow (create_namespace_invitation → join_namespace):
+       node-2 ends up with `target_application_id = 0x0…0` because the
+       invitation payload doesn't carry `application_id` until core commit
+       `b21acfda` (tagged 82 min after 0.10.1-rc.35). create_context then
+       aborts with "application not found" against the zero hash.
+
+    2. Direct admin add (add_group_members on namespace from node-1):
+       node-2's local store never learns about the namespace at all —
+       create_context aborts with "group not found". The propagation
+       requires an explicit join op from node-2's side, which we don't
+       have without invitation.
 
   This workflow is intentionally opt-in (not in WORKFLOW_FILES) so
   `make workflows` keeps passing on rc.35. Run it explicitly with:
     make workflows-extra
-  When merod ships an rc that includes b21acfda, move this back into
-  WORKFLOW_FILES.
+  When merod ships an rc that includes b21acfda (and the matching
+  add_group_members propagation fix, if that's separate), move this
+  back into WORKFLOW_FILES.
 
 force_pull_image: true
 
@@ -80,24 +89,20 @@ steps:
     type: wait
     seconds: 3
 
-  - name: Node 1 creates invitation for Node 2
-    type: create_group_invitation
+  # Use `add_group_members` (battleships pattern) instead of the invitation
+  # flow. The invitation payload on rc.35 doesn't carry `application_id`,
+  # which leaves node-2's local namespace meta with `target_application_id =
+  # 0x0…0` and breaks the subsequent `create_context`. Direct add_group_members
+  # writes the namespace governance op including application_id correctly.
+  - name: Node 1 adds Node 2 as namespace member
+    type: add_group_members
     node: calimero-node-1
     group_id: "{{namespace_id}}"
-    outputs:
-      invite_bob: invitation
+    members:
+      - identity: "{{bob_key}}"
+        role: Member
 
-  - name: Node 2 joins namespace via invitation
-    type: join_group
-    node: calimero-node-2
-    group_id: "{{namespace_id}}"
-    invitation: "{{invite_bob}}"
-
-  # `wait_for_sync` on the namespace itself is flaky at this point — the
-  # join op has been applied but state-hash convergence between the two
-  # nodes can lag past the 30s timeout. e2e.yml doesn't sync here either;
-  # a fixed wait is enough before the next admin-API call.
-  - name: Settle after namespace join
+  - name: Settle after add_group_members
     type: wait
     seconds: 5
   - name: Node 2 creates a channel context

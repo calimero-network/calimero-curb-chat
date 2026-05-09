@@ -263,8 +263,18 @@ async function resolveAppId(preferred: string): Promise<string> {
   return ids.includes(preferred) ? preferred : ids[0];
 }
 
+// When the alias is missing the user gets shown an ID slice. That's
+// the "weird ID instead of name" complaint from the explainer — the
+// aliased namespace metadata isn't propagated by rc.35 governance to
+// nodes that joined via invitation, and only a namespace admin can set
+// it locally. Until the upstream fix ships, fall back to a friendlier
+// "Workspace {short-id}" label rather than the bare hex slice.
 function nsLabel(g: GroupSummary): string {
-  return g.alias?.trim() || `${g.groupId.slice(0, 10)}…`;
+  const alias = g.alias?.trim();
+  if (alias) return alias;
+  const stored = getStoredGroupAlias(g.groupId).trim();
+  if (stored) return stored;
+  return `Workspace ${g.groupId.slice(0, 6)}`;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -429,11 +439,28 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       setInviteStatus("Joining channels…");
       const ctxRes = await api.current.listGroupContexts(groupId);
       if (ctxRes.data) {
+        // Display name to seed the per-context member alias with —
+        // priority: the namespace-level identity name, then the
+        // messenger-level cached name, then the typed `afterJoin` value.
+        // Without this, node-2 shows up to other members as a raw
+        // identity hash for the first session in each newly-joined
+        // context (the explainer's "random ID displayed as name" bug).
+        const seedAlias =
+          getIdentityDisplayName(memberIdentity) ||
+          getMessengerDisplayName() ||
+          afterJoin?.trim() ||
+          "";
         for (const ctx of ctxRes.data) {
           try {
             const joinCtx = await api.current.joinGroupContext(groupId, { contextId: ctx.contextId });
-            if (joinCtx.data?.memberPublicKey) {
-              setContextMemberIdentity(ctx.contextId, joinCtx.data.memberPublicKey);
+            const memberKey = joinCtx.data?.memberPublicKey;
+            if (memberKey) {
+              setContextMemberIdentity(ctx.contextId, memberKey);
+              if (seedAlias) {
+                api.current
+                  .setMemberAlias(ctx.contextId, memberKey, { alias: seedAlias })
+                  .catch(() => {/* non-fatal — alias is best-effort */});
+              }
             }
           } catch { /* non-fatal */ }
         }
