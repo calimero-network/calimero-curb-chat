@@ -122,7 +122,9 @@ failed=0
 for yml in "$@"; do
   rel="${yml#"$REPO_ROOT/"}"
   step "Running $rel"
-  if ! (cd "$WORKFLOWS_DIR" && merobox bootstrap run "${MEROBOX_FLAGS[@]}" "$(basename "$yml")"); then
+  # `${arr[@]+"${arr[@]}"}` is the set -u-safe way to expand a possibly-empty
+  # array on macOS bash 3.2 — plain `"${arr[@]}"` triggers "unbound variable".
+  if ! (cd "$WORKFLOWS_DIR" && merobox bootstrap run ${MEROBOX_FLAGS[@]+"${MEROBOX_FLAGS[@]}"} "$(basename "$yml")"); then
     red "$rel failed"
     failed=1
     # Clean between workflows even on failure so the next one starts fresh

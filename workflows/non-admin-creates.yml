@@ -1,0 +1,253 @@
+name: Curb — Non-Admin Member Operations
+description: >
+  Validates the rc.32+ subgroup-visibility + parent-walk inheritance + member
+  capability model end-to-end. Specifically:
+    - Node-1 (admin) creates a namespace with CAN_CREATE_CONTEXT |
+      CAN_INVITE_MEMBERS | CAN_JOIN_OPEN_SUBGROUPS | MANAGE_MEMBERS = 15 as
+      default member capabilities.
+    - Node-2 joins as a *non-admin* member.
+    - Node-2 creates a NEW channel context — covered by CAN_CREATE_CONTEXT,
+      not by `require_namespace_admin`.
+    - Node-2 marks the channel Open. Node-1 (namespace owner, holding
+      CAN_JOIN_OPEN_SUBGROUPS) sees it via parent-walk and joins it.
+    - Both nodes exchange messages in the channel that node-2 created.
+
+  ⚠️ Requires merod ≥ rc.36 (or master). The "Node 2 creates a channel
+  context" step fails on **rc.35 and earlier** with `application not found`
+  because the group-invitation payload didn't carry `application_id` until
+  core commit b21acfda (PR-pending), tagged 82 minutes after 0.10.1-rc.35.
+  Without that fix, node-2's local copy of the namespace metadata has
+  `target_application_id = 0x0…0` and create_context aborts.
+
+  This workflow is intentionally opt-in (not in WORKFLOW_FILES) so
+  `make workflows` keeps passing on rc.35. Run it explicitly with:
+    make workflows-extra
+  When merod ships an rc that includes b21acfda, move this back into
+  WORKFLOW_FILES.
+
+force_pull_image: true
+
+nodes:
+  chain_id: testnet-1
+  count: 2
+  image: ghcr.io/calimero-network/merod:0.10.1-rc.35
+  prefix: calimero-node
+
+steps:
+  # ── Bootstrap ────────────────────────────────────────────────────────────
+  - name: Install application on Node 1
+    type: install_application
+    node: calimero-node-1
+    path: "../logic/res/curb.wasm"
+    dev: true
+    outputs:
+      app_id: applicationId
+
+  # `dev: true` installs the WASM under a per-node random application_id, so
+  # node-2's id differs from node-1's even for the same bytes. Capture it
+  # so node-2 can pass its own id when calling create_context below.
+  - name: Install application on Node 2
+    type: install_application
+    node: calimero-node-2
+    path: "../logic/res/curb.wasm"
+    dev: true
+    outputs:
+      app_id_node_2: applicationId
+
+  - name: Create namespace on Node 1 (admin)
+    type: create_group
+    node: calimero-node-1
+    application_id: "{{app_id}}"
+    outputs:
+      namespace_id: namespaceId
+
+  # 15 = 0b01111 = CAN_CREATE_CONTEXT | CAN_INVITE_MEMBERS
+  #              | CAN_JOIN_OPEN_SUBGROUPS | MANAGE_MEMBERS
+  - name: Grant non-admin members the create-context + open-subgroup-join caps
+    type: set_default_capabilities
+    node: calimero-node-1
+    group_id: "{{namespace_id}}"
+    capabilities: 15
+
+  # ── Node 2 joins namespace as non-admin ──────────────────────────────────
+  - name: Generate identity for Node 2
+    type: create_identity
+    node: calimero-node-2
+    outputs:
+      bob_key: publicKey
+
+  - name: Wait for identity propagation
+    type: wait
+    seconds: 3
+
+  - name: Node 1 creates invitation for Node 2
+    type: create_group_invitation
+    node: calimero-node-1
+    group_id: "{{namespace_id}}"
+    outputs:
+      invite_bob: invitation
+
+  - name: Node 2 joins namespace via invitation
+    type: join_group
+    node: calimero-node-2
+    group_id: "{{namespace_id}}"
+    invitation: "{{invite_bob}}"
+
+  # `wait_for_sync` on the namespace itself is flaky at this point — the
+  # join op has been applied but state-hash convergence between the two
+  # nodes can lag past the 30s timeout. e2e.yml doesn't sync here either;
+  # a fixed wait is enough before the next admin-API call.
+  - name: Settle after namespace join
+    type: wait
+    seconds: 5
+  - name: Node 2 creates a channel context
+    type: create_context
+    node: calimero-node-2
+    application_id: "{{app_id_node_2}}"
+    group_id: "{{namespace_id}}"
+    params: '{"name": "bob-channel", "context_type": "Channel", "description": "channel created by a non-admin member", "created_at": 1751953200}'
+    outputs:
+      bob_channel_id: contextId
+      bob_channel_key: memberPublicKey
+
+  - name: Assert non-admin context creation succeeded
+    type: assert
+    statements:
+      - "is_set({{bob_channel_id}})"
+      - "is_set({{bob_channel_key}})"
+
+  # The context is its own subgroup. Mark it Open so Node-1 (namespace
+  # owner) inherits membership without an explicit add_group_members.
+  - name: Node 2 sets channel subgroup-visibility=open
+    type: set_subgroup_visibility
+    node: calimero-node-2
+    group_id: "{{bob_channel_id}}"
+    visibility: open
+
+  # The new context + visibility-open ops live on the namespace's op-log;
+  # node-1 needs to pull them before it can parent-walk into bob_channel_id.
+  # Use a plain wait — namespace-level `wait_for_sync` is unreliable here.
+  - name: Settle after context create + visibility=open
+    type: wait
+    seconds: 8
+
+  # ── Node 1 joins Node 2's channel via parent-walk inheritance ────────────
+  - name: Node 1 joins the channel created by Node 2
+    type: join_context
+    node: calimero-node-1
+    context_id: "{{bob_channel_id}}"
+    outputs:
+      alice_in_bob_channel: memberPublicKey
+
+  - name: Assert Node 1 obtained a member key in Node 2's channel
+    type: assert
+    statements:
+      - "is_set({{alice_in_bob_channel}})"
+
+  - name: Wait for channel state to sync between both nodes
+    type: wait_for_sync
+    context_id: "{{bob_channel_id}}"
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+
+  # ── Profiles + messages: both nodes participate ──────────────────────────
+  - name: Bob sets profile in his channel
+    type: call
+    node: calimero-node-2
+    context_id: "{{bob_channel_id}}"
+    method: set_profile
+    args:
+      username: Bob
+      avatar: null
+    executor_public_key: "{{bob_channel_key}}"
+
+  - name: Alice sets profile in Bob's channel
+    type: call
+    node: calimero-node-1
+    context_id: "{{bob_channel_id}}"
+    method: set_profile
+    args:
+      username: Alice
+      avatar: null
+    executor_public_key: "{{alice_in_bob_channel}}"
+
+  - name: Wait for profile sync
+    type: wait_for_sync
+    context_id: "{{bob_channel_id}}"
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+
+  - name: Bob sends a message in his channel
+    type: call
+    node: calimero-node-2
+    context_id: "{{bob_channel_id}}"
+    method: send_message
+    args:
+      message: "Hello from Bob (non-admin) — I created this channel."
+      mentions: []
+      mentions_usernames: []
+      parent_message: null
+      timestamp: 1751953210
+      sender_username: Bob
+      files: null
+      images: null
+    executor_public_key: "{{bob_channel_key}}"
+
+  - name: Alice replies in Bob's channel
+    type: call
+    node: calimero-node-1
+    context_id: "{{bob_channel_id}}"
+    method: send_message
+    args:
+      message: "Got it — admin sees the non-admin-created channel."
+      mentions: []
+      mentions_usernames: []
+      parent_message: null
+      timestamp: 1751953211
+      sender_username: Alice
+      files: null
+      images: null
+    executor_public_key: "{{alice_in_bob_channel}}"
+
+  - name: Wait for message sync
+    type: wait_for_sync
+    context_id: "{{bob_channel_id}}"
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+
+  - name: Verify messages on Node 1
+    type: call
+    node: calimero-node-1
+    context_id: "{{bob_channel_id}}"
+    method: get_messages
+    args:
+      start_position: 0
+      limit: 50
+      thread_parent_id: null
+    executor_public_key: "{{alice_in_bob_channel}}"
+    outputs:
+      msgs_node_1: result
+
+  - name: Verify messages on Node 2
+    type: call
+    node: calimero-node-2
+    context_id: "{{bob_channel_id}}"
+    method: get_messages
+    args:
+      start_position: 0
+      limit: 50
+      thread_parent_id: null
+    executor_public_key: "{{bob_channel_key}}"
+    outputs:
+      msgs_node_2: result
+
+  - name: Assert both messages reached both nodes
+    type: assert
+    statements:
+      - 'contains({{msgs_node_1}}, "Hello from Bob")'
+      - 'contains({{msgs_node_1}}, "admin sees the non-admin-created channel")'
+      - 'contains({{msgs_node_2}}, "Hello from Bob")'
+      - 'contains({{msgs_node_2}}, "admin sees the non-admin-created channel")'
