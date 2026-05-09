@@ -16,7 +16,7 @@ wait_timeout: 120
 nodes:
   chain_id: testnet-1
   count: 2
-  image: ghcr.io/calimero-network/merod:0.10.1-rc.32
+  image: ghcr.io/calimero-network/merod:0.10.1-rc.35
   prefix: calimero-node
 
 steps:
@@ -27,7 +27,7 @@ steps:
     path: "../logic/res/curb.wasm"
     dev: true
     outputs:
-      app_id: id
+      app_id: applicationId
 
   - name: Install Application on Node 2
     type: install_application
@@ -40,7 +40,7 @@ steps:
     node: calimero-node-1
     application_id: "{{app_id}}"
     outputs:
-      namespace_id: id
+      namespace_id: namespaceId
 
   - name: Create Integration Channel Context
     type: create_context
@@ -49,7 +49,7 @@ steps:
     group_id: "{{namespace_id}}"
     params: '{"name": "Integration Test", "context_type": "Channel", "description": "Playwright e2e context", "created_at": 1751952997}'
     outputs:
-      context_id: id
+      context_id: contextId
       member_public_key: memberPublicKey
 
   - name: Create Identity on Node 2
@@ -77,9 +77,8 @@ steps:
     invitation: "{{invitation_2}}"
 
   - name: Node 2 joins channel context
-    type: join_group_context
+    type: join_context
     node: calimero-node-2
-    group_id: "{{namespace_id}}"
     context_id: "{{context_id}}"
 
   - name: Wait for Sync

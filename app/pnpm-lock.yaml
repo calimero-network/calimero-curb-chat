@@ -22,8 +22,8 @@ importers:
         specifier: ^0.0.6
         version: 0.0.6(react@19.1.0)
       '@calimero-network/mero-react':
-        specifier: 1.1.0
-        version: 1.1.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: 2.2.0
+        version: 2.2.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@calimero-network/mero-ui':
         specifier: 1.4.0
         version: 1.4.0(@floating-ui/dom@1.7.1)(@tiptap/core@3.6.3(@tiptap/pm@3.6.3))(@tiptap/pm@3.6.3)(@types/react-dom@19.1.2(@types/react@19.1.2))(@types/react@19.1.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -724,12 +724,12 @@ packages:
     resolution: {integrity: sha512-Xb/GkHIkSruV1neOXbA0vBGoh8eUbGVt1l8LkROhO106LeN/M7KiX89dyZAYPXS/+uSef2aYSnFQYEl0DdfKuA==}
     engines: {node: '>=18.0.0'}
 
-  '@calimero-network/mero-js@1.4.1':
-    resolution: {integrity: sha512-dP3cQa++f6GNEUrzUlMcrerIFbBNQPokbOTAs0EwUI13RCOFTuO37LxeGbLemVdcTqoEhKSBwn/rJkpP083x9Q==}
+  '@calimero-network/mero-js@2.0.0':
+    resolution: {integrity: sha512-XcwaMa6nli6xqOuK29UKiIPHy0I81woqEb0ugd/uaEBARsoBsM9+q6MCho7oUs5EleC4J/woXkJJun3dZbsnWw==}
     engines: {node: '>=18.0.0'}
 
-  '@calimero-network/mero-react@1.1.0':
-    resolution: {integrity: sha512-GFRmApA72SuLKt5iIZBCfs2rVNxg7CSU54dHGkH31gQL3rWj+uQWZnhesR3tczh1nSE2E2xig4vV5abOeVwm/g==}
+  '@calimero-network/mero-react@2.2.0':
+    resolution: {integrity: sha512-K/eBd5DJmn2bBQ2ce0MxIvO9emnBWlpIkF6WmxUAZBykXnAc5/eE5JYGDn45nd4ZukwLX1en4zCPszDd6JIbAA==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -5136,11 +5136,11 @@ snapshots:
 
   '@calimero-network/mero-js@1.1.0': {}
 
-  '@calimero-network/mero-js@1.4.1': {}
+  '@calimero-network/mero-js@2.0.0': {}
 
-  '@calimero-network/mero-react@1.1.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+  '@calimero-network/mero-react@2.2.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
-      '@calimero-network/mero-js': 1.4.1
+      '@calimero-network/mero-js': 2.0.0
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 

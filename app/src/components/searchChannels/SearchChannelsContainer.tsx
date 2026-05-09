@@ -13,6 +13,7 @@ import { log } from "../../utils/logger";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { buildChannelEntryChat } from "../../utils/channelEntry";
 import { isDmContextCandidate } from "../../utils/dmContext";
+import { useToast } from "../../contexts/ToastContext";
 
 const SearchContainer = styled.div`
   padding: 24px;
@@ -171,6 +172,7 @@ export default function SearchChannelsContainer({
 }: SearchChannelsContainerProps) {
   const groupId = getGroupId();
   const currentGroupPermissions = useCurrentGroupPermissions(groupId);
+  const { addToast } = useToast();
   const [allChannels, setAllChannels] = useState<BrowsableChannel[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoadingId, setIsLoadingId] = useState("");
@@ -187,6 +189,9 @@ export default function SearchChannelsContainer({
   useEffect(() => {
     const loadChannels = async () => {
       if (!groupId) return;
+      // Wait for the namespace member identity to resolve, otherwise canJoin
+      // races to false and the Join button looks permanently disabled.
+      if (currentGroupPermissions.loading) return;
 
       const groupApi = new GroupApiDataSource();
       const clientApi = new ClientApiDataSource();
@@ -284,6 +289,7 @@ export default function SearchChannelsContainer({
   }, [
     currentGroupPermissions.canJoinOpenSubgroups,
     currentGroupPermissions.isAdmin,
+    currentGroupPermissions.loading,
     currentGroupPermissions.memberIdentity,
     groupId,
   ]);
@@ -302,6 +308,9 @@ export default function SearchChannelsContainer({
         const groupApi = new GroupApiDataSource();
         const joinResponse = await groupApi.joinGroupContext(groupId, { contextId });
         if (joinResponse.error || !joinResponse.data) {
+          const message = joinResponse.error?.message || "Failed to join channel";
+          log.error("SearchChannels", "joinGroupContext failed", joinResponse.error);
+          addToast({ title: "Join channel", message, type: "channel", duration: 4000 });
           return;
         }
 
@@ -332,11 +341,17 @@ export default function SearchChannelsContainer({
         }
       } catch (err) {
         log.error("SearchChannels", "Failed to join channel", err);
+        addToast({
+          title: "Join channel",
+          message: err instanceof Error ? err.message : "Failed to join channel",
+          type: "channel",
+          duration: 4000,
+        });
       } finally {
         setIsLoadingId("");
       }
     },
-    [allChannels, fetchChannels, groupId, onChatSelected],
+    [addToast, allChannels, fetchChannels, groupId, onChatSelected],
   );
 
   const onViewChannel = useCallback(

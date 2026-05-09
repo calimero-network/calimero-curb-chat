@@ -124,12 +124,26 @@ export default async function globalSetup(_config: FullConfig) {
     return;
   }
 
-  console.log("[global-setup] No valid token in env — falling back to browser auth flow.");
-
+  // Reuse cached session if it's still valid (rare — only after a prior live run).
   if (isSessionComplete()) {
     console.log("[global-setup] Reusing cached auth session.");
     return;
   }
+
+  // Default: env tokens are missing/expired. Write empty auth state and let
+  // mocked tests inject their own per-test tokens. Live/rpc projects set
+  // SKIP_DEV_SERVER=1 and don't hit this path. The browser auth fallback below
+  // is opt-in (E2E_LIVE_AUTH=1) — running it by default blocks 15s when
+  // auth-frontend isn't reachable, which breaks routine ci-local.sh runs.
+  if (!process.env.E2E_LIVE_AUTH) {
+    console.log("[global-setup] No valid token in env — writing empty auth state. Set E2E_LIVE_AUTH=1 to attempt browser auth.");
+    const emptyState = { cookies: [], origins: [] };
+    fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
+    fs.writeFileSync(AUTH_FILE, JSON.stringify(emptyState));
+    return;
+  }
+
+  console.log("[global-setup] No valid token in env — falling back to browser auth flow (E2E_LIVE_AUTH=1).");
 
   console.log("[global-setup] Starting automated auth flow…");
   console.log(`[global-setup]  App:  ${APP_URL}`);

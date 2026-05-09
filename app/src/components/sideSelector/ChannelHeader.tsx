@@ -88,7 +88,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
 
   const createChannel = async (
     channelName: string,
-    _isPublic: boolean,
+    isPublic: boolean,
     _isReadOnly: boolean,
   ) => {
     if (!groupId) {
@@ -106,15 +106,42 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     }
 
     const nodeApi = new ContextApiDataSource();
+    const groupApi = new GroupApiDataSource();
+    const namespaceId = props.targetGroupId ?? groupId;
 
-    // Create context directly in the namespace group — subgroup creation requires
-    // namespace admin rights which regular members don't have.
-    const contextGroupId = props.targetGroupId ?? groupId;
+    // Per-channel visibility requires per-channel subgroups: core has no
+    // per-context visibility, only per-group `subgroupVisibility`. So each
+    // channel = its own subgroup containing one context.
+    //
+    // 1) Create a subgroup under the namespace named after the channel.
+    const subgroupResp = await groupApi.createSubgroup(namespaceId, {
+      groupAlias: channelName,
+    });
+    if (subgroupResp.error || !subgroupResp.data) {
+      log.error("ChannelHeader", "Failed to create subgroup for channel", subgroupResp.error);
+      return;
+    }
+    const subgroupId = subgroupResp.data.groupId;
 
+    // 2) Set the subgroup's visibility based on the user's choice in the popup.
+    //    Best-effort: if this fails the channel is still usable, just at the
+    //    namespace's default visibility.
+    const visResp = await groupApi.setSubgroupVisibility(subgroupId, {
+      subgroupVisibility: isPublic ? "open" : "restricted",
+    });
+    if (visResp.error) {
+      log.warn(
+        "ChannelHeader",
+        "Failed to set subgroup visibility — channel will use namespace default",
+        visResp.error,
+      );
+    }
+
+    // 3) Create the channel context inside the subgroup.
     const createResp = await nodeApi.createGroupContext({
       applicationId: getApplicationId(),
       protocol: "near",
-      groupId: contextGroupId,
+      groupId: subgroupId,
       alias: channelName,
       initializationParams: {
         name: channelName,

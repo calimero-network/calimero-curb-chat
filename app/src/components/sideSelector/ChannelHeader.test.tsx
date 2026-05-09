@@ -6,16 +6,20 @@ const {
   mockGetGroupId,
   mockUseCurrentGroupPermissions,
   mockCreateGroupContext,
+  mockCreateSubgroup,
+  mockSetSubgroupVisibility,
   mockGetGroup,
-  mockSetContextVisibility,
   mockSetContextMemberIdentity,
+  mockJoinChat,
 } = vi.hoisted(() => ({
   mockGetGroupId: vi.fn(),
   mockUseCurrentGroupPermissions: vi.fn(),
   mockCreateGroupContext: vi.fn(),
+  mockCreateSubgroup: vi.fn(),
+  mockSetSubgroupVisibility: vi.fn(),
   mockGetGroup: vi.fn(),
-  mockSetContextVisibility: vi.fn(),
   mockSetContextMemberIdentity: vi.fn(),
+  mockJoinChat: vi.fn(),
 }));
 
 vi.mock("../../constants/config", () => ({
@@ -44,8 +48,15 @@ vi.mock("../../api/dataSource/nodeApiDataSource", () => ({
 
 vi.mock("../../api/dataSource/groupApiDataSource", () => ({
   GroupApiDataSource: class MockGroupApiDataSource {
+    createSubgroup = mockCreateSubgroup;
+    setSubgroupVisibility = mockSetSubgroupVisibility;
     getGroup = mockGetGroup;
-    setContextVisibility = mockSetContextVisibility;
+  },
+}));
+
+vi.mock("../../api/dataSource/clientApiDataSource", () => ({
+  ClientApiDataSource: class MockClientApiDataSource {
+    joinChat = mockJoinChat;
   },
 }));
 
@@ -85,12 +96,23 @@ describe("ChannelHeader", () => {
     mockGetGroupId.mockReset();
     mockUseCurrentGroupPermissions.mockReset();
     mockCreateGroupContext.mockReset();
+    mockCreateSubgroup.mockReset();
+    mockSetSubgroupVisibility.mockReset();
     mockGetGroup.mockReset();
-    mockSetContextVisibility.mockReset();
     mockSetContextMemberIdentity.mockReset();
+    mockJoinChat.mockReset();
+
     mockGetGroupId.mockReturnValue("group-1");
     mockGetGroup.mockResolvedValue({
-      data: { defaultVisibility: "open" },
+      data: { subgroupVisibility: "open" },
+      error: null,
+    });
+    mockCreateSubgroup.mockResolvedValue({
+      data: { groupId: "subgroup-1" },
+      error: null,
+    });
+    mockSetSubgroupVisibility.mockResolvedValue({
+      data: undefined,
       error: null,
     });
     mockCreateGroupContext.mockResolvedValue({
@@ -100,10 +122,7 @@ describe("ChannelHeader", () => {
       },
       error: null,
     });
-    mockSetContextVisibility.mockResolvedValue({
-      data: undefined,
-      error: null,
-    });
+    mockJoinChat.mockResolvedValue({ data: undefined, error: null });
   });
 
   it("shows the create channel action for all members (admin check removed)", () => {
@@ -118,7 +137,7 @@ describe("ChannelHeader", () => {
     expect(screen.getByTestId("create-channel-toggle")).toBeInTheDocument();
   });
 
-  it("passes the channel name as the group-context alias when creating a channel", async () => {
+  it("creates a subgroup with the channel name, sets visibility, then creates the context inside it", async () => {
     mockUseCurrentGroupPermissions.mockReturnValue({
       loading: false,
       isAdmin: true,
@@ -130,15 +149,23 @@ describe("ChannelHeader", () => {
     fireEvent.click(screen.getByText("submit channel"));
 
     await waitFor(() => {
-      expect(mockCreateGroupContext).toHaveBeenCalledWith(
-        expect.objectContaining({
-          groupId: "group-1",
-          alias: "project-alpha",
-          initializationParams: expect.objectContaining({
-            name: "project-alpha",
-          }),
-        }),
-      );
+      expect(mockCreateSubgroup).toHaveBeenCalledWith("group-1", {
+        groupAlias: "project-alpha",
+      });
     });
+
+    expect(mockSetSubgroupVisibility).toHaveBeenCalledWith("subgroup-1", {
+      subgroupVisibility: "open",
+    });
+
+    expect(mockCreateGroupContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: "subgroup-1",
+        alias: "project-alpha",
+        initializationParams: expect.objectContaining({
+          name: "project-alpha",
+        }),
+      }),
+    );
   });
 });

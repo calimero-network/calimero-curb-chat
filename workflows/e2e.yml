@@ -10,7 +10,7 @@ force_pull_image: true
 nodes:
   chain_id: testnet-1
   count: 3
-  image: ghcr.io/calimero-network/merod:0.10.1-rc.32
+  image: ghcr.io/calimero-network/merod:0.10.1-rc.35
   prefix: calimero-node
 
 steps:
@@ -21,7 +21,7 @@ steps:
     path: "../logic/res/curb.wasm"
     dev: true
     outputs:
-      app_id: id
+      app_id: applicationId
 
   - name: Install Application on Node 2
     type: install_application
@@ -40,7 +40,7 @@ steps:
     node: calimero-node-1
     application_id: "{{app_id}}"
     outputs:
-      namespace_id: id
+      namespace_id: namespaceId
 
   - name: Assert Namespace Created
     type: assert
@@ -54,7 +54,7 @@ steps:
     group_id: "{{namespace_id}}"
     params: '{"name": "General", "context_type": "Channel", "description": "Main channel", "created_at": 1751953000}'
     outputs:
-      channel_id: id
+      channel_id: contextId
       alice_key: memberPublicKey
 
   - name: Assert Channel Created
@@ -118,15 +118,13 @@ steps:
     invitation: "{{invite_carol}}"
 
   - name: Node 2 Joins General Channel
-    type: join_group_context
+    type: join_context
     node: calimero-node-2
-    group_id: "{{namespace_id}}"
     context_id: "{{channel_id}}"
 
   - name: Node 3 Joins General Channel
-    type: join_group_context
+    type: join_context
     node: calimero-node-3
-    group_id: "{{namespace_id}}"
     context_id: "{{channel_id}}"
 
   - name: Wait for 3-Node Channel Sync
@@ -468,7 +466,7 @@ steps:
     group_id: "{{namespace_id}}"
     params: '{"name": "Alice-Bob DM", "context_type": "Dm", "description": "", "created_at": 1751953100}'
     outputs:
-      dm_id: id
+      dm_id: contextId
 
   - name: Assert DM Context Created
     type: assert
@@ -478,6 +476,7 @@ steps:
   - name: Invite Bob to DM Context
     type: invite_identity
     node: calimero-node-1
+    namespace_id: "{{namespace_id}}"
     context_id: "{{dm_id}}"
     capability: member
     grantee_id: "{{bob_key}}"

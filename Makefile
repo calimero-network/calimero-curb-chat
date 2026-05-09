@@ -125,31 +125,7 @@ WORKFLOW_FILES := \
 	workflows/integration-setup.yml
 
 workflows: logic-build
-	@command -v merobox >/dev/null 2>&1 || { \
-		echo ""; \
-		echo "  merobox not found."; \
-		echo "  Install it first: https://calimero-network.github.io/docs/merobox/install"; \
-		echo ""; \
-		exit 1; \
-	}
-	@for yml in $(WORKFLOW_FILES); do \
-		echo ""; \
-		echo "▶  Running $$yml ..."; \
-		(cd workflows && merobox stop --all) 2>/dev/null || true; \
-		(cd workflows && merobox nuke --force) 2>/dev/null || true; \
-		if ! (cd workflows && merobox bootstrap run $$(basename $$yml)); then \
-			echo ""; \
-			echo "  ✗  $$yml failed"; \
-			(cd workflows && merobox stop --all) 2>/dev/null || true; \
-			(cd workflows && merobox nuke --force) 2>/dev/null || true; \
-			exit 1; \
-		fi; \
-		echo "  ✓  $$yml passed"; \
-	done
-	@(cd workflows && merobox stop --all) 2>/dev/null || true
-	@(cd workflows && merobox nuke --force) 2>/dev/null || true
-	@echo ""
-	@echo "  ✓  All workflow tests passed"
+	@bash scripts/workflows.sh $(WORKFLOW_FILES)
 
 # ── Clean ──────────────────────────────────────────────────────────────────────
 

@@ -85,6 +85,10 @@ vi.mock("@calimero-network/calimero-client", () => ({
   },
 }));
 
+vi.mock("../../contexts/ToastContext", () => ({
+  useToast: () => ({ addToast: vi.fn() }),
+}));
+
 describe("SearchChannelsContainer", () => {
   beforeEach(() => {
     mockListGroupContexts.mockReset();
@@ -105,6 +109,7 @@ describe("SearchChannelsContainer", () => {
       error: null,
     });
     mockUseCurrentGroupPermissions.mockReturnValue({
+      loading: false,
       isAdmin: false,
       canJoinOpenSubgroups: false,
       memberIdentity: "member-1",
