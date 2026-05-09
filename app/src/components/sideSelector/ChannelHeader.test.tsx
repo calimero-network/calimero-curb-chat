@@ -60,14 +60,16 @@ vi.mock("../../api/dataSource/clientApiDataSource", () => ({
   },
 }));
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  getAppEndpointKey: vi.fn(),
-  getAuthConfig: vi.fn(),
+vi.mock("@calimero-network/mero-react", () => ({
+  getNodeUrl: vi.fn(),
   getContextId: vi.fn(),
-  getExecutorPublicKey: vi.fn(),
-  setExecutorPublicKey: vi.fn(),
-  apiClient: { node: () => ({}) },
-  getJsonRpcClient: vi.fn(() => ({ execute: vi.fn() })),
+  getContextIdentity: vi.fn(),
+  setContextIdentity: vi.fn(),
+}));
+
+vi.mock("../../api/meroJsClient", () => ({
+  getAuthConfig: vi.fn(),
+  nodeApi: {},
 }));
 
 vi.mock("../popups/CreateChannelPopup", () => ({

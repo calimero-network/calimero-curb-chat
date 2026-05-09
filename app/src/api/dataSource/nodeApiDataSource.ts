@@ -1,10 +1,10 @@
 import axios from "axios";
 import {
-  getAppEndpointKey,
-  getAuthConfig,
-  getExecutorPublicKey,
-  type ApiResponse,
-} from "@calimero-network/calimero-client";
+  getNodeUrl as getAppEndpointKey,
+  getContextIdentity as getExecutorPublicKey,
+} from "@calimero-network/mero-react";
+import { getAuthConfig } from "../meroJsClient";
+import type { ApiResponse } from "../types";
 import { getApplicationId } from "../../constants/config";
 import type {
   CreateContextProps,

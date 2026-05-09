@@ -6,7 +6,7 @@ import { MessageActions } from "..";
 import type { AccountData, CurbMessage, CurbFile } from "../types/curbTypes";
 import { ElementPosition } from "../types/curbTypes";
 import { formatTimeAgo } from "../utils";
-import { blobClient } from "@calimero-network/calimero-client";
+import { downloadBlob } from "../../../api/meroJsClient";
 
 import { POPUP_POSITION_SWITCH_HEIGHT } from "./AutocompleteList";
 import { Avatar } from "./Avatar";
@@ -454,7 +454,7 @@ const Message = (props: MessageProps) => {
       }
 
       try {
-        const blob = await blobClient.downloadBlob(
+        const blob = await downloadBlob(
           attachment.ipfs_cid,
           props.contextId,
         );

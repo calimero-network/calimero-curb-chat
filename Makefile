@@ -19,7 +19,7 @@ help:
 	@echo "    app-build      Bundle frontend (dist/)"
 	@echo ""
 	@echo "  Dev"
-	@echo "    start          Node1 (full setup) + node2 (bare) + frontend"
+	@echo "    start          Node1 (full setup) + node2 (auto-invited) + frontend"
 	@echo "    dev            Start Vite dev server (http://localhost:5173)"
 	@echo ""
 	@echo "  Quality"
@@ -70,11 +70,11 @@ build: logic-build app-build
 dev: app-install
 	cd app && pnpm dev
 
-# Full dev setup: node1 (full setup) + node2 (bare, no workspace) + frontend.
-# Node2 is left without a workspace — invite it into the namespace from the webapp.
+# Full dev setup: node1 (full setup) + node2 (auto-invited into node1's workspace) + frontend.
 start: app-install
 	@bash scripts/dev-node.sh
 	@bash scripts/dev-node2.sh
+	@bash scripts/dev-invite.sh
 	cd app && pnpm dev
 
 # ── Quality ────────────────────────────────────────────────────────────────────

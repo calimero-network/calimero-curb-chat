@@ -18,18 +18,26 @@ import type { WebSocketEvent } from "../types/WebSocketTypes";
 // mockClient is hoisted so both vi.mock() and tests can reference the same object
 const mockClient = vi.hoisted(() => ({
   connect: vi.fn().mockResolvedValue(undefined),
-  disconnect: vi.fn(),
+  close: vi.fn(),
   subscribe: vi.fn().mockResolvedValue(undefined),
   unsubscribe: vi.fn().mockResolvedValue(undefined),
-  addCallback: vi.fn(),
+  on: vi.fn(),
+  off: vi.fn(),
 }));
 
-vi.mock("@calimero-network/calimero-client", () => ({
+vi.mock("@calimero-network/mero-js", () => ({
   // vitest v4 requires a regular function (not an arrow) for constructor mocks
-  SseSubscriptionsClient: vi.fn(function (this: unknown) {
+  SseClient: vi.fn(function (this: unknown) {
     return mockClient;
   }),
-  getAppEndpointKey: vi.fn().mockReturnValue("http://localhost:2428"),
+}));
+
+vi.mock("@calimero-network/mero-react", () => ({
+  getNodeUrl: vi.fn().mockReturnValue("http://localhost:2428"),
+}));
+
+vi.mock("../api/meroJsClient", () => ({
+  getJwt: () => "test-token",
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -42,10 +50,12 @@ function makeEvent(contextId = "ctx-1"): WebSocketEvent {
   };
 }
 
-/** Fire the callback registered via client.addCallback() */
+/** Fire the callback registered via client.on('event', cb) */
 function fireCallback(event: WebSocketEvent) {
-  const [cb] = mockClient.addCallback.mock.calls[0] as [(e: unknown) => void];
-  cb(event);
+  const calls = mockClient.on.mock.calls as Array<[string, (e: unknown) => void]>;
+  const eventCall = calls.find((c) => c[0] === "event");
+  if (!eventCall) throw new Error("No 'event' handler registered on SseClient");
+  eventCall[1](event);
 }
 
 beforeEach(() => {
@@ -91,7 +101,7 @@ describe("client lifecycle", () => {
 
     unmount();
 
-    expect(mockClient.disconnect).toHaveBeenCalledTimes(1);
+    expect(mockClient.close).toHaveBeenCalledTimes(1);
   });
 
   it("connects only once across multiple subscribe calls", async () => {

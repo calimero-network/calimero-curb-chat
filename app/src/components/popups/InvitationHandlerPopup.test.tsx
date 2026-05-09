@@ -38,16 +38,17 @@ vi.mock("@calimero-network/mero-ui", () => ({
   }) => <button onClick={onClick}>{children}</button>,
 }));
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  apiClient: {
-    node: () => ({
-      createNewIdentity: vi.fn(),
-      joinContextByOpenInvitation: vi.fn(),
-      getContext: vi.fn(),
-    }),
-  },
+vi.mock("@calimero-network/mero-react", () => ({
   setContextId: vi.fn(),
-  setExecutorPublicKey: vi.fn(),
+  setContextIdentity: vi.fn(),
+}));
+
+vi.mock("../../api/meroJsClient", () => ({
+  nodeApi: {
+    createNewIdentity: vi.fn(),
+    joinContextByOpenInvitation: vi.fn(),
+    getContext: vi.fn(),
+  },
 }));
 
 vi.mock("../../utils/invitation", () => ({

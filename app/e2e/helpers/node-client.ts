@@ -212,14 +212,17 @@ export async function injectRealTokens(
 ) {
   await page.addInitScript(
     ({ nodeUrl, accessToken, refreshToken }) => {
+      // MeroProvider internally uses mero-js's `LocalStorageTokenStore()`
+      // which reads/writes a single JSON blob at `mero-tokens`.
       localStorage.setItem("mero:node_url", nodeUrl);
       localStorage.setItem(
         "mero-tokens",
-        JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
+        JSON.stringify({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_at: Date.now() + 3600_000,
+        }),
       );
-      localStorage.setItem("app-url", JSON.stringify(nodeUrl));
-      localStorage.setItem("access-token", JSON.stringify(accessToken));
-      localStorage.setItem("refresh-token", JSON.stringify(refreshToken));
     },
     opts,
   );

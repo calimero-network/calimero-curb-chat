@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@calimero-network/calimero-client";
+import type { ApiResponse } from "./types";
 
 export type VisibilityMode = "open" | "restricted";
 export type GroupMemberRole = "Admin" | "Member";

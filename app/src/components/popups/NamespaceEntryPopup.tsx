@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { styled, keyframes } from "styled-components";
 import { Button, Input } from "@calimero-network/mero-ui";
-import { getAppEndpointKey, getAuthConfig } from "@calimero-network/calimero-client";
+import { getNodeUrl } from "@calimero-network/mero-react";
+import { getAuthConfig } from "../../api/meroJsClient";
 import axios from "axios";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
@@ -248,7 +249,7 @@ function authHeaders(): Record<string, string> {
 }
 
 async function resolveAppId(preferred: string): Promise<string> {
-  const base = getAppEndpointKey() || DEFAULT_ENDPOINT;
+  const base = getNodeUrl() || DEFAULT_ENDPOINT;
   const res = await axios.get(`${base}/admin-api/applications`, { headers: authHeaders() });
   const apps: unknown[] = res.data?.data?.apps ?? [];
   const ids = apps
@@ -471,7 +472,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
 
   // Initial load
   const loadNamespaces = useCallback(async () => {
-    if (!getAppEndpointKey()) return;
+    if (!getNodeUrl()) return;
 
     setStep("loading");
     setError("");
@@ -598,7 +599,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
 
       // Create initial "general" channel so the namespace has something to chat in
       try {
-        const base = getAppEndpointKey() || DEFAULT_ENDPOINT;
+        const base = getNodeUrl() || DEFAULT_ENDPOINT;
         const ctxRes = await axios.post<{ data: { contextId: string; memberPublicKey: string } }>(
           `${base}/admin-api/contexts`,
           { applicationId: appId, groupId, alias: "general" },

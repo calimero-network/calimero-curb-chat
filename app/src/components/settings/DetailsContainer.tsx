@@ -5,7 +5,7 @@ import MemberDetails from "./MemberDetails";
 import TabSwitch from "./TabSwitch";
 import type { ChannelMeta } from "../../types/Common";
 import type { UserId } from "../../api/clientApi";
-import { getExecutorPublicKey } from "@calimero-network/calimero-client";
+import { getContextIdentity } from "@calimero-network/mero-react";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { isRestrictedChannelType } from "../../utils/channelVisibility";
 import { useToast } from "../../contexts/ToastContext";
@@ -158,7 +158,7 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
       {selectedTabIndex === 1 && (
         <MemberDetails
           id={0}
-          user={getExecutorPublicKey() as unknown as UserId}
+          user={getContextIdentity() as unknown as UserId}
           promoteModerator={() => {}}
           removeUserFromChannel={removeUserFromChannel}
           channelOwner={channelMeta.createdBy}

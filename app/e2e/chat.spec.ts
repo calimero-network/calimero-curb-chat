@@ -35,6 +35,9 @@ async function setupApp(page: Page) {
     ({ groupId, memberKey }) => {
       // Group selection (app reads from sessionStorage with this key)
       sessionStorage.setItem("calimero_group_id", groupId);
+      // App.tsx canEnterApp gate: requires this flag set in the same browser
+      // session as the namespace selection. Without it, "/" redirects to /login.
+      sessionStorage.setItem("curb_ns_ready", "1");
       // Messenger display name
       localStorage.setItem("chat-username", "Alice");
       // Member identity for this group (public key used for RPC calls)

@@ -4,9 +4,11 @@ import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import { useCallback, useEffect, useState } from "react";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
-import { apiClient } from "@calimero-network/calimero-client";
-import type { ResponseData } from "@calimero-network/calimero-client";
-import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
+import type { ResponseData } from "../../api/types";
+import {
+  nodeApi as apiClientNode,
+  type LegacyFetchContextIdentitiesResponse as FetchContextIdentitiesResponse,
+} from "../../api/meroJsClient";
 import { getGroupId } from "../../constants/config";
 import { Button, SearchInput } from "@calimero-network/mero-ui";
 import { log } from "../../utils/logger";
@@ -210,7 +212,7 @@ export default function SearchChannelsContainer({
 
         try {
           const idResp: ResponseData<FetchContextIdentitiesResponse> =
-            await apiClient.node().fetchContextIdentities(ctxId);
+            await apiClientNode.fetchContextIdentities(ctxId);
           const identities = idResp.data?.data?.identities;
           if (identities && identities.length > 0) {
             isJoined = true;

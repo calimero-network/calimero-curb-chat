@@ -5,7 +5,7 @@ import Avatar from "../components/virtualized-chat/Message/Avatar";
 import RenderHtml from "../components/virtualized-chat/Message/RenderHtml";
 import MessageImageField from "./MessageImageField";
 import MessageFileField from "./MessageFileField";
-import { blobClient } from "@calimero-network/calimero-client";
+import { downloadBlob } from "../api/meroJsClient";
 import { MessageText } from "../components/virtualized-chat/Message";
 
 const Wrapper = styled.div`
@@ -155,7 +155,7 @@ export default function SearchResultMessage({
       if (!contextId) return;
 
       try {
-        const blob = await blobClient.downloadBlob(
+        const blob = await downloadBlob(
           attachment.ipfs_cid,
           contextId
         );

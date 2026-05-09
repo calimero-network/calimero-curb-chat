@@ -110,11 +110,19 @@ cleanup "Pre-flight cleanup"
 
 # ── Run workflows ─────────────────────────────────────────────────────────────
 
+# Prefer native-binary mode when the Docker daemon isn't reachable. setup-nodes.sh
+# already uses `--no-docker` for the same merobox; workflows can do the same.
+MEROBOX_FLAGS=()
+if ! docker info >/dev/null 2>&1; then
+  yellow "Docker daemon unreachable — running merobox with --no-docker"
+  MEROBOX_FLAGS+=(--no-docker)
+fi
+
 failed=0
 for yml in "$@"; do
   rel="${yml#"$REPO_ROOT/"}"
   step "Running $rel"
-  if ! (cd "$WORKFLOWS_DIR" && merobox bootstrap run "$(basename "$yml")"); then
+  if ! (cd "$WORKFLOWS_DIR" && merobox bootstrap run "${MEROBOX_FLAGS[@]}" "$(basename "$yml")"); then
     red "$rel failed"
     failed=1
     # Clean between workflows even on failure so the next one starts fresh

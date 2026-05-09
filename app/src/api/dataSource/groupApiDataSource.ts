@@ -1,10 +1,8 @@
 import axios from "axios";
 import bs58 from "bs58";
-import {
-  getAppEndpointKey,
-  getAuthConfig,
-  type ApiResponse,
-} from "@calimero-network/calimero-client";
+import { getNodeUrl as getAppEndpointKey } from "@calimero-network/mero-react";
+import { getAuthConfig } from "../meroJsClient";
+import type { ApiResponse } from "../types";
 import type {
   ContextVisibility,
   CreateGroupRequest,

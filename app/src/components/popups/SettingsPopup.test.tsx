@@ -17,9 +17,10 @@ const {
 }));
 
 vi.mock("@calimero-network/mero-react", () => ({
-  useMero: () => ({
-    logout: mockLogout,
-  }),
+  useMero: () => ({ logout: mockLogout }),
+  getNodeUrl: vi.fn(),
+  getContextId: vi.fn(),
+  getContextIdentity: vi.fn(),
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -38,13 +39,9 @@ vi.mock("../../constants/config", () => ({
   getStoredGroupAlias: () => "Test Workspace",
 }));
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  getAppEndpointKey: vi.fn(),
+vi.mock("../../api/meroJsClient", () => ({
   getAuthConfig: vi.fn(),
-  getContextId: vi.fn(),
-  getExecutorPublicKey: vi.fn(),
-  apiClient: { node: () => ({}) },
-  getJsonRpcClient: vi.fn(() => ({ execute: vi.fn() })),
+  nodeApi: {},
 }));
 
 vi.mock("../../hooks/useCurrentGroupPermissions", () => ({

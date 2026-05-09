@@ -15,9 +15,9 @@ import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import {
   setContextId,
-  setExecutorPublicKey,
-  useCalimero,
-} from "@calimero-network/calimero-client";
+  setContextIdentity as setExecutorPublicKey,
+  useMero as useCalimero,
+} from "@calimero-network/mero-react";
 import type { CreateContextResult } from "../../components/popups/StartDMPopup";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import { useAppNotifications } from "../../hooks/useAppNotifications";
@@ -49,7 +49,7 @@ import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissio
 import { buildDmMemberOptions } from "../../utils/dmMemberOptions";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
-  const { app } = useCalimero();
+  const { mero: app } = useCalimero();
   const currentGroupId = getGroupId();
   const [isOpenSearchChannel, setIsOpenSearchChannel] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

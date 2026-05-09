@@ -51,8 +51,8 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  getAppEndpointKey: () => "test-app-endpoint",
+vi.mock("@calimero-network/mero-react", () => ({
+  getNodeUrl: () => "test-app-endpoint",
 }));
 
 vi.mock("../../api/dataSource/groupApiDataSource", () => ({

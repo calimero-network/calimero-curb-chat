@@ -226,10 +226,14 @@ fi
 if [ -n "$NAMESPACE_ID" ]; then
   green "Workspace created (id: ${NAMESPACE_ID})"
 
-  # Allow all members to create contexts and invite others (0x0B = 11)
+  # Default capabilities for namespace members. 15 = 0b01111 =
+  #   CAN_CREATE_CONTEXT (1) | CAN_INVITE_MEMBERS (2)
+  # | CAN_JOIN_OPEN_SUBGROUPS (4) | MANAGE_MEMBERS (8)
+  # Without bit 2, namespace members fail parent-walk inheritance and hit
+  # "node is not a member of group" when listing contexts in subgroups.
   curl -sf -X PUT "${NODE_URL}/admin-api/groups/${NAMESPACE_ID}/settings/default-capabilities" \
     -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
-    -d '{"defaultCapabilities":11}' &>/dev/null \
+    -d '{"defaultCapabilities":15}' &>/dev/null \
     && green "Default member capabilities set" \
     || yellow "Could not set default capabilities (non-fatal)"
 
@@ -261,6 +265,15 @@ if [ -n "$NAMESPACE_ID" ]; then
       -d '{"mode":"open"}' &>/dev/null \
       && green "Channel visibility set to public" \
       || yellow "Could not set channel visibility (non-fatal)"
+
+    # Mark the channel's underlying subgroup as Open. Required (alongside
+    # CAN_JOIN_OPEN_SUBGROUPS in default-capabilities above) for parent-walk
+    # membership inheritance — see core PR #2256 (rc.32+).
+    curl -sf -X PUT "${NODE_URL}/admin-api/groups/${CONTEXT_ID}/settings/subgroup-visibility" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
+      -d '{"subgroupVisibility":"open"}' &>/dev/null \
+      && green "Channel subgroup-visibility set to open" \
+      || yellow "Could not set subgroup visibility (non-fatal)"
   else
     yellow "Could not create #general — create channels from the app after logging in"
   fi

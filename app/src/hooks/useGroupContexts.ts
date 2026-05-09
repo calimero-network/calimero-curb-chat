@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef } from "react";
-import { apiClient } from "@calimero-network/calimero-client";
-import type { ResponseData } from "@calimero-network/calimero-client";
-import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
+import type { ResponseData } from "../api/types";
+import {
+  nodeApi as apiClientNode,
+  type LegacyFetchContextIdentitiesResponse as FetchContextIdentitiesResponse,
+} from "../api/meroJsClient";
 import { GroupApiDataSource } from "../api/dataSource/groupApiDataSource";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { GroupContextChannel } from "../types/Common";
@@ -58,7 +60,7 @@ export function useGroupContexts() {
           ids.filter((id) => !idMap[id]).map(async (ctxId) => {
             try {
               const resp: ResponseData<FetchContextIdentitiesResponse> =
-                await apiClient.node().fetchContextIdentities(ctxId);
+                await apiClientNode.fetchContextIdentities(ctxId);
               const list = resp.data?.data?.identities;
               if (list && list.length > 0) idMap[ctxId] = list[0];
             } catch {

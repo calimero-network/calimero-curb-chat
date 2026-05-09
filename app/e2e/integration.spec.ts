@@ -87,9 +87,12 @@ test.describe("Authentication with live node", () => {
     await page.goto("/login");
 
     // The workspace selector heading is the first thing that appears after auth
-    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
-      timeout: 20_000,
-    });
+    // After auth, the user lands on the workspace picker. With groups
+    // present the heading is "Select workspace"; with none it's "Welcome
+    // to MeroChat". Both indicate the auth gate has been passed.
+    await expect(
+      page.getByText(/Select workspace|Welcome to MeroChat/),
+    ).toBeVisible({ timeout: 20_000 });
   });
 
   test("workspace list shows the integration test workspace", async ({
@@ -98,9 +101,12 @@ test.describe("Authentication with live node", () => {
     const _env = requireEnv();
     await setupAuth(page);
     await page.goto("/login");
-    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
-      timeout: 20_000,
-    });
+    // After auth, the user lands on the workspace picker. With groups
+    // present the heading is "Select workspace"; with none it's "Welcome
+    // to MeroChat". Both indicate the auth gate has been passed.
+    await expect(
+      page.getByText(/Select workspace|Welcome to MeroChat/),
+    ).toBeVisible({ timeout: 20_000 });
 
     // The workspace selector polls /admin-api/groups and displays each group alias
     // The integration-setup workflow creates a group; at minimum one workspace row
@@ -114,9 +120,12 @@ test.describe("Authentication with live node", () => {
     requireEnv();
     await setupAuth(page);
     await page.goto("/login");
-    await expect(page.getByText("Welcome to MeroChat")).toBeVisible({
-      timeout: 20_000,
-    });
+    // After auth, the user lands on the workspace picker. With groups
+    // present the heading is "Select workspace"; with none it's "Welcome
+    // to MeroChat". Both indicate the auth gate has been passed.
+    await expect(
+      page.getByText(/Select workspace|Welcome to MeroChat/),
+    ).toBeVisible({ timeout: 20_000 });
 
     await page.getByRole("button", { name: /disconnect node/i }).click();
     await page.waitForTimeout(500);

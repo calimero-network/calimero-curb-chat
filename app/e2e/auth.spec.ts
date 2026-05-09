@@ -77,7 +77,7 @@ test.describe("Unauthenticated state", () => {
   // in both mocked and live projects.
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      ["mero:node_url", "mero-tokens", "app-url", "access-token", "refresh-token"].forEach(
+      ["mero:node_url", "mero-tokens"].forEach(
         (k) => localStorage.removeItem(k),
       );
     });
@@ -224,7 +224,7 @@ test.describe("Invitation URL parameter", () => {
   // before the test can read it.
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      ["mero:node_url", "mero-tokens", "app-url", "access-token", "refresh-token"].forEach(
+      ["mero:node_url", "mero-tokens"].forEach(
         (k) => localStorage.removeItem(k),
       );
     });

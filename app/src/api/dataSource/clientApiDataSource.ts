@@ -1,10 +1,11 @@
 import {
-  type ApiResponse,
-  getAppEndpointKey,
   getContextId,
-  getExecutorPublicKey,
-  rpcClient,
-} from "@calimero-network/calimero-client";
+  getContextIdentity as getExecutorPublicKey,
+  getNodeUrl as getAppEndpointKey,
+} from "@calimero-network/mero-react";
+import type { ExecuteParams } from "@calimero-network/mero-js";
+import type { ApiResponse } from "../types";
+import { rpcExec } from "../meroJsClient";
 import {
   type AcceptInvitationProps,
   type ChannelInfo,
@@ -40,14 +41,16 @@ import {
 } from "../clientApi";
 import { getMessengerDisplayName } from "../../utils/messengerName";
 
+// Backward-compat shim: dataSource code calls
+//   getJsonRpcClient().execute<any, T>(params, config)
+// which now routes through mero-js via our rpcExec wrapper. The wrapper
+// rebuilds the legacy `{ result: { output }, error: { code, error: { cause: { info: { message } } } } }`
+// envelope so callsites don't need touching.
 export function getJsonRpcClient() {
-  const appEndpointKey = getAppEndpointKey();
-  if (!appEndpointKey) {
-    throw new Error(
-      "Application endpoint key is missing. Please check your configuration.",
-    );
-  }
-  return rpcClient;
+  return {
+    execute: <_Args, T>(params: ExecuteParams, _config?: unknown) =>
+      rpcExec<T>(params, _config),
+  };
 }
 
 export class ClientApiDataSource implements ClientApi {

@@ -1,10 +1,15 @@
 import { useRef, useCallback, useEffect } from "react";
-import {
-  SseSubscriptionsClient,
-  getAppEndpointKey,
-} from "@calimero-network/calimero-client";
+import { SseClient } from "@calimero-network/mero-js";
+import { getNodeUrl } from "@calimero-network/mero-react";
+import { getJwt } from "../api/meroJsClient";
 import type { WebSocketEvent, WebSocketEventCallback } from "../types/WebSocketTypes";
 import { log } from "../utils/logger";
+
+// SseClient expects an async `getAuthToken`. Wrap our sync localStorage
+// reader to satisfy the contract.
+async function getAuthToken(): Promise<string> {
+  return getJwt();
+}
 
 /**
  * SSE-based context subscription hook.
@@ -19,7 +24,7 @@ import { log } from "../utils/logger";
  * reconnects automatically.
  */
 export function useSseSubscription(eventCallback: WebSocketEventCallback | null) {
-  const clientRef = useRef<SseSubscriptionsClient | null>(null);
+  const clientRef = useRef<SseClient | null>(null);
   const subscribedRef = useRef<Set<string>>(new Set());
   const callbackRef = useRef(eventCallback);
   const connectingRef = useRef(false);
@@ -29,15 +34,15 @@ export function useSseSubscription(eventCallback: WebSocketEventCallback | null)
     callbackRef.current = eventCallback;
   }, [eventCallback]);
 
-  const getOrCreate = useCallback((): SseSubscriptionsClient | null => {
+  const getOrCreate = useCallback((): SseClient | null => {
     if (clientRef.current) return clientRef.current;
-    const nodeUrl = getAppEndpointKey();
+    const nodeUrl = getNodeUrl();
     if (!nodeUrl) {
       log.warn("SseSubscription", "No node URL in storage — cannot create SSE client");
       return null;
     }
-    const client = new SseSubscriptionsClient(nodeUrl);
-    client.addCallback((event) => {
+    const client = new SseClient({ baseUrl: nodeUrl, getAuthToken });
+    client.on("event", (event) => {
       if (callbackRef.current) {
         callbackRef.current(event as unknown as WebSocketEvent).catch(() => {});
       }
@@ -47,7 +52,7 @@ export function useSseSubscription(eventCallback: WebSocketEventCallback | null)
     return client;
   }, []);
 
-  const ensureConnected = useCallback(async (): Promise<SseSubscriptionsClient | null> => {
+  const ensureConnected = useCallback(async (): Promise<SseClient | null> => {
     const client = getOrCreate();
     if (!client) return null;
     if (connectedRef.current || connectingRef.current) return client;
@@ -167,7 +172,7 @@ export function useSseSubscription(eventCallback: WebSocketEventCallback | null)
     return () => {
       const client = clientRef.current;
       if (client) {
-        try { client.disconnect(); } catch { /* ignore */ }
+        try { client.close(); } catch { /* ignore */ }
         clientRef.current = null;
         connectedRef.current = false;
         connectingRef.current = false;

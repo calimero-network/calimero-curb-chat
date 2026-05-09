@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@calimero-network/calimero-client";
+import type { ApiResponse } from "../api/types";
 import type { GroupContextEntry } from "../api/groupApi";
 import type { CreateContextResponse } from "../api/nodeApi";
 import type { ContextInfo } from "../types/Common";

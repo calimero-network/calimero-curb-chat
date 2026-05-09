@@ -17,8 +17,11 @@ vi.mock("axios", () => ({
   isAxiosError: () => false,
 }));
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  getAppEndpointKey: () => "http://localhost:2428",
+vi.mock("@calimero-network/mero-react", () => ({
+  getNodeUrl: () => "http://localhost:2428",
+}));
+
+vi.mock("../meroJsClient", () => ({
   getAuthConfig: () => ({ jwtToken: "token" }),
 }));
 

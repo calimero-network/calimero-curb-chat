@@ -1,16 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { styled, keyframes } from "styled-components";
 import {
-  apiClient,
-  type ResponseData,
   setContextId,
-  setExecutorPublicKey,
-} from "@calimero-network/calimero-client";
-import type {
-  JoinContextResponse,
-  NodeIdentity,
-  SignedOpenInvitation,
-} from "@calimero-network/calimero-client/lib/api/nodeApi";
+  setContextIdentity as setExecutorPublicKey,
+} from "@calimero-network/mero-react";
+import type { ResponseData } from "../../api/types";
+import {
+  nodeApi as apiClientNode,
+  type LegacyJoinContextResponse as JoinContextResponse,
+  type LegacyNodeIdentity as NodeIdentity,
+  type LegacySignedOpenInvitation as SignedOpenInvitation,
+} from "../../api/meroJsClient";
 import {
   clearInvitationFromStorage,
   getInvitationFromStorage,
@@ -289,8 +289,7 @@ export default function InvitationHandlerPopup({
           }
 
           try {
-            const verifyResponse = await apiClient
-              .node()
+            const verifyResponse = await apiClientNode
               .getContext(contextId);
             if (verifyResponse.data) {
               const isSynced =
@@ -322,8 +321,7 @@ export default function InvitationHandlerPopup({
       setStatus("joining");
       setStatusMessage("Creating identity...");
 
-      const identityResponse: ResponseData<NodeIdentity> = await apiClient
-        .node()
+      const identityResponse: ResponseData<NodeIdentity> = await apiClientNode
         .createNewIdentity();
       if (identityResponse.error || !identityResponse.data) {
         throw new Error(
@@ -346,8 +344,7 @@ export default function InvitationHandlerPopup({
       const parsed = JSON.parse(invitationPayload.trim());
       const signedInvitation: SignedOpenInvitation = parsed.data ?? parsed;
 
-      const joinResponse: ResponseData<JoinContextResponse> = await apiClient
-        .node()
+      const joinResponse: ResponseData<JoinContextResponse> = await apiClientNode
         .joinContextByOpenInvitation(signedInvitation, executorPk);
       if (joinResponse.error || !joinResponse.data) {
         throw new Error(
@@ -355,8 +352,7 @@ export default function InvitationHandlerPopup({
         );
       }
 
-      const verifyResponse = await apiClient
-        .node()
+      const verifyResponse = await apiClientNode
         .getContext(joinResponse.data.contextId);
       if (verifyResponse.error || !verifyResponse.data) {
         throw new Error("Failed to verify context");

@@ -77,11 +77,9 @@ vi.mock("../../api/dataSource/clientApiDataSource", () => ({
   },
 }));
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  apiClient: {
-    node: () => ({
-      fetchContextIdentities: mockFetchContextIdentities,
-    }),
+vi.mock("../../api/meroJsClient", () => ({
+  nodeApi: {
+    fetchContextIdentities: mockFetchContextIdentities,
   },
 }));
 

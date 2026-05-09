@@ -2,8 +2,8 @@ import type { Page } from "@playwright/test";
 
 /**
  * Simulate mero-react authentication by injecting tokens directly into
- * localStorage — the same storage keys that mero-react writes after a
- * successful ConnectButton auth flow.
+ * localStorage — the same `mero-tokens` blob format MeroProvider's internal
+ * `LocalStorageTokenStore()` reads from.
  *
  * Use this helper in tests that want to skip the actual auth redirect and
  * start with an already-authenticated session.
@@ -20,13 +20,9 @@ export async function injectMeroAuthTokens(
         JSON.stringify({
           access_token: accessToken,
           refresh_token: refreshToken ?? "",
+          expires_at: Date.now() + 3600_000,
         }),
       );
-      // Bridge to calimero-client keys (mirroring main.tsx IIFE)
-      // calimero-client does JSON.parse("app-url"), so the value must be JSON-encoded
-      localStorage.setItem("app-url", JSON.stringify(nodeUrl));
-      localStorage.setItem("access-token", JSON.stringify(accessToken));
-      localStorage.setItem("refresh-token", JSON.stringify(refreshToken ?? ""));
     },
     opts,
   );
@@ -35,10 +31,10 @@ export async function injectMeroAuthTokens(
 /**
  * Clear all auth-related localStorage keys.
  */
+const AUTH_KEYS = ["mero:node_url", "mero-tokens"] as const;
+
 export async function clearAuth(page: Page) {
-  await page.evaluate(() => {
-    ["mero:node_url", "mero-tokens", "app-url", "access-token", "refresh-token"].forEach(
-      (k) => localStorage.removeItem(k),
-    );
-  });
+  await page.evaluate((keys) => {
+    keys.forEach((k) => localStorage.removeItem(k));
+  }, AUTH_KEYS as unknown as string[]);
 }

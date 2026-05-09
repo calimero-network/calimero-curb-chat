@@ -2,10 +2,8 @@ import { useState, useCallback } from "react";
 import { styled } from "styled-components";
 import { Button, Input } from "@calimero-network/mero-ui";
 import axios from "axios";
-import {
-  getAppEndpointKey,
-  getAuthConfig,
-} from "@calimero-network/calimero-client";
+import { getNodeUrl as getAppEndpointKey } from "@calimero-network/mero-react";
+import { getAuthConfig } from "../../api/meroJsClient";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import {
   getApplicationId,

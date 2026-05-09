@@ -18,9 +18,9 @@ import ChatDisplaySplit from "./ChatDisplaySplit";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import {
   getContextId,
-  getExecutorPublicKey,
-  type ResponseData,
-} from "@calimero-network/calimero-client";
+  getContextIdentity as getExecutorPublicKey,
+} from "@calimero-network/mero-react";
+import type { ResponseData } from "../api/types";
 import type { ChannelInfo, UserId } from "../api/clientApi";
 import { extractAndAddMentions } from "../utils/mentions";
 import ChatSearchOverlay from "./ChatSearchOverlay";

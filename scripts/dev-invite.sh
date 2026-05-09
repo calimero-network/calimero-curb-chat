@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# scripts/dev-invite.sh — Invite node2 into node1's dev workspace.
+#
+# Run after dev-node.sh + dev-node2.sh. Reads tokens / IDs from
+# app/.env.integration and performs the invite → join → sync → channel-join
+# handshake so node2 lands directly inside node1's namespace and #general
+# channel — no manual webapp clicks required.
+#
+# Usage:
+#   ./scripts/dev-invite.sh
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$REPO_ROOT/app/.env.integration"
+
+green()  { printf '\033[32m  ✓  %s\033[0m\n' "$*"; }
+yellow() { printf '\033[33m  !  %s\033[0m\n' "$*"; }
+red()    { printf '\033[31m  ✗  %s\033[0m\n' "$*" >&2; }
+step()   { printf '\n\033[1;36m▶  %s\033[0m\n' "$*"; }
+
+[ -f "$ENV_FILE" ] || { red "$ENV_FILE not found — run dev-node.sh and dev-node2.sh first"; exit 1; }
+
+# shellcheck disable=SC1090
+set -a; . "$ENV_FILE"; set +a
+
+NODE_1_URL="${E2E_NODE_URL:-}"
+NODE_2_URL="${E2E_NODE_URL_2:-}"
+ACCESS_TOKEN_1="${E2E_ACCESS_TOKEN:-}"
+ACCESS_TOKEN_2="${E2E_ACCESS_TOKEN_2:-}"
+GROUP_ID="${E2E_GROUP_ID:-}"
+CONTEXT_ID="${E2E_CONTEXT_ID:-}"
+
+for var in NODE_1_URL NODE_2_URL ACCESS_TOKEN_1 ACCESS_TOKEN_2 GROUP_ID CONTEXT_ID; do
+  [ -n "${!var:-}" ] || { red "$var missing in $ENV_FILE"; exit 1; }
+done
+
+# ── 1. Generate namespace invitation on node1 ────────────────────────────────
+
+step "Generating namespace invitation on node1"
+INVITE_RES=$(curl -sf -X POST "${NODE_1_URL}/admin-api/namespaces/${GROUP_ID}/invite" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN_1}" \
+  -H "Content-Type: application/json" \
+  -d '{}' 2>/dev/null) || INVITE_RES="{}"
+INVITE_DATA=$(echo "$INVITE_RES" | jq '.data.invitation // empty' 2>/dev/null)
+[ -n "$INVITE_DATA" ] && [ "$INVITE_DATA" != "null" ] \
+  || { red "Invitation empty"; echo "$INVITE_RES" >&2; exit 1; }
+green "Invitation generated"
+
+# ── 2. Node2 joins the namespace ─────────────────────────────────────────────
+
+step "Node2 joining namespace $GROUP_ID"
+curl -sf -X POST "${NODE_2_URL}/admin-api/namespaces/${GROUP_ID}/join" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --argjson inv "$INVITE_DATA" '{invitation: $inv}')" >/dev/null \
+  && green "Joined namespace" \
+  || { red "Namespace join failed"; exit 1; }
+
+# ── 3. Sync namespace to node2 ───────────────────────────────────────────────
+
+step "Syncing namespace to node2"
+curl -sf -X POST "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/sync" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
+  -H "Content-Type: application/json" -d '{}' &>/dev/null \
+  && green "Sync triggered" || yellow "Sync failed (non-fatal)"
+
+# ── 4. Wait for context to surface on node2, then join it ────────────────────
+
+step "Waiting for #general to appear on node2"
+for i in $(seq 1 30); do
+  CTXS_2=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/contexts" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null) || CTXS_2="{}"
+  if echo "$CTXS_2" | jq -e \
+      --arg id "$CONTEXT_ID" \
+      '(.data // .) | if type=="array" then .[] | select(.contextId==$id or .id==$id) else empty end' \
+      >/dev/null 2>&1; then
+    green "Channel visible on node2 (attempt $i)"
+    break
+  fi
+  [ "$i" -eq 30 ] && yellow "Context not visible after 60s — proceeding anyway"
+  sleep 2
+done
+
+step "Node2 joining #general channel"
+JOIN_CTX=$(curl -sf -X POST "${NODE_2_URL}/admin-api/contexts/${CONTEXT_ID}/join" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
+  -H "Content-Type: application/json" -d '{}' 2>/dev/null) || JOIN_CTX="{}"
+MEMBER_KEY_2=$(echo "$JOIN_CTX" | jq -r '.data.memberPublicKey // .data.member_public_key // empty' 2>/dev/null || true)
+if [ -z "$MEMBER_KEY_2" ]; then
+  MEMBER_KEY_2=$(curl -sf "${NODE_2_URL}/admin-api/contexts/${CONTEXT_ID}/identities-owned" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null \
+    | jq -r '(.data // .) | if type=="array" then .[0] else (.identities[0] // .items[0]) end' 2>/dev/null || true)
+fi
+[ -n "$MEMBER_KEY_2" ] && green "Joined channel (identity: $MEMBER_KEY_2)" \
+  || yellow "Could not resolve node2 member key (non-fatal)"
+
+# ── 5. Persist node2 member key to .env.integration ──────────────────────────
+
+if [ -n "$MEMBER_KEY_2" ]; then
+  sed -i.bak "s|^E2E_MEMBER_KEY_2=.*|E2E_MEMBER_KEY_2=${MEMBER_KEY_2}|" "$ENV_FILE" \
+    && rm -f "${ENV_FILE}.bak"
+  green "Updated $ENV_FILE"
+fi
+
+printf '\n'
+printf '\033[1;32m══════════════════════════════════════════\033[0m\n'
+printf '\033[1;32m  Node2 invited into node1 workspace\033[0m\n'
+printf '\033[1;32m══════════════════════════════════════════\033[0m\n'
+printf '\n'
+printf '  Workspace:  %s\n' "$GROUP_ID"
+printf '  Channel:    %s  (#general)\n' "$CONTEXT_ID"
+printf '\n'

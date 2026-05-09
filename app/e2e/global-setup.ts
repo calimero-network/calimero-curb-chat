@@ -56,10 +56,9 @@ function isSessionComplete(): boolean {
       origins.find((o) => o.origin.includes("localhost:5173"))?.localStorage ??
       [];
 
-    const meroTokens = ls.find((e) => e.name === "mero-tokens");
+    const meroTokens = ls.find((e) => e.name === "mero-tokens")?.value;
     if (!meroTokens) return false;
-
-    const tokens = JSON.parse(meroTokens.value) as { access_token?: string };
+    const tokens = JSON.parse(meroTokens) as { access_token?: string };
     if (!tokens.access_token) return false;
 
     // Treat an undecodable token as expired — real tokens from the node are
@@ -103,17 +102,21 @@ export default async function globalSetup(_config: FullConfig) {
   const refreshToken = process.env.E2E_REFRESH_TOKEN ?? "";
   if (accessToken && !isTokenExpired(JSON.stringify(accessToken))) {
     console.log("[global-setup] Injecting tokens from env into auth state (no browser flow).");
+    // MeroProvider's internal `LocalStorageTokenStore()` reads tokens from
+    // the single JSON blob at `mero-tokens` — not from individual keys.
+    const tokens = JSON.stringify({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_at: Date.now() + 3600_000,
+    });
     const state = {
       cookies: [],
       origins: [
         {
           origin: APP_URL,
           localStorage: [
-            { name: "mero:node_url",  value: NODE_URL },
-            { name: "mero-tokens",    value: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }) },
-            { name: "app-url",        value: JSON.stringify(NODE_URL) },
-            { name: "access-token",   value: JSON.stringify(accessToken) },
-            { name: "refresh-token",  value: JSON.stringify(refreshToken) },
+            { name: "mero:node_url", value: NODE_URL },
+            { name: "mero-tokens",   value: tokens },
           ],
         },
       ],

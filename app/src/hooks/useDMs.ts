@@ -3,9 +3,11 @@ import { GroupApiDataSource } from "../api/dataSource/groupApiDataSource";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { GroupContextChannel, ContextInfo } from "../types/Common";
 import { log } from "../utils/logger";
-import { apiClient } from "@calimero-network/calimero-client";
-import type { ResponseData } from "@calimero-network/calimero-client";
-import type { FetchContextIdentitiesResponse } from "@calimero-network/calimero-client/lib/api/nodeApi";
+import type { ResponseData } from "../api/types";
+import {
+  nodeApi as apiClientNode,
+  type LegacyFetchContextIdentitiesResponse as FetchContextIdentitiesResponse,
+} from "../api/meroJsClient";
 import { getGroupMemberIdentity, setGroupMemberIdentity } from "../constants/config";
 import { resolveSharedDmDiscovery } from "../utils/dmContext";
 
@@ -74,7 +76,7 @@ export function useDMs() {
           let joinedIdentity: string | undefined;
           try {
             const resp: ResponseData<FetchContextIdentitiesResponse> =
-              await apiClient.node().fetchContextIdentities(ctxId);
+              await apiClientNode.fetchContextIdentities(ctxId);
             const list = resp.data?.data?.identities;
             if (list && list.length > 0) {
               joinedIdentity = list[0];

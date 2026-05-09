@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
-import type { ResponseData } from "@calimero-network/calimero-client";
+import type { ResponseData } from "../api/types";
 import type { FullMessageResponse } from "../api/clientApi";
 import type {
   ActiveChat,

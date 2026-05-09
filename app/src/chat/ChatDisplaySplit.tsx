@@ -17,8 +17,8 @@ import {
 import type { ChannelInfo } from "../api/clientApi";
 import {
   getContextId as getGlobalContextId,
-  getExecutorPublicKey,
-} from "@calimero-network/calimero-client";
+  getContextIdentity as getExecutorPublicKey,
+} from "@calimero-network/mero-react";
 import EmojiSelectorPopup from "../emojiSelector/EmojiSelectorPopup";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { scrollbarStyles } from "../styles/scrollbar";

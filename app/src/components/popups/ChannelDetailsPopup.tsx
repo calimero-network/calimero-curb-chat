@@ -6,8 +6,8 @@ import type { ChannelInfo, UserId } from "../../api/clientApi";
 import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
-import type { ResponseData } from "@calimero-network/calimero-client";
-import { getExecutorPublicKey } from "@calimero-network/calimero-client";
+import type { ResponseData } from "../../api/types";
+import { getContextIdentity } from "@calimero-network/mero-react";
 import { useGroupAdmin } from "../../hooks/useGroupAdmin";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { getGroupId } from "../../constants/config";
@@ -90,7 +90,7 @@ export default function ChannelDetailsPopup({
     }
   };
 
-  const currentIdentity = getExecutorPublicKey() as string;
+  const currentIdentity = getContextIdentity() as string;
   const isOwner = !!channelMeta.createdBy && channelMeta.createdBy === currentIdentity;
   const canDelete = isOwner || isAdmin;
   const canLeave = !!chat.contextId && !isOwner;

@@ -9,7 +9,7 @@ import type {
   WebSocketEvent,
   ExecutionEventData,
 } from "../types/WebSocketTypes";
-import { getExecutorPublicKey } from "@calimero-network/calimero-client";
+import { getContextIdentity } from "@calimero-network/mero-react";
 import { bytesParser } from "../utils/bytesParser";
 
 /**
@@ -150,7 +150,7 @@ export function useChatHandlers(
 
           // Always show notifications for all messages (even if not in active chat)
           const lastMessage = newMessages[newMessages.length - 1];
-          const currentUserId = getExecutorPublicKey();
+          const currentUserId = getContextIdentity();
 
           if (!useDM) {
             const isFromCurrentUser = lastMessage.sender === currentUserId;

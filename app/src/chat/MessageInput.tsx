@@ -14,11 +14,9 @@ import UploadComponent, {
 } from "./UploadComponent";
 import MessageFileField from "./MessageFileField";
 import MessageImageField from "./MessageImageField";
-import {
-  blobClient,
-  getContextId,
-  type ResponseData,
-} from "@calimero-network/calimero-client";
+import { getContextId } from "@calimero-network/mero-react";
+import type { ResponseData } from "../api/types";
+import { getMeroJs } from "../api/meroJsClient";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { extractUsernames } from "../utils/mentions";
 import { RichTextEditor } from "@calimero-network/mero-ui";
@@ -425,10 +423,7 @@ export default function MessageInput({
     }
 
     try {
-      const response = await blobClient.deleteBlob(blobId);
-      if (response?.error) {
-        console.error("MessageInput", "Failed to delete blob", response.error);
-      }
+      await getMeroJs().admin.deleteBlob(blobId);
     } catch (error) {
       console.error("MessageInput", "Failed to delete blob", error);
     }

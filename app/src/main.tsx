@@ -3,15 +3,12 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
 import { BrowserRouter } from "react-router-dom";
-import {
-  AppMode,
-  CalimeroProvider,
-  setAppEndpointKey,
-  setAccessToken,
-  setRefreshToken,
-} from "@calimero-network/calimero-client";
 import bs58 from "bs58";
-import { MeroProvider, AppMode as MeroAppMode } from "@calimero-network/mero-react";
+import {
+  MeroProvider,
+  AppMode as MeroAppMode,
+  setNodeUrl,
+} from "@calimero-network/mero-react";
 import "@calimero-network/mero-ui/styles.css";
 import { ToastProvider } from "@calimero-network/mero-ui";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
@@ -20,32 +17,28 @@ import { log } from "./utils/logger.ts";
 
 import 'react-photo-view/dist/react-photo-view.css';
 
-// Bridge mero-react storage → calimero-client storage so CalimeroProvider's
-// CalimeroApplication gets the correct node URL and access token at creation time.
-// Runs synchronously before React renders — effects would be too late.
-(function bridgeStorageOnLoad() {
+// Tauri SSO and web-auth callbacks deliver fresh tokens via URL hash.
+// MeroProvider's internal `LocalStorageTokenStore()` reads tokens as a
+// single JSON blob at `mero-tokens`; persist the hash values there before
+// React mounts (effects would be too late).
+(function persistAuthHashOnLoad() {
   const hash = window.location.hash.slice(1);
-  if (hash) {
-    // Auth callback return (web auth) or Tauri SSO — hash has the fresh tokens.
-    const p = new URLSearchParams(hash);
-    const accessToken = p.get('access_token');
-    const refreshToken = p.get('refresh_token');
-    const nodeUrl = p.get('node_url');
-    if (nodeUrl) setAppEndpointKey(nodeUrl.trim());
-    if (accessToken) setAccessToken(accessToken);
-    if (refreshToken) setRefreshToken(refreshToken);
-  } else {
-    // Returning authenticated user: bridge mero-react storage keys → calimero storage keys.
-    const nodeUrl = localStorage.getItem('mero:node_url');
-    if (nodeUrl) setAppEndpointKey(nodeUrl);
-    const raw = localStorage.getItem('mero-tokens');
-    if (raw) {
-      try {
-        const d = JSON.parse(raw) as { access_token?: string; refresh_token?: string };
-        if (d.access_token) setAccessToken(d.access_token);
-        if (d.refresh_token) setRefreshToken(d.refresh_token);
-      } catch { /* ignore */ }
-    }
+  if (!hash) return;
+  const p = new URLSearchParams(hash);
+  const accessToken = p.get("access_token");
+  const refreshToken = p.get("refresh_token");
+  const expiresAt = p.get("expires_at");
+  const nodeUrl = p.get("node_url");
+  if (nodeUrl) setNodeUrl(nodeUrl.trim());
+  if (accessToken && refreshToken) {
+    localStorage.setItem(
+      "mero-tokens",
+      JSON.stringify({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: expiresAt ? parseInt(expiresAt, 10) : Date.now() + 3600_000,
+      }),
+    );
   }
 })();
 
@@ -133,17 +126,11 @@ createRoot(document.getElementById("root")!).render(
         registryUrl="https://apps.calimero.network"
       >
         <BrowserRouter>
-          <CalimeroProvider
-            mode={AppMode.MultiContext}
-            packageName={import.meta.env.VITE_APPLICATION_PACKAGE}
-            registryUrl="https://apps.calimero.network"
-          >
-            <WebSocketProvider>
-              <ToastProvider>
-                <App />
-              </ToastProvider>
-            </WebSocketProvider>
-          </CalimeroProvider>
+          <WebSocketProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </WebSocketProvider>
         </BrowserRouter>
       </MeroProvider>
     </ErrorBoundary>

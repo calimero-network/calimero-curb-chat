@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@calimero-network/calimero-client";
+import type { ApiResponse } from "./types";
 import type { HashMap } from "../types/Common";
 
 export enum ChannelType {

@@ -51,8 +51,11 @@ vi.mock("@calimero-network/mero-ui", () => ({
   ),
 }));
 
-vi.mock("@calimero-network/calimero-client", () => ({
-  getAppEndpointKey: () => "http://localhost:2428",
+vi.mock("@calimero-network/mero-react", () => ({
+  getNodeUrl: () => "http://localhost:2428",
+}));
+
+vi.mock("../../api/meroJsClient", () => ({
   getAuthConfig: () => ({ jwtToken: "token" }),
 }));
 

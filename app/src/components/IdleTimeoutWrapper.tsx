@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, memo } from "react";
-import { useCalimero } from "@calimero-network/calimero-client";
+import { useMero } from "@calimero-network/mero-react";
 import {
   clearStoredSession,
   updateSessionActivity,
@@ -23,7 +23,7 @@ const IdleTimeoutWrapper = memo(function IdleTimeoutWrapper({
   children,
   timeoutMs = 3600000, // 1 hour
 }: IdleTimeoutWrapperProps) {
-  const { isAuthenticated, logout } = useCalimero();
+  const { isAuthenticated, logout } = useMero();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
 
