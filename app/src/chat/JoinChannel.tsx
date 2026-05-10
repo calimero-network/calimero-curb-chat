@@ -4,7 +4,15 @@ import Loader from "../components/loader/Loader";
 import { styled } from "styled-components";
 import type { ChannelInfo } from "../api/clientApi";
 import { GroupApiDataSource } from "../api/dataSource/groupApiDataSource";
-import { getGroupId } from "../constants/config";
+import {
+  getGroupId,
+  getGroupMemberIdentity,
+  setContextMemberIdentity,
+} from "../constants/config";
+import {
+  getIdentityDisplayName,
+  getMessengerDisplayName,
+} from "../utils/messengerName";
 import { timestampToDate } from "../utils/time";
 import { Button } from "@calimero-network/mero-ui";
 
@@ -101,9 +109,26 @@ export default function JoinChannel({
     setLoading(true);
     const groupId = getGroupId();
     if (groupId && activeChat.contextId) {
-      await new GroupApiDataSource().joinGroupContext(groupId, {
+      const groupApi = new GroupApiDataSource();
+      const joinRes = await groupApi.joinGroupContext(groupId, {
         contextId: activeChat.contextId,
       });
+      const memberKey = joinRes.data?.memberPublicKey;
+      if (memberKey) {
+        setContextMemberIdentity(activeChat.contextId, memberKey);
+        // Seed server-side member alias so other members see a display
+        // name instead of a raw identity hash on rc.35.
+        const namespaceIdentity = getGroupMemberIdentity(groupId);
+        const seedAlias =
+          (namespaceIdentity ? getIdentityDisplayName(namespaceIdentity) : "") ||
+          getMessengerDisplayName() ||
+          "";
+        if (seedAlias) {
+          groupApi
+            .setMemberAlias(activeChat.contextId, memberKey, { alias: seedAlias })
+            .catch(() => {/* non-fatal — alias is best-effort */});
+        }
+      }
     }
     setLoading(false);
     onJoinedChat();

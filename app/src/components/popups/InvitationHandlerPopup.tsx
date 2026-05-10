@@ -22,6 +22,10 @@ import {
   setStoredGroupAlias,
   setContextMemberIdentity,
 } from "../../constants/config";
+import {
+  getIdentityDisplayName,
+  getMessengerDisplayName,
+} from "../../utils/messengerName";
 import { parseGroupInvitationPayload } from "../../utils/invitation";
 
 const spin = keyframes`to { transform: rotate(360deg); }`;
@@ -246,13 +250,27 @@ export default function InvitationHandlerPopup({
         setStatus("syncing-context");
         setStatusMessage(`Joining ${contextEntries.length} channel(s)...`);
 
+        // Seed each newly-joined context with a server-side member alias so
+        // other members see a display name instead of a raw identity hash
+        // (papers over the rc.35 governance gap until the upstream fix lands).
+        const seedAlias =
+          getIdentityDisplayName(memberIdentity) ||
+          getMessengerDisplayName() ||
+          "";
+
         for (const entry of contextEntries) {
           try {
             const joinCtxResult = await groupApi.joinGroupContext(groupId, {
               contextId: entry.contextId,
             });
-            if (joinCtxResult.data?.memberPublicKey) {
-              setContextMemberIdentity(entry.contextId, joinCtxResult.data.memberPublicKey);
+            const memberKey = joinCtxResult.data?.memberPublicKey;
+            if (memberKey) {
+              setContextMemberIdentity(entry.contextId, memberKey);
+              if (seedAlias) {
+                groupApi
+                  .setMemberAlias(entry.contextId, memberKey, { alias: seedAlias })
+                  .catch(() => {/* non-fatal — alias is best-effort */});
+              }
             }
           } catch {
             // Best-effort: failing to join one context shouldn't block workspace entry

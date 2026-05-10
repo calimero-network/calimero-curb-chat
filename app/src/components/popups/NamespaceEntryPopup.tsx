@@ -302,11 +302,22 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
     try {
       const ctxRes = await api.current.listGroupContexts(namespaceId);
       if (!ctxRes.data) return;
+      const namespaceIdentity = getGroupMemberIdentity(namespaceId);
+      const seedAlias =
+        (namespaceIdentity ? getIdentityDisplayName(namespaceIdentity) : "") ||
+        getMessengerDisplayName() ||
+        "";
       for (const ctx of ctxRes.data) {
         try {
           const joinRes = await api.current.joinGroupContext(namespaceId, { contextId: ctx.contextId });
-          if (joinRes.data?.memberPublicKey) {
-            setContextMemberIdentity(ctx.contextId, joinRes.data.memberPublicKey);
+          const memberKey = joinRes.data?.memberPublicKey;
+          if (memberKey) {
+            setContextMemberIdentity(ctx.contextId, memberKey);
+            if (seedAlias) {
+              api.current
+                .setMemberAlias(ctx.contextId, memberKey, { alias: seedAlias })
+                .catch(() => {/* non-fatal — alias is best-effort */});
+            }
           }
         } catch { /* already a member or restricted — ignore */ }
       }

@@ -14,6 +14,7 @@ import { ToastProvider } from "@calimero-network/mero-ui";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { WebSocketProvider } from "./contexts/WebSocketContext.tsx";
 import { log } from "./utils/logger.ts";
+import { applyDevOverlay } from "./utils/devOverlay.ts";
 
 import 'react-photo-view/dist/react-photo-view.css';
 
@@ -99,6 +100,16 @@ function getExplicitApplicationId(): string {
 const explicitApplicationId = getExplicitApplicationId();
 if (explicitApplicationId && !localStorage.getItem(CALIMERO_APP_ID_KEY)) {
   localStorage.setItem(CALIMERO_APP_ID_KEY, explicitApplicationId);
+}
+
+// Dev-only: when running under `make start`, dev-invite.sh writes
+// /dev-overlay.json with namespace_id + namespace_alias. The webapp
+// can't get the alias from /admin-api/namespaces on node-2 because
+// rc.35 governance doesn't propagate the alias field. Seed the local
+// alias cache so node-2's UI shows "Dev Workspace" instead of
+// "Workspace {short-id}". See needs-fix.md item A2.
+if (import.meta.env.DEV) {
+  void applyDevOverlay();
 }
 
 // Register service worker for PWA (production only — sw.js is not served in dev)

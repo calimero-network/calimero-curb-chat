@@ -38,6 +38,7 @@ import {
   getGroupId,
   getGroupMemberIdentity,
   setGroupMemberIdentity,
+  setContextMemberIdentity,
 } from "../../constants/config";
 import { getAppEntryState } from "../../utils/appEntry";
 import { getMessengerDisplayName, getIdentityDisplayName, getStoredExecutorIdentity } from "../../utils/messengerName";
@@ -425,6 +426,19 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         }
 
         resolvedIdentity = joinResponse.data.memberPublicKey;
+        setContextMemberIdentity(contextId, resolvedIdentity);
+        // Seed server-side member alias so the other DM participant sees a
+        // display name instead of a raw identity hash on rc.35.
+        const namespaceIdentity = getGroupMemberIdentity(groupId);
+        const seedAlias =
+          (namespaceIdentity ? getIdentityDisplayName(namespaceIdentity) : "") ||
+          getMessengerDisplayName() ||
+          "";
+        if (seedAlias) {
+          groupApi
+            .setMemberAlias(contextId, resolvedIdentity, { alias: seedAlias })
+            .catch(() => {/* non-fatal — alias is best-effort */});
+        }
         const refreshedDms = await fetchDmsWithGroup();
         const refreshedDm = refreshedDms.find(
           (entry) => entry.contextId === contextId,

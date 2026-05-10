@@ -104,6 +104,36 @@ if [ -n "$MEMBER_KEY_2" ]; then
   green "Updated $ENV_FILE"
 fi
 
+# ── 6. Write dev-overlay.json so node-2's webapp can show the workspace alias.
+# Without this, the namespace alias ("Dev Workspace") set on node-1 doesn't
+# propagate via rc.35 governance — node-2's webapp would otherwise show
+# "Workspace {short-id}". main.tsx fetches this on boot in dev mode and
+# seeds localStorage. Best-effort: pull alias from node-1 directly.
+ALIAS_FROM_N1=$(curl -sf "${NODE_1_URL}/admin-api/namespaces" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN_1:-}" 2>/dev/null \
+  | jq -r --arg id "$GROUP_ID" \
+      '(.data // [])[] | select(.namespaceId==$id) | .alias // empty' \
+      2>/dev/null || true)
+
+if [ -n "$ALIAS_FROM_N1" ]; then
+  OVERLAY="$REPO_ROOT/app/public/dev-overlay.json"
+  jq -n \
+    --arg ns "$GROUP_ID" \
+    --arg alias "$ALIAS_FROM_N1" \
+    --arg ctx "$CONTEXT_ID" \
+    --arg member "$MEMBER_KEY_2" \
+    '{
+      "namespace_id": $ns,
+      "namespace_alias": $alias,
+      "general_context_id": $ctx,
+      "node_2_member_key": $member,
+      "_note": "written by dev-invite.sh; main.tsx seeds localStorage from this in dev mode"
+    }' > "$OVERLAY"
+  green "Wrote $OVERLAY (alias: $ALIAS_FROM_N1)"
+else
+  yellow "Could not fetch namespace alias from node-1 (non-fatal — webapp will fall back to 'Workspace {id-slice}')"
+fi
+
 printf '\n'
 printf '\033[1;32m══════════════════════════════════════════\033[0m\n'
 printf '\033[1;32m  Node2 invited into node1 workspace\033[0m\n'

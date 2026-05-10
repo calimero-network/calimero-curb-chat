@@ -9,12 +9,20 @@ import {
   nodeApi as apiClientNode,
   type LegacyFetchContextIdentitiesResponse as FetchContextIdentitiesResponse,
 } from "../../api/meroJsClient";
-import { getGroupId } from "../../constants/config";
+import {
+  getGroupId,
+  getGroupMemberIdentity,
+  setContextMemberIdentity,
+} from "../../constants/config";
 import { Button, SearchInput } from "@calimero-network/mero-ui";
 import { log } from "../../utils/logger";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { buildChannelEntryChat } from "../../utils/channelEntry";
 import { isDmContextCandidate } from "../../utils/dmContext";
+import {
+  getIdentityDisplayName,
+  getMessengerDisplayName,
+} from "../../utils/messengerName";
 import { useToast } from "../../contexts/ToastContext";
 
 const SearchContainer = styled.div`
@@ -314,6 +322,21 @@ export default function SearchChannelsContainer({
           log.error("SearchChannels", "joinGroupContext failed", joinResponse.error);
           addToast({ title: "Join channel", message, type: "channel", duration: 4000 });
           return;
+        }
+
+        const memberKey = joinResponse.data.memberPublicKey;
+        setContextMemberIdentity(contextId, memberKey);
+        // Seed server-side member alias so other members see a display name
+        // instead of a raw identity hash on rc.35.
+        const namespaceIdentity = getGroupMemberIdentity(groupId);
+        const seedAlias =
+          (namespaceIdentity ? getIdentityDisplayName(namespaceIdentity) : "") ||
+          getMessengerDisplayName() ||
+          "";
+        if (seedAlias) {
+          groupApi
+            .setMemberAlias(contextId, memberKey, { alias: seedAlias })
+            .catch(() => {/* non-fatal — alias is best-effort */});
         }
 
         setAllChannels((prev) =>
