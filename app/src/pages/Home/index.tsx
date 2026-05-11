@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppContainer from "../../components/common/AppContainer";
+import { clearNamespaceReady } from "../../utils/session";
 import {
   type ActiveChat,
   type ChatMessagesData,
@@ -51,7 +53,19 @@ import { buildDmMemberOptions } from "../../utils/dmMemberOptions";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { mero: app } = useCalimero();
+  const navigate = useNavigate();
   const currentGroupId = getGroupId();
+
+  // Hard guard: if no namespace/group is actually selected, bounce back to
+  // /login so the NamespaceEntryPopup picks one. Belt-and-braces with the
+  // isNamespaceReady() check in App.tsx — that's a sessionStorage flag and
+  // can fall out of sync with the real group selection.
+  useEffect(() => {
+    if (!currentGroupId) {
+      clearNamespaceReady();
+      navigate("/login", { replace: true });
+    }
+  }, [currentGroupId, navigate]);
   const [isOpenSearchChannel, setIsOpenSearchChannel] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
@@ -688,6 +702,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
       const otherUsername = dmMembers.get(otherIdentity) || chatMembers.get(otherIdentity) || "";
 
+      // 1-group-per-context model: DM = a new restricted subgroup under the
+      // namespace + one context inside. The helper handles both steps and
+      // adds the other identity as a member of the new DM subgroup.
       const createResponse = await createDmContextInGroup({
         applicationId: getApplicationId(),
         groupId,

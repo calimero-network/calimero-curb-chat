@@ -52,7 +52,8 @@ export function useGroupContexts() {
       const idMap: ContextIdentityMap = { ...identitiesRef.current };
 
       async function enrichEntries(
-        entries: { contextId: string; alias?: string }[]
+        entries: { contextId: string; alias?: string }[],
+        visibility?: "open" | "restricted",
       ): Promise<GroupContextChannel[]> {
         const filtered = entries.filter((e) => !leftContextIdsRef.current.has(e.contextId));
         const ids = filtered.map((e) => e.contextId);
@@ -76,6 +77,7 @@ export function useGroupContexts() {
                 contextId: ctxId,
                 alias,
                 info: null,
+                visibility,
                 contextIdentity: undefined,
                 isJoined: false,
               };
@@ -87,6 +89,7 @@ export function useGroupContexts() {
                   contextId: ctxId,
                   alias,
                   info: infoResp.data,
+                  visibility,
                   contextIdentity: executor,
                   isJoined: true,
                 };
@@ -98,6 +101,7 @@ export function useGroupContexts() {
               contextId: ctxId,
               alias,
               info: null,
+              visibility,
               contextIdentity: executor,
               isJoined: true,
             };
@@ -105,16 +109,11 @@ export function useGroupContexts() {
         );
       }
 
-      // Fetch namespace-level contexts (DMs and any direct namespace channels)
-      const listResponse = await groupApi.listGroupContexts(groupId);
-      if (listResponse.error || !listResponse.data) {
-        setError(listResponse.error?.message || "Failed to fetch group contexts");
-        setLoading(false);
-        return;
-      }
-      const namespaceChannels = await enrichEntries(listResponse.data);
-
-      // Fetch subgroups and their contexts
+      // 1-group-per-context model: each subgroup under the namespace IS a
+      // channel-group with exactly one context inside. The subgroup's
+      // VisibilityMode (open|restricted) is the channel's public/private
+      // flag. DMs are also subgroups (restricted, 2 members) — caller
+      // distinguishes them via `info.context_type`.
       let subgroupList: SubgroupEntry[] = [];
       const subgroupChannelsMap = new Map<string, GroupContextChannel[]>();
 
@@ -124,9 +123,13 @@ export function useGroupContexts() {
           subgroupList = sgResp.data;
           await Promise.all(
             subgroupList.map(async (sg) => {
-              const sgListResp = await groupApi.listGroupContexts(sg.groupId);
+              const [sgListResp, sgInfoResp] = await Promise.all([
+                groupApi.listGroupContexts(sg.groupId),
+                groupApi.getGroup(sg.groupId).catch(() => null),
+              ]);
+              const visibility = sgInfoResp?.data?.subgroupVisibility;
               if (sgListResp.data) {
-                const sgChannels = await enrichEntries(sgListResp.data);
+                const sgChannels = await enrichEntries(sgListResp.data, visibility);
                 subgroupChannelsMap.set(sg.groupId, sgChannels);
               }
             })
@@ -136,8 +139,7 @@ export function useGroupContexts() {
         log.debug("useGroupContexts", "Failed to fetch subgroups", e);
       }
 
-      // Flat list = namespace channels + all subgroup channels
-      const allChannels: GroupContextChannel[] = [...namespaceChannels];
+      const allChannels: GroupContextChannel[] = [];
       subgroupChannelsMap.forEach((sgChannels) => allChannels.push(...sgChannels));
 
       identitiesRef.current = idMap;

@@ -14,6 +14,7 @@ export interface DevOverlay {
   namespace_id: string;
   namespace_alias: string;
   general_context_id?: string;
+  general_subgroup_id?: string;
   node_2_member_key?: string;
 }
 

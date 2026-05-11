@@ -173,6 +173,8 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
           nonInvitedUserList={nonInvitedUserList}
           nonChannelMembers={props.nonChannelMembers}
           isOwner={isOwner}
+          contextId={props.contextId}
+          myContextIdentity={getContextIdentity() ?? undefined}
         />
       )}
     </Wrapper>

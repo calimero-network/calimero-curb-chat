@@ -28,33 +28,33 @@ describe("getContextVisibilityModeFromOption", () => {
 });
 
 describe("visibility labels", () => {
-  it("shows open for the public modal option", () => {
-    expect(getChannelVisibilityOptionLabel("public")).toBe("Open");
+  it("shows Public for the public modal option", () => {
+    expect(getChannelVisibilityOptionLabel("public")).toBe("Public");
   });
 
-  it("shows restricted for the private modal option", () => {
-    expect(getChannelVisibilityOptionLabel("private")).toBe("Restricted");
+  it("shows Private for the private modal option", () => {
+    expect(getChannelVisibilityOptionLabel("private")).toBe("Private");
   });
 
-  it("shows open for open contexts", () => {
-    expect(getContextVisibilityLabel("open")).toBe("Open");
+  it("shows Public for open contexts", () => {
+    expect(getContextVisibilityLabel("open")).toBe("Public");
   });
 
-  it("shows restricted for restricted contexts", () => {
-    expect(getContextVisibilityLabel("restricted")).toBe("Restricted");
+  it("shows Private for restricted contexts", () => {
+    expect(getContextVisibilityLabel("restricted")).toBe("Private");
   });
 });
 
 describe("isRestrictedChannelType", () => {
-  it("treats the new restricted label as restricted", () => {
-    expect(isRestrictedChannelType("Restricted")).toBe(true);
-  });
-
-  it("keeps backward compatibility for the legacy private label", () => {
+  it("treats Private (current label) as restricted", () => {
     expect(isRestrictedChannelType("Private")).toBe(true);
   });
 
-  it("treats open channels as not restricted", () => {
-    expect(isRestrictedChannelType("Open")).toBe(false);
+  it("keeps backward compatibility with the legacy Restricted label", () => {
+    expect(isRestrictedChannelType("Restricted")).toBe(true);
+  });
+
+  it("treats Public channels as not restricted", () => {
+    expect(isRestrictedChannelType("Public")).toBe(false);
   });
 });

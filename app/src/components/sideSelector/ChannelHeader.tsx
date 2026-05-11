@@ -7,6 +7,7 @@ import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import { getApplicationId, getGroupId, setContextMemberIdentity } from "../../constants/config";
 import { memo, useCallback, useState } from "react";
 import { usePersistentState } from "../../hooks/usePersistentState";
+import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { log } from "../../utils/logger";
 import {
   getChannelVisibilityOption,
@@ -71,6 +72,13 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const [defaultVisibility, setDefaultVisibility] = useState<"public" | "private">("public");
   const [isLoadingDefaultVisibility, setIsLoadingDefaultVisibility] = useState(false);
   const groupId = getGroupId();
+  const permissionsGroupId = props.targetGroupId ?? groupId;
+  const permissions = useCurrentGroupPermissions(permissionsGroupId);
+  // Optimistic gate: only hide when we've definitively resolved a non-admin
+  // role. While loading, on API failure, or before memberIdentity is known,
+  // show the button — the create API enforces the real check anyway.
+  const resolved = !permissions.loading && permissions.memberIdentity !== "";
+  const canShowCreate = !resolved || permissions.isAdmin;
 
   const channelNameValidator = useCallback(
     (value: string) => {
@@ -109,39 +117,35 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     const groupApi = new GroupApiDataSource();
     const namespaceId = props.targetGroupId ?? groupId;
 
-    // Per-channel visibility requires per-channel subgroups: core has no
-    // per-context visibility, only per-group `subgroupVisibility`. So each
-    // channel = its own subgroup containing one context.
-    //
-    // 1) Create a subgroup under the namespace named after the channel.
-    const subgroupResp = await groupApi.createSubgroup(namespaceId, {
-      groupAlias: channelName,
-    });
-    if (subgroupResp.error || !subgroupResp.data) {
-      log.error("ChannelHeader", "Failed to create subgroup for channel", subgroupResp.error);
+    // 1-group-per-context model (rc.37+): each channel is its own subgroup
+    // under the namespace root, with one context inside. Subgroup visibility
+    // (open|restricted) IS the channel's public/private flag, and is set
+    // deterministically via the SubgroupVisibilitySet op (encrypted to the
+    // subgroup's members). Non-admin members can create+manage their own
+    // channel-groups thanks to the CAN_CREATE_SUBGROUP / CAN_MANAGE_VISIBILITY
+    // namespace caps granted in dev-node.sh.
+
+    // 1) Create the channel's subgroup under the namespace root.
+    const sgResp = await groupApi.createSubgroup(namespaceId, { groupAlias: channelName });
+    if (sgResp.error || !sgResp.data) {
+      log.error("ChannelHeader", "Failed to create channel subgroup", sgResp.error);
       return;
     }
-    const subgroupId = subgroupResp.data.groupId;
+    const channelGroupId = sgResp.data.groupId;
 
-    // 2) Set the subgroup's visibility based on the user's choice in the popup.
-    //    Best-effort: if this fails the channel is still usable, just at the
-    //    namespace's default visibility.
-    const visResp = await groupApi.setSubgroupVisibility(subgroupId, {
+    // 2) Set the subgroup's visibility from the popup choice.
+    const visResp = await groupApi.setSubgroupVisibility(channelGroupId, {
       subgroupVisibility: isPublic ? "open" : "restricted",
     });
     if (visResp.error) {
-      log.warn(
-        "ChannelHeader",
-        "Failed to set subgroup visibility — channel will use namespace default",
-        visResp.error,
-      );
+      log.warn("ChannelHeader", "Failed to set subgroup visibility (non-fatal)", visResp.error);
     }
 
-    // 3) Create the channel context inside the subgroup.
+    // 3) Create the channel's single context inside the new subgroup.
     const createResp = await nodeApi.createGroupContext({
       applicationId: getApplicationId(),
       protocol: "near",
-      groupId: subgroupId,
+      groupId: channelGroupId,
       alias: channelName,
       initializationParams: {
         name: channelName,
@@ -156,7 +160,9 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
       return;
     }
 
-    const contextId = createResp.data.contextId;
+    const contextIdJustCreated = createResp.data.contextId;
+
+    const contextId = contextIdJustCreated;
     const memberKey = createResp.data.memberPublicKey ?? "";
     if (memberKey) {
       setContextMemberIdentity(contextId, memberKey);
@@ -209,7 +215,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   return (
     <Container $isCollapsed={props.isCollapsed}>
       {!props.isCollapsed && <TextBold>{props.title}</TextBold>}
-      {(props.targetGroupId ?? groupId) && (
+      {(props.targetGroupId ?? groupId) && canShowCreate && (
         <CreateChannelPopup
           title={"Create new Channel"}
           inputValue={inputValue}

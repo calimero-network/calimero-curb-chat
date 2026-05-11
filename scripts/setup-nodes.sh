@@ -271,20 +271,31 @@ else
   # ── Install app via REST (no meroctl needed) ──────────────────────────────
 
   step "Installing curb app on node-1"
-  APP_RES=$(curl -sf -X POST "${NODE_1_URL}/admin-api/install-dev-application" \
+  # Drop -f and capture HTTP status so we can surface merod's actual error
+  # body if the install fails — `-sf` silently swallows non-2xx responses.
+  APP_HTTP=$(curl -s -o /tmp/curb-app-install-n1.json -w '%{http_code}' \
+    -X POST "${NODE_1_URL}/admin-api/install-dev-application" \
     -H "Authorization: Bearer ${ACCESS_TOKEN_1}" \
     -H "Content-Type: application/json" \
     -d "$(jq -n --arg p "$WASM_PATH" '{path: $p, metadata: [], package: null, version: null}')" \
-    2>/dev/null) || APP_RES="{}"
+    2>/dev/null) || APP_HTTP="000"
+  APP_RES=$(cat /tmp/curb-app-install-n1.json 2>/dev/null || echo "{}")
   APP_ID=$(echo "$APP_RES" | jq -r '.data.applicationId // empty' 2>/dev/null || true)
 
   if [ -z "$APP_ID" ]; then
+    yellow "install-dev-application returned HTTP $APP_HTTP — body:"
+    printf '%s\n' "$APP_RES" | sed 's/^/    /' >&2
+
     yellow "Fetching existing app ID from node-1"
-    APP_ID=$(curl -sf "${NODE_1_URL}/admin-api/applications" \
-      -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null \
-      | jq -r '.data.apps[0].id // .data.applications[0].id // empty' 2>/dev/null || true)
+    APPS_RES=$(curl -s "${NODE_1_URL}/admin-api/applications" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null || echo "{}")
+    APP_ID=$(echo "$APPS_RES" | jq -r '.data.apps[0].id // .data.applications[0].id // empty' 2>/dev/null || true)
+    if [ -z "$APP_ID" ]; then
+      yellow "GET /admin-api/applications body:"
+      printf '%s\n' "$APPS_RES" | sed 's/^/    /' >&2
+    fi
   fi
-  [ -n "$APP_ID" ] || { red "ERROR: could not install or find app on node-1"; exit 1; }
+  [ -n "$APP_ID" ] || { red "ERROR: could not install or find app on node-1 (see HTTP body above)"; exit 1; }
   green "APP_ID: $APP_ID"
 
   step "Installing curb app on node-2"

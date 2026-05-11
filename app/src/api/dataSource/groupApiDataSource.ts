@@ -32,6 +32,7 @@ import type {
   SubgroupEntry,
   CreateSubgroupRequest,
   CreateSubgroupResponse,
+  ReparentGroupRequest,
   SetMemberAliasRequest,
   SetMemberCapabilitiesRequest,
   SyncGroupResponse,
@@ -879,6 +880,24 @@ export class GroupApiDataSource implements GroupApi {
         : httpFail(response.status, response.statusText);
     } catch (error) {
       return catchError("createSubgroup", error);
+    }
+  }
+
+  async reparentGroup(
+    groupId: string,
+    request: ReparentGroupRequest,
+  ): ApiResponse<void> {
+    try {
+      const response = await axios.post(
+        `${this.base()}/groups/${groupId}/reparent`,
+        { new_parent_id: request.newParentId },
+        { headers: getAuthHeaders() },
+      );
+      return response.status === 200
+        ? ok(undefined)
+        : httpFail(response.status, response.statusText);
+    } catch (error) {
+      return catchError("reparentGroup", error);
     }
   }
 

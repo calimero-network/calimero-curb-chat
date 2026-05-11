@@ -255,27 +255,16 @@ export default function SearchChannelsContainer({
 
       const collected: (BrowsableChannel | null)[] = [];
 
-      // Namespace-level contexts (e.g. "general")
-      const listResp = await groupApi.listGroupContexts(groupId);
-      if (listResp.data) {
-        const results = await Promise.all(
-          listResp.data.map(async (entry) => {
-            const visResp = await groupApi.getContextVisibility(groupId, entry.contextId);
-            const vis: "open" | "restricted" =
-              visResp.data?.mode ?? (visResp.error?.code === 404 ? "open" : "restricted");
-            return enrichContext(entry.contextId, entry.alias, vis);
-          }),
-        );
-        collected.push(...results);
-      }
-
-      // Subgroup contexts
+      // 1-group-per-context model: each channel-group is a subgroup under the
+      // namespace, its VisibilityMode (open|restricted) IS the channel's
+      // public/private flag. DMs are also subgroups; filter them out by the
+      // context's info.context_type === "Dm" in enrichContext below.
       const sgResp = await groupApi.listSubgroups(groupId);
       if (sgResp.data && sgResp.data.length > 0) {
         await Promise.all(
           sgResp.data.map(async (sg) => {
             const groupInfoResp = await groupApi.getGroup(sg.groupId);
-            // If we can't read the subgroup info, default to restricted (fail closed)
+            // Fail closed if we can't read the subgroup info.
             const sgVisibility: "open" | "restricted" =
               groupInfoResp.data?.subgroupVisibility === "open" ? "open" : "restricted";
 

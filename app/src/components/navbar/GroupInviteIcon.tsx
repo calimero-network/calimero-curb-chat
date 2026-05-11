@@ -30,11 +30,16 @@ export default function GroupInviteIcon() {
   const groupId = getGroupId();
   const permissions = useCurrentGroupPermissions(groupId);
 
-  if (!groupId || permissions.loading) {
+  if (!groupId) {
     return null;
   }
 
-  if (!permissions.isAdmin && !permissions.isModerator) {
+  // Optimistic gate: hide only when role is definitively resolved to a
+  // non-admin/non-moderator. While loading or if the role API fails (state
+  // collapses back to initial), keep the button visible — the invite API
+  // enforces the real check server-side.
+  const resolved = !permissions.loading && permissions.memberIdentity !== "";
+  if (resolved && !permissions.isAdmin && !permissions.isModerator) {
     return null;
   }
 

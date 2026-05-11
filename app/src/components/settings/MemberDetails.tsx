@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import styled from "styled-components";
 import type { User } from "../../types/Common";
 import { Avatar, Button, Input } from "@calimero-network/mero-ui";
-import type { UserId } from "../../api/clientApi";
+import type { Role, UserId } from "../../api/clientApi";
+import { ClientApiDataSource } from "../../api/dataSource/clientApiDataSource";
 import BaseModal from "../common/popups/BaseModal";
 
 
@@ -351,6 +352,79 @@ const OverLay = styled.div`
 //   position: relative;
 // `;
 
+// ── Role badge + action buttons ───────────────────────────────────────────
+
+const RoleBadge = styled.span<{ $role: Role }>`
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 0.25rem;
+  ${({ $role }) => {
+    switch ($role) {
+      case "Admin":
+        return `color:#a5ff11; background:rgba(165,255,17,0.12);`;
+      case "Mod":
+        return `color:#5cd8ff; background:rgba(92,216,255,0.12);`;
+      case "Banned":
+        return `color:#ff6b6b; background:rgba(255,107,107,0.14);`;
+      default:
+        return `display:none;`;
+    }
+  }}
+`;
+
+const RowActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+`;
+
+const ActionBtn = styled.button<{ $variant?: "danger" | "default" }>`
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover:enabled {
+    color: ${({ $variant }) => ($variant === "danger" ? "#ff6b6b" : "#a5ff11")};
+    border-color: ${({ $variant }) =>
+      $variant === "danger" ? "rgba(255,107,107,0.4)" : "rgba(165,255,17,0.4)"};
+    background: ${({ $variant }) =>
+      $variant === "danger" ? "rgba(255,107,107,0.08)" : "rgba(165,255,17,0.06)"};
+  }
+
+  &:disabled { opacity: 0.35; cursor: not-allowed; }
+`;
+
+const HoverRow = styled(UserListItem)`
+  &:hover ${RowActions} { opacity: 1; }
+`;
+
+// Promote/demote rules: User <-> Mod <-> Admin (single rung at a time).
+function promoteTarget(role: Role): Role | null {
+  if (role === "User") return "Mod";
+  if (role === "Mod") return "Admin";
+  return null;
+}
+function demoteTarget(role: Role): Role | null {
+  if (role === "Admin") return "Mod";
+  if (role === "Mod") return "User";
+  return null;
+}
+
 interface MemberDetailsProps {
   id: number;
   user: UserId;
@@ -368,12 +442,67 @@ interface MemberDetailsProps {
   nonInvitedUserList: UserId[];
   nonChannelMembers?: Map<string, string>;
   isOwner?: boolean;
+  /// Context (channel) id — required to read/write WASM-level moderation roles.
+  contextId?: string;
+  /// Viewer's identity within this context. Falsy → no actions are exposed.
+  myContextIdentity?: string;
 }
 
 const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
   const userList = props.userList;
 
   const [optionsOpen, setOptionsOpen] = useState(-1);
+
+  // ── In-context roles (WASM moderation) ──────────────────────────────────
+  // Empty entry in `roles` ↔ Role::User on the WASM side. We track everyone
+  // in `userList` so the UI can show badges and gate actions per row.
+  const [roles, setRoles] = useState<Map<string, Role>>(new Map());
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const fetchRoles = useCallback(async () => {
+    if (!props.contextId || !props.myContextIdentity) return;
+    const resp = await new ClientApiDataSource().listRoles({
+      contextId: props.contextId,
+      executorPublicKey: props.myContextIdentity,
+    });
+    if (resp.error || !resp.data) return;
+    const next = new Map<string, Role>();
+    for (const { identity, role } of resp.data) next.set(identity, role);
+    setRoles(next);
+  }, [props.contextId, props.myContextIdentity]);
+
+  useEffect(() => { void fetchRoles(); }, [fetchRoles]);
+
+  const roleOf = (identity: string): Role => {
+    if (roles.has(identity)) return roles.get(identity)!;
+    // The creator is seeded as Admin in `init`. Use that as a fallback when
+    // `list_roles` hasn't surfaced them (older contexts pre-role-map etc.).
+    if (identity === props.channelOwner) return "Admin";
+    return "User";
+  };
+
+  const myRole = props.myContextIdentity ? roleOf(props.myContextIdentity) : "User";
+  const canModerate = myRole === "Admin" || myRole === "Mod";
+
+  const applyRole = async (target: string, role: Role) => {
+    if (!props.contextId || !props.myContextIdentity) return;
+    setBusy(target);
+    try {
+      const resp = await new ClientApiDataSource().setMemberRole({
+        contextId: props.contextId,
+        executorPublicKey: props.myContextIdentity,
+        target,
+        role,
+      });
+      if (resp.error) {
+        console.warn("setMemberRole failed:", resp.error.message);
+        return;
+      }
+      await fetchRoles();
+    } finally {
+      setBusy(null);
+    }
+  };
 
   //const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
@@ -422,40 +551,92 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
       )}
       <UserList>
         {userList.size > 0 &&
-          Array.from(userList.entries()).map(([identity, username], id) => (
-            <UserListItem key={identity}>
-              <UserInfo>
-                <Avatar size="xs" name={username ?? ""} />
-                <Text $isSelected={optionsOpen === id}>
-                  {username}
-                </Text>
-              </UserInfo>
-              {props.isOwner && identity !== props.channelOwner && (
-                <RemoveButton
-                  title="Remove from channel"
-                  aria-label="Remove from channel"
-                  onClick={() => void props.removeUserFromChannel(identity)}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </RemoveButton>
-              )}
-              {/* TODO: Add moderator options */}
-              {/* <ModeratorOptions>
-                {(user.moderator || channelOwner === user.id) && (
-                  <RoleText>{`${
-                    channelOwner === user.id
-                      ? "Channel Owner"
-                      : "Channel Moderator"
-                  }`}</RoleText>
-                )}
-                {channelOwner !== user.id && (
-                  <ModeratorOptionsPopup id={id} user={user} length={userList.length}/>
-                )}
-              </ModeratorOptions> */}
-            </UserListItem>
-          ))}
+          Array.from(userList.entries()).map(([identity, username], id) => {
+            const targetRole = roleOf(identity);
+            const isSelf = identity === props.myContextIdentity;
+            const isOwnerRow = identity === props.channelOwner;
+
+            // Promote/demote: Admin only.
+            const promoteTo = promoteTarget(targetRole);
+            const demoteTo = demoteTarget(targetRole);
+            const showPromote =
+              myRole === "Admin" && !isSelf && !isOwnerRow && !!promoteTo;
+            const showDemote =
+              myRole === "Admin" && !isSelf && !isOwnerRow && !!demoteTo;
+            // Ban/unban: Admin can act on anyone (except self/owner).
+            // Mod can only flip Users (i.e. not other Mods/Admins).
+            const canBanThis =
+              !isSelf && !isOwnerRow &&
+              (myRole === "Admin" ||
+                (myRole === "Mod" && (targetRole === "User" || targetRole === "Banned")));
+            const showBan = canBanThis && targetRole !== "Banned";
+            const showUnban = canBanThis && targetRole === "Banned";
+
+            return (
+              <HoverRow key={identity}>
+                <UserInfo>
+                  <Avatar size="xs" name={username ?? ""} />
+                  <Text $isSelected={optionsOpen === id}>
+                    {username}
+                  </Text>
+                </UserInfo>
+
+                <RowActions>
+                  <RoleBadge $role={targetRole}>{targetRole}</RoleBadge>
+
+                  {canModerate && showPromote && (
+                    <ActionBtn
+                      title={`Promote to ${promoteTo}`}
+                      disabled={busy === identity}
+                      onClick={() => void applyRole(identity, promoteTo!)}
+                    >
+                      ↑ {promoteTo}
+                    </ActionBtn>
+                  )}
+                  {canModerate && showDemote && (
+                    <ActionBtn
+                      title={`Demote to ${demoteTo}`}
+                      disabled={busy === identity}
+                      onClick={() => void applyRole(identity, demoteTo!)}
+                    >
+                      ↓ {demoteTo}
+                    </ActionBtn>
+                  )}
+                  {canModerate && showBan && (
+                    <ActionBtn
+                      $variant="danger"
+                      title="Ban from this channel (app-level)"
+                      disabled={busy === identity}
+                      onClick={() => void applyRole(identity, "Banned")}
+                    >
+                      Ban
+                    </ActionBtn>
+                  )}
+                  {canModerate && showUnban && (
+                    <ActionBtn
+                      title="Unban (restore as User)"
+                      disabled={busy === identity}
+                      onClick={() => void applyRole(identity, "User")}
+                    >
+                      Unban
+                    </ActionBtn>
+                  )}
+
+                  {props.isOwner && identity !== props.channelOwner && (
+                    <RemoveButton
+                      title="Remove from channel"
+                      aria-label="Remove from channel"
+                      onClick={() => void props.removeUserFromChannel(identity)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </RemoveButton>
+                  )}
+                </RowActions>
+              </HoverRow>
+            );
+          })}
       </UserList>
     </>
   );

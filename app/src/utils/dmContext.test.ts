@@ -37,7 +37,7 @@ describe("dmContext", () => {
     });
   });
 
-  it("passes the deterministic alias into group context creation", async () => {
+  it("creates a restricted DM subgroup + context with the deterministic alias", async () => {
     const createGroupContext = vi.fn().mockResolvedValue({
       data: {
         contextId: "ctx-1",
@@ -45,18 +45,22 @@ describe("dmContext", () => {
       },
       error: null,
     });
-    const setContextVisibility = vi.fn().mockResolvedValue({
+    const createSubgroup = vi.fn().mockResolvedValue({
+      data: { groupId: "dm-sg-1" },
+      error: null,
+    });
+    const setSubgroupVisibility = vi.fn().mockResolvedValue({
       data: undefined,
       error: null,
     });
-    const manageContextAllowlist = vi.fn().mockResolvedValue({
+    const addGroupMember = vi.fn().mockResolvedValue({
       data: undefined,
       error: null,
     });
 
     const result = await createDmContextInGroup({
       applicationId: "app-1",
-      groupId: "group-1",
+      groupId: "namespace-1",
       myIdentity: "member-b",
       otherIdentity: "member-a",
       otherUsername: "Alice",
@@ -64,32 +68,30 @@ describe("dmContext", () => {
         createGroupContext,
       },
       groupApi: {
-        setContextVisibility,
-        manageContextAllowlist,
+        createSubgroup,
+        setSubgroupVisibility,
+        addGroupMember,
       },
     });
 
     expect(result.error).toBe("");
     expect(result.alias).toBe("DM_CONTEXT_member-a_member-b");
+    expect(createSubgroup).toHaveBeenCalledWith("namespace-1", {
+      groupAlias: "DM_CONTEXT_member-a_member-b",
+    });
+    expect(setSubgroupVisibility).toHaveBeenCalledWith("dm-sg-1", {
+      subgroupVisibility: "restricted",
+    });
+    expect(addGroupMember).toHaveBeenCalledWith("dm-sg-1", "member-a");
     expect(createGroupContext).toHaveBeenCalledWith(
       expect.objectContaining({
-        groupId: "group-1",
+        groupId: "dm-sg-1",
         alias: "DM_CONTEXT_member-a_member-b",
         initializationParams: expect.objectContaining({
           context_type: "Dm",
           name: "DM: Alice",
         }),
       }),
-    );
-    expect(setContextVisibility).toHaveBeenCalledWith(
-      "group-1",
-      "ctx-1",
-      { mode: "restricted" },
-    );
-    expect(manageContextAllowlist).toHaveBeenCalledWith(
-      "group-1",
-      "ctx-1",
-      { add: ["member-b", "member-a"] },
     );
   });
 

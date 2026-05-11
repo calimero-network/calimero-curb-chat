@@ -226,56 +226,71 @@ fi
 if [ -n "$NAMESPACE_ID" ]; then
   green "Workspace created (id: ${NAMESPACE_ID})"
 
-  # Default capabilities for namespace members. 15 = 0b01111 =
-  #   CAN_CREATE_CONTEXT (1) | CAN_INVITE_MEMBERS (2)
-  # | CAN_JOIN_OPEN_SUBGROUPS (4) | MANAGE_MEMBERS (8)
-  # Without bit 2, namespace members fail parent-walk inheritance and hit
-  # "node is not a member of group" when listing contexts in subgroups.
+  # ── Permission model (rc.37+, 1-group-per-context) ─────────────────────────
+  # Each channel/DM = its own subgroup under the namespace root, with one
+  # context inside. Members hold caps at the *namespace* level that let them
+  # start (and clean up) their own channel-groups:
+  #   1   CAN_CREATE_CONTEXT       — inside their own subgroup (they're admin)
+  #   2   CAN_INVITE_MEMBERS       — invite into the workspace
+  #   4   CAN_JOIN_OPEN_SUBGROUPS  — auto-join open channels
+  #  32   CAN_CREATE_SUBGROUP      — create a channel-group at root (rc.37)
+  #  64   CAN_DELETE_SUBGROUP      — delete a channel-group they own (rc.37)
+  # 128   CAN_MANAGE_VISIBILITY    — flip open↔restricted on their group (rc.37)
+  # Total = 231.
   curl -sf -X PUT "${NODE_URL}/admin-api/groups/${NAMESPACE_ID}/settings/default-capabilities" \
     -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
-    -d '{"defaultCapabilities":15}' &>/dev/null \
-    && green "Default member capabilities set" \
-    || yellow "Could not set default capabilities (non-fatal)"
+    -d '{"defaultCapabilities":231}' &>/dev/null \
+    && green "Namespace member caps set (231 = create/delete subgroup + manage visibility + create context + invite + join-open)" \
+    || yellow "Could not set namespace caps (non-fatal)"
 
-  # Build init params as UTF-8 byte array for the WASM init function
-  TIMESTAMP=$(date +%s)
-  INIT_JSON="{\"name\":\"general\",\"context_type\":\"Channel\",\"description\":\"\",\"created_at\":${TIMESTAMP}}"
-  INIT_BYTES=$(printf '%s' "$INIT_JSON" | python3 -c \
-    "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')" 2>/dev/null || echo "[]")
+  # Namespace's own subgroup-visibility = open so all child channel-groups are
+  # discoverable / joinable by namespace members via parent-walk.
+  curl -sf -X PUT "${NODE_URL}/admin-api/groups/${NAMESPACE_ID}/settings/subgroup-visibility" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
+    -d '{"subgroupVisibility":"open"}' &>/dev/null || true
 
-  # Create #general channel as a group context (linked to workspace)
-  CTX_RES=$(curl -sf -X POST "${NODE_URL}/admin-api/contexts" \
-    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-    -H "Content-Type: application/json" \
-    -d "$(jq -n \
-          --arg appId "$APP_ID" \
-          --arg groupId "$NAMESPACE_ID" \
-          --argjson initParams "$INIT_BYTES" \
-          '{applicationId: $appId, protocol: "near", groupId: $groupId, alias: "general", initializationParams: $initParams}')" \
-    2>/dev/null) || CTX_RES="{}"
-  CONTEXT_ID=$(echo "$CTX_RES" | jq -r '.data.contextId // .data.id // empty' 2>/dev/null || true)
-  MEMBER_KEY=$(echo "$CTX_RES" | jq -r '.data.memberPublicKey // .data.member_public_key // empty' 2>/dev/null || true)
+  # ── #general = standalone open subgroup + one context inside ───────────────
+  step "Creating #general (open subgroup + context)"
 
-  if [ -n "$CONTEXT_ID" ]; then
-    green "General channel created (id: ${CONTEXT_ID})"
-
-    # Set channel visibility to public so members can browse and join it
-    curl -sf -X PUT "${NODE_URL}/admin-api/groups/${NAMESPACE_ID}/contexts/${CONTEXT_ID}/visibility" \
-      -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
-      -d '{"mode":"open"}' &>/dev/null \
-      && green "Channel visibility set to public" \
-      || yellow "Could not set channel visibility (non-fatal)"
-
-    # Mark the channel's underlying subgroup as Open. Required (alongside
-    # CAN_JOIN_OPEN_SUBGROUPS in default-capabilities above) for parent-walk
-    # membership inheritance — see core PR #2256 (rc.32+).
-    curl -sf -X PUT "${NODE_URL}/admin-api/groups/${CONTEXT_ID}/settings/subgroup-visibility" \
-      -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
-      -d '{"subgroupVisibility":"open"}' &>/dev/null \
-      && green "Channel subgroup-visibility set to open" \
-      || yellow "Could not set subgroup visibility (non-fatal)"
+  GEN_SG_RES=$(curl -sf -X POST "${NODE_URL}/admin-api/namespaces/${NAMESPACE_ID}/groups" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
+    -d '{"groupAlias":"general"}' 2>/dev/null) || GEN_SG_RES="{}"
+  GENERAL_SG_ID=$(echo "$GEN_SG_RES" | jq -r '.data.groupId // empty' 2>/dev/null)
+  if [ -z "$GENERAL_SG_ID" ]; then
+    yellow "Could not create #general subgroup — skipped"
   else
-    yellow "Could not create #general — create channels from the app after logging in"
+    green "  general subgroup: $GENERAL_SG_ID"
+
+    # Open visibility so all namespace members auto-join the channel.
+    curl -sf -X PUT "${NODE_URL}/admin-api/groups/${GENERAL_SG_ID}/settings/subgroup-visibility" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
+      -d '{"subgroupVisibility":"open"}' &>/dev/null || true
+
+    TIMESTAMP=$(date +%s)
+    INIT_JSON="{\"name\":\"general\",\"context_type\":\"Channel\",\"description\":\"\",\"created_at\":${TIMESTAMP}}"
+    INIT_BYTES=$(printf '%s' "$INIT_JSON" | python3 -c \
+      "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')" 2>/dev/null || echo "[]")
+
+    CTX_RES=$(curl -sf -X POST "${NODE_URL}/admin-api/contexts" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "$(jq -n \
+            --arg appId "$APP_ID" \
+            --arg groupId "$GENERAL_SG_ID" \
+            --argjson initParams "$INIT_BYTES" \
+            '{applicationId: $appId, protocol: "near", groupId: $groupId, alias: "general", initializationParams: $initParams}')" \
+      2>/dev/null) || CTX_RES="{}"
+    CONTEXT_ID=$(echo "$CTX_RES" | jq -r '.data.contextId // .data.id // empty' 2>/dev/null || true)
+    MEMBER_KEY=$(echo "$CTX_RES" | jq -r '.data.memberPublicKey // .data.member_public_key // empty' 2>/dev/null || true)
+
+    if [ -n "$CONTEXT_ID" ]; then
+      green "  general context: ${CONTEXT_ID}"
+      curl -sf -X PUT "${NODE_URL}/admin-api/groups/${GENERAL_SG_ID}/contexts/${CONTEXT_ID}/visibility" \
+        -H "Authorization: Bearer ${ACCESS_TOKEN}" -H "Content-Type: application/json" \
+        -d '{"mode":"open"}' &>/dev/null || true
+    else
+      yellow "  Could not create #general context"
+    fi
   fi
 else
   yellow "Could not create workspace — create one from the app after logging in"

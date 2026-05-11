@@ -6,6 +6,7 @@ const {
   mockListGroupContexts,
   mockListMembers,
   mockResolveCurrentMemberIdentity,
+  mockListSubgroups,
   mockGetContextInfo,
   mockGetProfiles,
   mockFetchContextIdentities,
@@ -15,6 +16,7 @@ const {
   mockListGroupContexts: vi.fn(),
   mockListMembers: vi.fn(),
   mockResolveCurrentMemberIdentity: vi.fn(),
+  mockListSubgroups: vi.fn(),
   mockGetContextInfo: vi.fn(),
   mockGetProfiles: vi.fn(),
   mockFetchContextIdentities: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock("../api/dataSource/groupApiDataSource", () => ({
     listGroupContexts = mockListGroupContexts;
     listMembers = mockListMembers;
     resolveCurrentMemberIdentity = mockResolveCurrentMemberIdentity;
+    listSubgroups = mockListSubgroups;
   },
 }));
 
@@ -48,11 +51,12 @@ vi.mock("../constants/config", () => ({
   setGroupMemberIdentity: mockSetGroupMemberIdentity,
 }));
 
-describe("useDMs", () => {
+describe("useDMs (1-group-per-context)", () => {
   beforeEach(() => {
     mockListGroupContexts.mockReset();
     mockListMembers.mockReset();
     mockResolveCurrentMemberIdentity.mockReset();
+    mockListSubgroups.mockReset();
     mockGetContextInfo.mockReset();
     mockGetProfiles.mockReset();
     mockFetchContextIdentities.mockReset();
@@ -65,32 +69,39 @@ describe("useDMs", () => {
       error: null,
     });
     mockResolveCurrentMemberIdentity.mockResolvedValue({
-      data: {
-        memberIdentity: "member-me",
-      },
+      data: { memberIdentity: "member-me" },
       error: null,
     });
   });
 
   it("prefers shared DM metadata for unjoined DM discovery", async () => {
-    mockListGroupContexts.mockResolvedValue({
-      data: [
-        {
-          contextId: "ctx-1",
-          alias: "channel-like-alias",
-          sharedContextType: "Dm",
-          memberIdentities: ["member-me", "member-you"],
-        },
-      ],
+    // Each DM lives in its own restricted subgroup with one context inside.
+    mockListSubgroups.mockResolvedValue({
+      data: [{ groupId: "dm-sg-1", alias: "DM_CONTEXT_member-me_member-you" }],
       error: null,
     });
+    mockListGroupContexts.mockImplementation(async (id: string) =>
+      id === "dm-sg-1"
+        ? {
+            data: [
+              {
+                contextId: "ctx-1",
+                alias: "channel-like-alias",
+                sharedContextType: "Dm",
+                memberIdentities: ["member-me", "member-you"],
+              },
+            ],
+            error: null,
+          }
+        : { data: [], error: null },
+    );
     mockFetchContextIdentities.mockRejectedValue(new Error("not joined"));
 
     const { result } = renderHook(() => useDMs());
 
     let dms: Awaited<ReturnType<typeof result.current.fetchDms>> = [];
     await act(async () => {
-      dms = await result.current.fetchDms("group-1");
+      dms = await result.current.fetchDms("namespace-1");
     });
 
     expect(dms).toEqual([
@@ -103,46 +114,42 @@ describe("useDMs", () => {
   });
 
   it("falls back to alias parsing and keeps the participant identity when profiles are missing", async () => {
-    mockListGroupContexts.mockResolvedValue({
+    mockListSubgroups.mockResolvedValue({
       data: [
-        {
-          contextId: "ctx-me-you",
-          alias: "DM_CONTEXT_member-me_member-you",
-        },
-        {
-          contextId: "ctx-other",
-          alias: "DM_CONTEXT_member-a_member-b",
-        },
+        { groupId: "dm-sg-me-you", alias: "DM_CONTEXT_member-me_member-you" },
+        { groupId: "dm-sg-other", alias: "DM_CONTEXT_member-a_member-b" },
       ],
       error: null,
+    });
+    mockListGroupContexts.mockImplementation(async (id: string) => {
+      if (id === "dm-sg-me-you") {
+        return {
+          data: [
+            { contextId: "ctx-me-you", alias: "DM_CONTEXT_member-me_member-you" },
+          ],
+          error: null,
+        };
+      }
+      if (id === "dm-sg-other") {
+        return {
+          data: [{ contextId: "ctx-other", alias: "DM_CONTEXT_member-a_member-b" }],
+          error: null,
+        };
+      }
+      return { data: [], error: null };
     });
     mockFetchContextIdentities.mockImplementation(async (contextId: string) => {
       if (contextId === "ctx-me-you") {
-        return {
-          data: {
-            data: {
-              identities: ["member-me"],
-            },
-          },
-        };
+        return { data: { data: { identities: ["member-me"] } } };
       }
-
       throw new Error("not joined");
     });
     mockGetContextInfo.mockResolvedValue({
-      data: {
-        name: "DM",
-        context_type: "Dm",
-      },
+      data: { name: "DM", context_type: "Dm" },
       error: null,
     });
     mockGetProfiles.mockResolvedValue({
-      data: [
-        {
-          identity: "member-me",
-          username: "Me",
-        },
-      ],
+      data: [{ identity: "member-me", username: "Me" }],
       error: null,
     });
 
@@ -150,9 +157,10 @@ describe("useDMs", () => {
 
     let dms: Awaited<ReturnType<typeof result.current.fetchDms>> = [];
     await act(async () => {
-      dms = await result.current.fetchDms("group-1");
+      dms = await result.current.fetchDms("namespace-1");
     });
 
+    // ctx-other isn't joined and has no metadata match for member-me → filtered out.
     expect(dms).toHaveLength(1);
     expect(dms[0]).toEqual(
       expect.objectContaining({
@@ -166,15 +174,20 @@ describe("useDMs", () => {
   });
 
   it("uses the member alias when DM profiles do not provide a username", async () => {
-    mockListGroupContexts.mockResolvedValue({
-      data: [
-        {
-          contextId: "ctx-me-you",
-          alias: "DM_CONTEXT_member-me_member-you",
-        },
-      ],
+    mockListSubgroups.mockResolvedValue({
+      data: [{ groupId: "dm-sg-1", alias: "DM_CONTEXT_member-me_member-you" }],
       error: null,
     });
+    mockListGroupContexts.mockImplementation(async (id: string) =>
+      id === "dm-sg-1"
+        ? {
+            data: [
+              { contextId: "ctx-me-you", alias: "DM_CONTEXT_member-me_member-you" },
+            ],
+            error: null,
+          }
+        : { data: [], error: null },
+    );
     mockListMembers.mockResolvedValue({
       data: {
         members: [
@@ -185,26 +198,14 @@ describe("useDMs", () => {
       error: null,
     });
     mockFetchContextIdentities.mockResolvedValue({
-      data: {
-        data: {
-          identities: ["member-me"],
-        },
-      },
+      data: { data: { identities: ["member-me"] } },
     });
     mockGetContextInfo.mockResolvedValue({
-      data: {
-        name: "DM",
-        context_type: "Dm",
-      },
+      data: { name: "DM", context_type: "Dm" },
       error: null,
     });
     mockGetProfiles.mockResolvedValue({
-      data: [
-        {
-          identity: "member-me",
-          username: "Me",
-        },
-      ],
+      data: [{ identity: "member-me", username: "Me" }],
       error: null,
     });
 
@@ -212,7 +213,7 @@ describe("useDMs", () => {
 
     let dms: Awaited<ReturnType<typeof result.current.fetchDms>> = [];
     await act(async () => {
-      dms = await result.current.fetchDms("group-1");
+      dms = await result.current.fetchDms("namespace-1");
     });
 
     expect(dms[0]).toEqual(

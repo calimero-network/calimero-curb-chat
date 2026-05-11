@@ -129,8 +129,9 @@ describe("SearchChannelsContainer", () => {
       />,
     );
 
+    // 1-group-per-context model: lists subgroups, not namespace-root contexts.
     await waitFor(() => {
-      expect(mockListGroupContexts).toHaveBeenCalledWith("group-1");
+      expect(mockListSubgroups).toHaveBeenCalledWith("group-1");
     });
 
     expect(await screen.findByText(/no channels yet/i)).toBeInTheDocument();
@@ -140,10 +141,22 @@ describe("SearchChannelsContainer", () => {
   });
 
   it("shows alias-based channel labels and matches searches against the alias", async () => {
-    mockListGroupContexts.mockResolvedValue({
-      data: [{ contextId: "abcdefgh12345678", alias: "Project Alpha" }],
+    mockListSubgroups.mockResolvedValue({
+      data: [{ groupId: "channel-sg-1", alias: "Project Alpha" }],
       error: null,
     });
+    mockGetGroup.mockResolvedValue({
+      data: { subgroupVisibility: "open" },
+      error: null,
+    });
+    mockListGroupContexts.mockImplementation(async (id: string) =>
+      id === "channel-sg-1"
+        ? {
+            data: [{ contextId: "abcdefgh12345678", alias: "Project Alpha" }],
+            error: null,
+          }
+        : { data: [], error: null },
+    );
     mockFetchContextIdentities.mockResolvedValue({
       data: { data: { identities: ["member-key-1"] } },
     });
@@ -166,12 +179,31 @@ describe("SearchChannelsContainer", () => {
   });
 
   it("does not list DM contexts in the channel browser", async () => {
-    mockListGroupContexts.mockResolvedValue({
+    mockListSubgroups.mockResolvedValue({
       data: [
-        { contextId: "ctx-dm", alias: "DM_CONTEXT_member-1_member-2" },
-        { contextId: "ctx-channel", alias: "Project Alpha" },
+        { groupId: "dm-sg-1", alias: "DM_CONTEXT_member-1_member-2" },
+        { groupId: "channel-sg-1", alias: "Project Alpha" },
       ],
       error: null,
+    });
+    mockGetGroup.mockResolvedValue({
+      data: { subgroupVisibility: "open" },
+      error: null,
+    });
+    mockListGroupContexts.mockImplementation(async (id: string) => {
+      if (id === "dm-sg-1") {
+        return {
+          data: [{ contextId: "ctx-dm", alias: "DM_CONTEXT_member-1_member-2" }],
+          error: null,
+        };
+      }
+      if (id === "channel-sg-1") {
+        return {
+          data: [{ contextId: "ctx-channel", alias: "Project Alpha" }],
+          error: null,
+        };
+      }
+      return { data: [], error: null };
     });
 
     render(

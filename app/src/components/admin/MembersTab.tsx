@@ -218,6 +218,9 @@ export default function MembersTab({
     canCreateContext: false,
     canInviteMembers: false,
     canJoinOpenSubgroups: false,
+    canCreateSubgroup: false,
+    canDeleteSubgroup: false,
+    canManageVisibility: false,
   });
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);

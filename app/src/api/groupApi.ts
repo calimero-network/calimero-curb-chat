@@ -196,6 +196,11 @@ export interface UpgradeGroupResponse {
   failed: number | null;
 }
 
+export interface ReparentGroupRequest {
+  /// New parent (hex group id). Must be a non-cycle ancestor.
+  newParentId: string;
+}
+
 export interface GroupApi {
   createGroup(
     request: CreateGroupRequest,
@@ -273,6 +278,12 @@ export interface GroupApi {
     namespaceId: string,
     request: CreateSubgroupRequest,
   ): ApiResponse<CreateSubgroupResponse>;
+  /// Atomic edge swap: moves `groupId` under `newParentId`. Replaces the
+  /// older nest+unnest pair and prevents orphan state.
+  reparentGroup(
+    groupId: string,
+    request: ReparentGroupRequest,
+  ): ApiResponse<void>;
 
   triggerUpgrade(
     groupId: string,

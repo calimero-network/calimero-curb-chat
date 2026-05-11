@@ -13,6 +13,7 @@ export interface SharedDmDiscovery {
 
 interface CreateDmContextParams {
   applicationId: string;
+  /** The namespace id — the new DM subgroup is created directly under it. */
   groupId: string;
   myIdentity: string;
   otherIdentity: string;
@@ -28,15 +29,17 @@ interface CreateDmContextParams {
     }): ApiResponse<CreateContextResponse>;
   };
   groupApi: {
-    setContextVisibility(
+    createSubgroup(
+      namespaceId: string,
+      request: { groupAlias?: string },
+    ): ApiResponse<{ groupId: string }>;
+    setSubgroupVisibility(
       groupId: string,
-      contextId: string,
-      request: { mode: "open" | "restricted" },
+      request: { subgroupVisibility: "open" | "restricted" },
     ): ApiResponse<void>;
-    manageContextAllowlist(
+    addGroupMember(
       groupId: string,
-      contextId: string,
-      request: { add?: string[]; remove?: string[] },
+      identity: string,
     ): ApiResponse<void>;
   };
   onWarning?: (message: string) => void;
@@ -248,10 +251,46 @@ export async function createDmContextInGroup(
   params: CreateDmContextParams,
 ): Promise<CreateDmContextResult> {
   const alias = buildDmAlias(params.myIdentity, params.otherIdentity);
+
+  // 1) Create a restricted subgroup under the namespace for the DM.
+  const sgResponse = await params.groupApi.createSubgroup(params.groupId, {
+    groupAlias: alias,
+  });
+  if (sgResponse.error || !sgResponse.data) {
+    return {
+      data: null,
+      error: sgResponse.error?.message || "Failed to create DM subgroup",
+      alias,
+    };
+  }
+  const dmSubgroupId = sgResponse.data.groupId;
+
+  const visResponse = await params.groupApi.setSubgroupVisibility(dmSubgroupId, {
+    subgroupVisibility: "restricted",
+  });
+  if (visResponse.error) {
+    params.onWarning?.(
+      `Failed to set DM subgroup visibility: ${visResponse.error.message}`,
+    );
+  }
+
+  // 2) Add the other identity as a member of the DM subgroup. Creator is
+  //    already admin/owner of the new subgroup automatically.
+  const addMemberResponse = await params.groupApi.addGroupMember(
+    dmSubgroupId,
+    params.otherIdentity,
+  );
+  if (addMemberResponse.error) {
+    params.onWarning?.(
+      `Failed to add member to DM subgroup: ${addMemberResponse.error.message}`,
+    );
+  }
+
+  // 3) Create the DM's single context inside the new subgroup.
   const createResponse = await params.contextApi.createGroupContext({
     applicationId: params.applicationId,
     protocol: "near",
-    groupId: params.groupId,
+    groupId: dmSubgroupId,
     alias,
     initializationParams: {
       name: params.otherUsername
@@ -269,29 +308,6 @@ export async function createDmContextInGroup(
       error: createResponse.error?.message || "Failed to create DM context",
       alias,
     };
-  }
-
-  const contextId = createResponse.data.contextId;
-  const visibilityResponse = await params.groupApi.setContextVisibility(
-    params.groupId,
-    contextId,
-    { mode: "restricted" },
-  );
-  if (visibilityResponse.error) {
-    params.onWarning?.(
-      `Failed to set restricted visibility: ${visibilityResponse.error.message}`,
-    );
-  }
-
-  const allowlistResponse = await params.groupApi.manageContextAllowlist(
-    params.groupId,
-    contextId,
-    { add: [params.myIdentity, params.otherIdentity] },
-  );
-  if (allowlistResponse.error) {
-    params.onWarning?.(
-      `Failed to add to allowlist: ${allowlistResponse.error.message}`,
-    );
   }
 
   return {

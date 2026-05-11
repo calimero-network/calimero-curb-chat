@@ -1,4 +1,4 @@
-.PHONY: help setup install build dev dev-node dev-node2 start test test-full unit e2e workflows ci ci-stop \
+.PHONY: help setup install build dev dev-node dev-node2 start test test-all test-full unit e2e workflows ci ci-stop \
         logic-build app-install app-build app-typecheck app-lint clean
 
 # ── Help ───────────────────────────────────────────────────────────────────────
@@ -27,6 +27,7 @@ help:
 	@echo "    app-lint       Run ESLint on frontend"
 	@echo ""
 	@echo "  Test"
+	@echo "    test-all       Full pipeline: build + ci + workflows, with pass/fail summary"
 	@echo "    test-full      1 node: rpc + rpc-admin + mocked + live (58 tests, skips 2-node)"
 	@echo "    ci             2 nodes: rpc + rpc-admin + mocked — full suite (90 tests)"
 	@echo "    test           Run unit tests + e2e tests"
@@ -62,7 +63,7 @@ logic-build:
 app-install:
 	cd app && pnpm install
 
-app-build:
+app-build: app-install
 	cd app && pnpm build
 
 build: logic-build app-build
@@ -110,6 +111,12 @@ e2e:
 	cd app && pnpm exec playwright test
 
 test: unit e2e
+
+# End-to-end validation: build + ci + workflows, with per-phase pass/fail
+# reporting and log paths for any failures. Skips `make start` because it
+# ends in `pnpm dev` and never exits. Use this before tagging a release.
+test-all:
+	@bash scripts/test-all.sh
 
 # Build WASM, spin up 2 nodes, run all RPC+admin tests, tear down.
 # Nodes are stopped even if tests fail (trap EXIT in ci.sh).

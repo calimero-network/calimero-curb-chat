@@ -259,6 +259,39 @@ export enum ClientMethod {
   GET_DM_UNREAD_COUNT = "get_dm_unread_count",
   GET_TOTAL_DM_UNREAD_COUNT = "get_total_dm_unread_count",
   MARK_ALL_DMS_AS_READ = "mark_all_dms_as_read",
+  // Moderation (in-WASM roles + ban gate). See curb/logic/src/lib.rs.
+  SET_MEMBER_ROLE = "set_member_role",
+  GET_MEMBER_ROLE = "get_member_role",
+  LIST_ROLES = "list_roles",
+}
+
+/// Per-context moderation role. Mirrors the Rust `Role` enum.
+export type Role = "User" | "Mod" | "Admin" | "Banned";
+
+export interface SetMemberRoleProps {
+  contextId: string;
+  /// The actor's identity for this context (must be Admin or Mod).
+  executorPublicKey: string;
+  /// The member whose role is being changed.
+  target: string;
+  role: Role;
+}
+
+export interface GetMemberRoleProps {
+  contextId: string;
+  executorPublicKey: string;
+  identity: string;
+}
+
+export interface ListRolesProps {
+  contextId: string;
+  executorPublicKey: string;
+}
+
+/// Returned by `list_roles` — only members with a non-default role appear.
+export interface MemberRoleEntry {
+  identity: string;
+  role: Role;
 }
 
 export interface ClientApi {
@@ -291,4 +324,7 @@ export interface ClientApi {
   readMessage(props: ReadMessageProps): ApiResponse<string>;
   readDm(props: ReadDmProps): ApiResponse<string>;
   getUsername(props: GetUsernameProps): ApiResponse<string>;
+  setMemberRole(props: SetMemberRoleProps): ApiResponse<string>;
+  getMemberRole(props: GetMemberRoleProps): ApiResponse<Role>;
+  listRoles(props: ListRolesProps): ApiResponse<MemberRoleEntry[]>;
 }

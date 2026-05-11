@@ -146,6 +146,8 @@ pub enum Event {
     ReactionUpdated(String),
     ProfileUpdated(String),
     InfoUpdated(),
+    /// Payload: target identity (base58) whose role just changed.
+    RoleUpdated(String),
 }
 
 /// "channel" or "dm" — stored in app state so it's mutable (supports renames).
@@ -155,6 +157,32 @@ pub enum Event {
 pub enum ContextType {
     Channel,
     Dm,
+}
+
+/// In-context moderation role. App-level enforcement: every state-mutating
+/// method checks the caller is not Banned before applying the change. This
+/// is a workaround for kick/leave being absent on rc.35 — banned users stay
+/// in the underlying group but the WASM rejects their writes.
+///
+/// - `User`     default for everyone except the creator
+/// - `Mod`      can flip a User to Banned (and back)
+/// - `Admin`    can change anyone's role; creator starts here
+/// - `Banned`   cannot perform any state-mutating action
+#[derive(Debug, Clone, Copy, PartialEq, Eq,
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[borsh(crate = "calimero_sdk::borsh")]
+#[serde(crate = "calimero_sdk::serde")]
+pub enum Role {
+    User,
+    Mod,
+    Admin,
+    Banned,
+}
+
+impl Default for Role {
+    fn default() -> Self {
+        Role::User
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -415,6 +443,9 @@ pub struct MeroChat {
     threads: UnorderedMap<MessageId, AuthoredVector<Message>>,
     reactions: UnorderedMap<MessageId, UnorderedMap<String, UnorderedSet<String>>>,
     profiles: AuthoredMap<UserId, StoredProfile>,
+    /// Per-context moderation roles. Missing entry = Role::User (default).
+    /// LwwRegister-wrapped so the storage layer has merge semantics.
+    roles: UnorderedMap<UserId, LwwRegister<Role>>,
 }
 
 #[app::logic]
@@ -430,6 +461,10 @@ impl MeroChat {
 
         let creator = encode_blob_id_base58(&env::executor_id());
 
+        // Seed the creator as Admin so they can moderate from day one.
+        let mut roles = UnorderedMap::new();
+        let _ = roles.insert(UserId::new(env::executor_id()), LwwRegister::new(Role::Admin));
+
         MeroChat {
             name: LwwRegister::new(name),
             context_type: LwwRegister::new(context_type),
@@ -440,6 +475,7 @@ impl MeroChat {
             threads: UnorderedMap::new(),
             reactions: UnorderedMap::new(),
             profiles: AuthoredMap::new(),
+            roles,
         }
     }
 
@@ -474,6 +510,7 @@ impl MeroChat {
         name: Option<String>,
         description: Option<String>,
     ) -> app::Result<String, String> {
+        self.require_not_banned()?;
         if let Some(n) = name {
             self.name.set(n);
         }
@@ -489,6 +526,7 @@ impl MeroChat {
         username: String,
         avatar: Option<String>,
     ) -> app::Result<String, String> {
+        self.require_not_banned()?;
         if username.trim().is_empty() {
             return Err("Username cannot be empty".to_string());
         }
@@ -524,6 +562,86 @@ impl MeroChat {
             }
         }
         result
+    }
+
+    // ── Moderation: roles + ban gate ───────────────────────────────────────
+
+    /// Read the current role of `identity`. Defaults to `User` when the
+    /// identity has no explicit entry (i.e. anyone who joined and never
+    /// had their role changed).
+    pub fn get_member_role(&self, identity: UserId) -> Role {
+        self.role_of(&identity)
+    }
+
+    /// All members with a non-default role. Members with the default
+    /// `User` role are not returned (they're inferred).
+    pub fn list_roles(&self) -> Vec<(UserId, Role)> {
+        let mut out = Vec::new();
+        if let Ok(entries) = self.roles.entries() {
+            for (id, role) in entries {
+                out.push((id, *role.get()));
+            }
+        }
+        out
+    }
+
+    /// Change a member's role. Authorisation:
+    /// - `Admin` may change anyone's role to anything.
+    /// - `Mod`   may only flip a `User` to `Banned` (or back).
+    /// - `User`/`Banned` may not call this.
+    /// An admin cannot demote themselves below `Admin` (lockout-prevention).
+    pub fn set_member_role(
+        &mut self,
+        target: UserId,
+        role: Role,
+    ) -> app::Result<String, String> {
+        let me = Self::executor_id();
+        let actor_role = self.role_of(&me);
+        let target_role = self.role_of(&target);
+
+        if me == target && actor_role == Role::Admin && role != Role::Admin {
+            return Err("An admin cannot demote themselves below Admin".to_string());
+        }
+        if !Self::can_change_role(actor_role, target_role, role) {
+            return Err("You don't have permission to change this member's role".to_string());
+        }
+
+        // User is the implicit default — keep the map small by removing the
+        // entry instead of storing the default.
+        if role == Role::User {
+            let _ = self.roles.remove(&target);
+        } else {
+            let _ = self.roles.insert(target, LwwRegister::new(role));
+        }
+
+        app::emit!(Event::RoleUpdated(target.to_string()));
+        Ok("Role updated".to_string())
+    }
+
+    fn role_of(&self, user: &UserId) -> Role {
+        match self.roles.get(user) {
+            Ok(Some(r)) => *r.get(),
+            _ => Role::default(),
+        }
+    }
+
+    fn require_not_banned(&self) -> app::Result<(), String> {
+        let me = Self::executor_id();
+        if self.role_of(&me) == Role::Banned {
+            return Err("You are banned from this context".to_string());
+        }
+        Ok(())
+    }
+
+    fn can_change_role(actor: Role, target_current: Role, target_new: Role) -> bool {
+        match actor {
+            Role::Admin => true,
+            Role::Mod => {
+                (target_current == Role::User && target_new == Role::Banned)
+                    || (target_current == Role::Banned && target_new == Role::User)
+            }
+            _ => false,
+        }
     }
 
     fn executor_id() -> UserId {
@@ -575,6 +693,7 @@ impl MeroChat {
         files: Option<Vec<AttachmentInput>>,
         images: Option<Vec<AttachmentInput>>,
     ) -> app::Result<Message, String> {
+        self.require_not_banned()?;
         let executor_id = Self::executor_id();
 
         let sender_username = match self.profiles.get(&executor_id) {
@@ -811,6 +930,7 @@ impl MeroChat {
         user: String,
         add: bool,
     ) -> app::Result<String, String> {
+        self.require_not_banned()?;
         let mut reactions = match self.reactions.get(&message_id) {
             Ok(Some(reactions)) => reactions,
             _ => UnorderedMap::new(),
@@ -842,6 +962,7 @@ impl MeroChat {
         timestamp: u64,
         parent_id: Option<MessageId>,
     ) -> app::Result<Message, String> {
+        self.require_not_banned()?;
         let executor_id = Self::executor_id();
 
         if let Some(parent_message_id) = parent_id {
@@ -921,6 +1042,7 @@ impl MeroChat {
         message_id: MessageId,
         parent_id: Option<MessageId>,
     ) -> app::Result<String, String> {
+        self.require_not_banned()?;
         let executor_id = Self::executor_id();
 
         if let Some(parent_message_id) = parent_id {

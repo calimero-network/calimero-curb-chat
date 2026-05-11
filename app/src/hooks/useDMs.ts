@@ -57,14 +57,34 @@ export function useDMs() {
         });
       }
 
-      const listResponse = await groupApi.listGroupContexts(groupId);
-      if (listResponse.error || !listResponse.data) {
-        setError(listResponse.error?.message || "Failed to fetch group contexts");
+      // 1-group-per-context model: DMs are subgroups under the namespace
+      // (restricted visibility, 2 members) with one context inside whose
+      // info.context_type === "Dm". Walk subgroups → contexts and filter
+      // by type in the enrich pass below.
+      const contextEntries: { contextId: string; alias?: string }[] = [];
+
+      const subgroupsResp = await groupApi.listSubgroups(groupId);
+      if (subgroupsResp.error) {
+        log.warn("useDMs", "listSubgroups failed", subgroupsResp.error);
+      }
+      const subgroups = subgroupsResp.data ?? [];
+
+      await Promise.all(
+        subgroups.map(async (sg) => {
+          const ctxResp = await groupApi.listGroupContexts(sg.groupId);
+          if (ctxResp.data) {
+            contextEntries.push(...ctxResp.data);
+          } else if (ctxResp.error) {
+            log.debug("useDMs", `listGroupContexts failed for ${sg.groupId}`, ctxResp.error);
+          }
+        }),
+      );
+
+      if (contextEntries.length === 0 && subgroupsResp.error) {
+        setError(subgroupsResp.error.message || "Failed to fetch DM contexts");
         setLoading(false);
         return [];
       }
-
-      const contextEntries = listResponse.data;
 
       const enriched: (DMContextInfo | null)[] = await Promise.all(
         contextEntries.map(async (entry) => {

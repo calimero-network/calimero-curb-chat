@@ -34,6 +34,11 @@ import {
   type ReadDmProps,
   type ReadMessageProps,
   type SendMessageProps,
+  type SetMemberRoleProps,
+  type GetMemberRoleProps,
+  type ListRolesProps,
+  type MemberRoleEntry,
+  type Role,
   type UpdateInvitationPayloadProps,
   type UpdateNewIdentityProps,
   type UpdateReactionProps,
@@ -1391,6 +1396,116 @@ export class ClientApiDataSource implements ClientApi {
         data: null,
         error: { code: 500, message: errorMessage },
       };
+    }
+  }
+
+  // ── Moderation: in-WASM role + ban gate ───────────────────────────────────
+
+  async setMemberRole(props: SetMemberRoleProps): ApiResponse<string> {
+    try {
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        string
+      >(
+        {
+          contextId: props.contextId,
+          method: ClientMethod.SET_MEMBER_ROLE,
+          argsJson: { target: props.target, role: props.role },
+          executorPublicKey: props.executorPublicKey,
+        },
+        { headers: { "Content-Type": "application/json" }, timeout: 10000 },
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return { data: response?.result.output as string, error: null };
+    } catch (error) {
+      console.error("setMemberRole failed:", error);
+      const message =
+        error instanceof Error ? error.message : "setMemberRole failed";
+      return { data: null, error: { code: 500, message } };
+    }
+  }
+
+  async getMemberRole(props: GetMemberRoleProps): ApiResponse<Role> {
+    try {
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        Role
+      >(
+        {
+          contextId: props.contextId,
+          method: ClientMethod.GET_MEMBER_ROLE,
+          argsJson: { identity: props.identity },
+          executorPublicKey: props.executorPublicKey,
+        },
+        { headers: { "Content-Type": "application/json" }, timeout: 10000 },
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return { data: response?.result.output as Role, error: null };
+    } catch (error) {
+      console.error("getMemberRole failed:", error);
+      const message =
+        error instanceof Error ? error.message : "getMemberRole failed";
+      return { data: null, error: { code: 500, message } };
+    }
+  }
+
+  async listRoles(props: ListRolesProps): ApiResponse<MemberRoleEntry[]> {
+    try {
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        // WASM returns Vec<(UserId, Role)> serialised as a tuple-array.
+        Array<[string, Role]>
+      >(
+        {
+          contextId: props.contextId,
+          method: ClientMethod.LIST_ROLES,
+          argsJson: {},
+          executorPublicKey: props.executorPublicKey,
+        },
+        { headers: { "Content-Type": "application/json" }, timeout: 10000 },
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      const tuples = (response?.result.output as Array<[string, Role]>) ?? [];
+      const data: MemberRoleEntry[] = tuples.map(([identity, role]) => ({
+        identity,
+        role,
+      }));
+      return { data, error: null };
+    } catch (error) {
+      console.error("listRoles failed:", error);
+      const message =
+        error instanceof Error ? error.message : "listRoles failed";
+      return { data: null, error: { code: 500, message } };
     }
   }
 }

@@ -66,11 +66,26 @@ curl -sf -X POST "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/sync" \
   -H "Content-Type: application/json" -d '{}' &>/dev/null \
   && green "Sync triggered" || yellow "Sync failed (non-fatal)"
 
-# ── 4. Wait for context to surface on node2, then join it ────────────────────
+# ── 3b. Discover the #general subgroup (1-group-per-context model) ───────────
+# Each channel = its own open subgroup under the namespace with one context
+# inside. Default namespace caps grant CAN_CREATE_SUBGROUP / DELETE / VISIBILITY
+# (rc.37) so node2 can also create its own channels after this.
+
+step "Discovering #general subgroup on node1"
+SUBGROUPS_JSON=$(curl -sf "${NODE_1_URL}/admin-api/groups/${GROUP_ID}/subgroups" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN_1}" 2>/dev/null) || SUBGROUPS_JSON='{"subgroups":[]}'
+
+GENERAL_SG_ID=$(echo "$SUBGROUPS_JSON" \
+  | jq -r '(.subgroups // []) | map(select(.alias=="general")) | .[0].groupId // empty')
+
+[ -n "$GENERAL_SG_ID" ] && green "general subgroup : $GENERAL_SG_ID" || yellow "general subgroup not found (non-fatal)"
+
+# ── 4. Wait for #general context to surface on node2, then join it ───────────
 
 step "Waiting for #general to appear on node2"
+GENERAL_PARENT="${GENERAL_SG_ID:-$GROUP_ID}"
 for i in $(seq 1 30); do
-  CTXS_2=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GROUP_ID}/contexts" \
+  CTXS_2=$(curl -sf "${NODE_2_URL}/admin-api/groups/${GENERAL_PARENT}/contexts" \
     -H "Authorization: Bearer ${ACCESS_TOKEN_2}" 2>/dev/null) || CTXS_2="{}"
   if echo "$CTXS_2" | jq -e \
       --arg id "$CONTEXT_ID" \
@@ -122,10 +137,12 @@ if [ -n "$ALIAS_FROM_N1" ]; then
     --arg alias "$ALIAS_FROM_N1" \
     --arg ctx "$CONTEXT_ID" \
     --arg member "$MEMBER_KEY_2" \
+    --arg general "$GENERAL_SG_ID" \
     '{
       "namespace_id": $ns,
       "namespace_alias": $alias,
       "general_context_id": $ctx,
+      "general_subgroup_id": $general,
       "node_2_member_key": $member,
       "_note": "written by dev-invite.sh; main.tsx seeds localStorage from this in dev mode"
     }' > "$OVERLAY"

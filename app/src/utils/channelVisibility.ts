@@ -1,7 +1,10 @@
 import type { VisibilityMode } from "../api/groupApi";
 
 export type ChannelVisibilityOption = "public" | "private";
-export type ChannelVisibilityLabel = "Open" | "Restricted";
+// UI label only — the wire-level VisibilityMode stays "open"/"restricted".
+// "Public"/"Private" reads better and matches the Public Channels /
+// Private Channels category subgroups channels are routed into.
+export type ChannelVisibilityLabel = "Public" | "Private";
 
 export function getChannelVisibilityOption(
   defaultVisibility: VisibilityMode,
@@ -18,15 +21,19 @@ export function getContextVisibilityModeFromOption(
 export function getChannelVisibilityOptionLabel(
   visibility: ChannelVisibilityOption,
 ): ChannelVisibilityLabel {
-  return visibility === "private" ? "Restricted" : "Open";
+  return visibility === "private" ? "Private" : "Public";
 }
 
 export function getContextVisibilityLabel(
   visibility: VisibilityMode,
 ): ChannelVisibilityLabel {
-  return visibility === "restricted" ? "Restricted" : "Open";
+  return visibility === "restricted" ? "Private" : "Public";
 }
 
 export function isRestrictedChannelType(channelType?: string): boolean {
-  return channelType === "Restricted" || channelType === "Private";
+  // Accept old "Restricted"/"Private" labels for back-compat with stored state.
+  return (
+    channelType === "Private" ||
+    channelType === "Restricted"
+  );
 }
