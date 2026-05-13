@@ -29,20 +29,48 @@ export function setMessengerDisplayName(name: string): void {
   StorageHelper.setItem(MESSENGER_NAME_KEY, trimmedName);
 }
 
-/** Per-identity display name — keyed by the member's public key, stable across workspaces. */
-export function getIdentityDisplayName(memberIdentity: string): string {
-  if (!memberIdentity) return "";
-  return (StorageHelper.getItem(IDENTITY_NAME_PREFIX + memberIdentity) || "").trim();
+/**
+ * Single-global-name model: identity-keyed display name is aliased to the
+ * global `chat-username`. The legacy per-identity rows
+ * (`curb_username_<identity>`) are no longer written; existing rows from
+ * older sessions are silently ignored. The `memberIdentity` argument is
+ * kept on the signature so callsites don't have to change, but it doesn't
+ * affect storage.
+ *
+ * Rationale: in this app each context the user joins gets its own
+ * `executor_id`, so a single human user accumulates many per-identity
+ * rows for the same name. Users wanted one handle they pick once that
+ * applies everywhere.
+ */
+export function getIdentityDisplayName(_memberIdentity: string): string {
+  return getMessengerDisplayName();
 }
 
-export function setIdentityDisplayName(memberIdentity: string, name: string): void {
-  if (!memberIdentity) return;
-  const trimmedName = name.trim();
-  if (!trimmedName) return;
-  StorageHelper.setItem(IDENTITY_NAME_PREFIX + memberIdentity, trimmedName);
+export function setIdentityDisplayName(_memberIdentity: string, name: string): void {
+  setMessengerDisplayName(name);
 }
 
-export function clearIdentityDisplayName(memberIdentity: string): void {
-  if (!memberIdentity) return;
-  StorageHelper.removeItem(IDENTITY_NAME_PREFIX + memberIdentity);
+export function clearIdentityDisplayName(_memberIdentity: string): void {
+  // No-op under the global-name model. The global handle is cleared via
+  // `clearMessengerDisplayName`, which is invoked from the explicit
+  // "change my name" path — not from per-identity cleanup.
+}
+
+/**
+ * One-shot cleanup of the legacy per-identity rows. Safe to call on app
+ * startup: idempotent, never touches the global handle.
+ */
+export function purgeLegacyIdentityDisplayNames(): void {
+  try {
+    const toDelete: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(IDENTITY_NAME_PREFIX)) {
+        toDelete.push(key);
+      }
+    }
+    toDelete.forEach((k) => StorageHelper.removeItem(k));
+  } catch {
+    /* ignore — storage may be unavailable */
+  }
 }

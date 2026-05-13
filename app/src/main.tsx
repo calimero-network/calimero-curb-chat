@@ -15,6 +15,12 @@ import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { WebSocketProvider } from "./contexts/WebSocketContext.tsx";
 import { log } from "./utils/logger.ts";
 import { applyDevOverlay } from "./utils/devOverlay.ts";
+import { purgeLegacyIdentityDisplayNames } from "./utils/messengerName.ts";
+
+// Single-global-name model: legacy `curb_username_<identity>` rows from
+// older app versions are no longer read; clean them up once on startup so
+// the localStorage stays small and predictable.
+purgeLegacyIdentityDisplayNames();
 
 import 'react-photo-view/dist/react-photo-view.css';
 

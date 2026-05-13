@@ -55,6 +55,7 @@ export function useGroupContexts() {
       async function enrichEntries(
         entries: { contextId: string; alias?: string }[],
         visibility?: "open" | "restricted",
+        isDirectMember: boolean = false,
       ): Promise<GroupContextChannel[]> {
         const filtered = entries.filter((e) => !leftContextIdsRef.current.has(e.contextId));
         const ids = filtered.map((e) => e.contextId);
@@ -70,25 +71,23 @@ export function useGroupContexts() {
             }
           })
         );
-        // Auto-join is **scoped to RESTRICTED (private) channels only**.
-        // Server-side, restricted subgroups require an explicit
-        // `add_group_members` call by an admin — so if we're a direct
-        // member of one and lack a local ContextIdentity, an admin just
-        // added us and we should follow the context to surface the
-        // channel in the sidebar (the server-side auto-follow gap, see
-        // `add_group_members.rs` — it publishes MemberAdded + KeyDelivery
-        // but never creates the local ContextIdentity row).
+        // Auto-join is scoped to subgroups where we are a DIRECT member
+        // (admin explicitly added us, or we joined explicitly). This is
+        // the canonical signal: inherited members via
+        // `CAN_JOIN_OPEN_SUBGROUPS` on the namespace root are NOT in
+        // `listMembers(subgroupId)`, so they correctly skip auto-join —
+        // public-channel discovery stays opt-in via search. For private
+        // (restricted) channels, every member is direct, so add-by-admin
+        // flows through this path even when `getGroup` 500s and we never
+        // learned the visibility flag.
         //
-        // Open (public) channels are intentionally NOT auto-joined: every
-        // namespace member is an inherited member via
-        // CAN_JOIN_OPEN_SUBGROUPS, so auto-join would silently enroll
-        // everyone in every public channel the moment it's created. Users
-        // discover public channels via search and join explicitly. The
-        // creator already has a local identity from the `createContext`
-        // round-trip, so their own channel still appears immediately.
-        //
-        // Contexts the user explicitly left are already excluded above.
-        if (visibility === "restricted") {
+        // Server-side auto-follow gap context: `add_group_members.rs`
+        // publishes MemberAdded + KeyDelivery but never creates the local
+        // ContextIdentity for the new member, so without this fallback
+        // the channel never surfaces in their sidebar (SideSelector
+        // filters on isJoined). Contexts the user explicitly left are
+        // already excluded above.
+        if (isDirectMember) {
           await Promise.all(
             ids.filter((id) => !idMap[id]).map(async (ctxId) => {
               try {
@@ -98,22 +97,22 @@ export function useGroupContexts() {
                 if (joinResp.error) {
                   log.warn(
                     "useGroupContexts",
-                    `Auto-join rejected for restricted context ${ctxId}: ${joinResp.error.message}`,
+                    `Auto-join rejected for context ${ctxId}: ${joinResp.error.message}`,
                   );
                   return;
                 }
                 const key = joinResp.data?.memberPublicKey;
                 if (key) {
                   idMap[ctxId] = key;
-                  log.info("useGroupContexts", `Auto-joined restricted context ${ctxId}`);
+                  log.info("useGroupContexts", `Auto-joined context ${ctxId}`);
                 } else {
                   log.warn(
                     "useGroupContexts",
-                    `Auto-join returned no memberPublicKey for restricted context ${ctxId}; will retry on next tick`,
+                    `Auto-join returned no memberPublicKey for context ${ctxId}; will retry on next tick`,
                   );
                 }
               } catch (err) {
-                log.warn("useGroupContexts", `Auto-join threw for restricted context ${ctxId}`, err);
+                log.warn("useGroupContexts", `Auto-join threw for context ${ctxId}`, err);
               }
             })
           );
@@ -180,11 +179,33 @@ export function useGroupContexts() {
           );
           await Promise.all(
             subgroupList.map(async (sg) => {
-              const [sgListResp, sgInfoResp] = await Promise.all([
+              const [sgListResp, sgInfoResp, sgMembersResp] = await Promise.all([
                 groupApi.listGroupContexts(sg.groupId),
                 groupApi.getGroup(sg.groupId).catch(() => null),
+                groupApi.listMembers(sg.groupId).catch(() => null),
               ]);
               const visibility = sgInfoResp?.data?.subgroupVisibility;
+              // Auto-join discriminator: am I a DIRECT member of this
+              // subgroup? `listMembers` is the authoritative source —
+              // direct members are the ones the admin explicitly added
+              // (or that joined explicitly). Inherited members reached
+              // via `CAN_JOIN_OPEN_SUBGROUPS` on the namespace root are
+              // NOT in this list. That distinction is exactly what we
+              // need to tell apart "admin added me to a private channel"
+              // (auto-join) from "I'm an inherited member of a public
+              // channel I haven't explicitly joined" (don't auto-join).
+              //
+              // Using listMembers also doesn't depend on `getGroup`
+              // succeeding — when getGroup 500s and visibility comes
+              // back undefined, the previous visibility-only gate would
+              // silently skip auto-join even for direct members. This
+              // path stays robust to that failure mode.
+              const selfIdentity = sgMembersResp?.data?.selfIdentity;
+              const isDirectMember =
+                !!selfIdentity &&
+                !!sgMembersResp?.data?.members.some(
+                  (m) => m.identity === selfIdentity,
+                );
               if (sgListResp.data) {
                 // Belt-and-suspenders: also drop any context whose own
                 // alias is DM-prefixed, in case a subgroup is renamed but
@@ -192,7 +213,11 @@ export function useGroupContexts() {
                 const channelEntries = sgListResp.data.filter(
                   (e) => !(e.alias ?? "").startsWith(DM_CONTEXT_ALIAS_PREFIX),
                 );
-                const sgChannels = await enrichEntries(channelEntries, visibility);
+                const sgChannels = await enrichEntries(
+                  channelEntries,
+                  visibility,
+                  isDirectMember,
+                );
                 subgroupChannelsMap.set(sg.groupId, sgChannels);
               }
             })

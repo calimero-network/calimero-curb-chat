@@ -26,7 +26,9 @@ const CONNECT_PRESERVE_EXACT = new Set([
   "calimero-application-id",
   "calimero_group_aliases",
 ]);
-const CONNECT_PRESERVE_PREFIX = ["curb_username_"];
+// No prefix-based preservation: per-identity username rows were retired
+// in favor of the single global `chat-username` (preserved exactly above).
+const CONNECT_PRESERVE_PREFIX: string[] = [];
 
 function clearStorageForConnect(): void {
   try {
