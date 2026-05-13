@@ -1,6 +1,6 @@
 import { styled, keyframes } from "styled-components";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BaseModal from "../common/popups/BaseModal";
 import { Button, Input } from "@calimero-network/mero-ui";
 import {
@@ -172,17 +172,26 @@ export default function CreateChannelPopup({
   const [validInput, setValidInput] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [visibility, setVisibility] = useState<ChannelVisibilityOption>(defaultVisibility);
+  // Synchronous re-entrancy guard — closes the React-batching race where
+  // two onClicks fire before the first setIsProcessing(true) commits.
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) setVisibility(defaultVisibility);
   }, [defaultVisibility, isOpen]);
 
   const runProcess = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setIsProcessing(true);
-    await createChannel(inputValue, visibility === "public", false);
-    setInputValue("");
-    setIsProcessing(false);
-    setIsOpen(false);
+    try {
+      await createChannel(inputValue, visibility === "public", false);
+      setInputValue("");
+      setIsOpen(false);
+    } finally {
+      setIsProcessing(false);
+      inFlightRef.current = false;
+    }
   };
 
   const handleClose = () => {

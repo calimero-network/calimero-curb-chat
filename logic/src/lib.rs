@@ -521,6 +521,20 @@ impl MeroChat {
         Ok("Info updated".to_string())
     }
 
+    /// Set or update this user's profile in the current context.
+    ///
+    /// Username is **write-once**: once a profile exists for an identity,
+    /// the `username` field is preserved on subsequent calls — only the
+    /// avatar can be changed. This freezes a member's handle to whatever
+    /// they registered at first profile creation (typically on join), so
+    /// other members keep seeing a stable identity even if the user later
+    /// rotates their local `chat-username` from a different device.
+    ///
+    /// Caveat: enforcement is per-node-state at write time, not at the
+    /// CRDT merge layer. Two nodes that each see a freshly-empty profile
+    /// for the same identity and write different usernames concurrently
+    /// will still converge via `LwwRegister` semantics. In practice the
+    /// initial set happens on one device, so this is rare.
     pub fn set_profile(
         &mut self,
         username: String,
@@ -536,13 +550,21 @@ impl MeroChat {
 
         let executor_id = Self::executor_id();
 
-        let profile = StoredProfile {
-            username: LwwRegister::new(username),
-            avatar: avatar.map(LwwRegister::new),
-        };
         if self.profiles.contains(&executor_id).unwrap_or(false) {
-            let _ = self.profiles.update(&executor_id, profile);
+            // Preserve the frozen username; only the avatar is mutable.
+            if let Ok(Some(existing)) = self.profiles.get(&executor_id) {
+                let frozen_username = existing.username.get().clone();
+                let new_profile = StoredProfile {
+                    username: LwwRegister::new(frozen_username),
+                    avatar: avatar.map(LwwRegister::new),
+                };
+                let _ = self.profiles.update(&executor_id, new_profile);
+            }
         } else {
+            let profile = StoredProfile {
+                username: LwwRegister::new(username),
+                avatar: avatar.map(LwwRegister::new),
+            };
             let _ = self.profiles.insert(executor_id, profile);
         }
 

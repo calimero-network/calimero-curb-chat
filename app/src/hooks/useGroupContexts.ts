@@ -10,6 +10,7 @@ import type { GroupContextChannel } from "../types/Common";
 import type { SubgroupEntry } from "../api/groupApi";
 import { log } from "../utils/logger";
 import { DM_CONTEXT_ALIAS_PREFIX } from "../utils/dmContext";
+import { getMessengerDisplayName } from "../utils/messengerName";
 
 const LEFT_CONTEXTS_KEY = "curb:left_contexts";
 
@@ -105,6 +106,42 @@ export function useGroupContexts() {
                 if (key) {
                   idMap[ctxId] = key;
                   log.info("useGroupContexts", `Auto-joined context ${ctxId}`);
+                  // Freeze the user's name in this context at join time:
+                  // call `set_profile` with the current global handle.
+                  // The WASM contract treats username as write-once, so
+                  // later edits to the local `chat-username` won't
+                  // overwrite what other members see. This is also what
+                  // makes the user appear in `get_profiles` (= channel
+                  // member list) right away — without it they're a
+                  // context member with no profile entry.
+                  const username = getMessengerDisplayName();
+                  if (username) {
+                    try {
+                      const profileResp = await clientApi.joinChat({
+                        contextId: ctxId,
+                        username,
+                        executorPublicKey: key,
+                        isDM: false,
+                      });
+                      if (profileResp.error) {
+                        log.warn(
+                          "useGroupContexts",
+                          `set_profile after auto-join failed for ${ctxId}: ${profileResp.error.message}`,
+                        );
+                      }
+                    } catch (err) {
+                      log.warn(
+                        "useGroupContexts",
+                        `set_profile after auto-join threw for ${ctxId}`,
+                        err,
+                      );
+                    }
+                  } else {
+                    log.warn(
+                      "useGroupContexts",
+                      `No global chat-username set; skipping freeze for ${ctxId}`,
+                    );
+                  }
                 } else {
                   log.warn(
                     "useGroupContexts",

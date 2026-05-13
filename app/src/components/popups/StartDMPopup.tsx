@@ -178,6 +178,11 @@ const StartDMPopup = memo(function StartDMPopup({
 }: StartDMPopupProps) {
   const [isOpen, setIsOpen] = usePersistentState("startDMPopupOpen", false);
   const [isProcessing, setIsProcessing] = useState(false);
+  // Synchronous re-entrancy guard. `isProcessing` state lags by a render
+  // tick, so a fast double-click can fire two onClicks before the first
+  // setIsProcessing(true) commits. A ref reflects writes immediately and
+  // closes the race.
+  const inFlightRef = useRef(false);
   const [inputValue, setInputValue] = usePersistentState("startDMInputValue", "");
   const [selectedIdentity, setSelectedIdentity] = useState("");
   const [validInput, setValidInput] = useState(false);
@@ -221,18 +226,24 @@ const StartDMPopup = memo(function StartDMPopup({
   };
 
   const runProcess = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setIsProcessing(true);
     setErrorMessage("");
     const identity = selectedIdentity || inputValue.trim();
-    const result = await functionLoader(identity);
-    if (result.data) {
-      setInputValue("");
-      setSelectedIdentity("");
-      setIsOpen(false);
-    } else {
-      setErrorMessage(result.error);
+    try {
+      const result = await functionLoader(identity);
+      if (result.data) {
+        setInputValue("");
+        setSelectedIdentity("");
+        setIsOpen(false);
+      } else {
+        setErrorMessage(result.error);
+      }
+    } finally {
+      setIsProcessing(false);
+      inFlightRef.current = false;
     }
-    setIsProcessing(false);
   };
 
   const handleClose = () => { if (!isProcessing) setIsOpen(false); };
@@ -303,7 +314,7 @@ const StartDMPopup = memo(function StartDMPopup({
         variant="primary"
         style={{ width: "100%", marginTop: "0.25rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
         onClick={() => void runProcess()}
-        disabled={inputValue ? !!isInvalid : true}
+        disabled={isProcessing || (inputValue ? !!isInvalid : true)}
       >
         {isProcessing ? <Loader size={16} /> : buttonText}
       </Button>
