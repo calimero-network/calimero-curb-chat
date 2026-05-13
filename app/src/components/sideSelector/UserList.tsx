@@ -27,7 +27,6 @@ interface UserListProps {
   onDMSelected: (dm: DMContextInfo) => void;
   privateDMs: DMContextInfo[];
   isCollapsed?: boolean;
-  onNoActiveChat: () => void;
 }
 
 const UserList = memo(function UserList({
@@ -35,7 +34,6 @@ const UserList = memo(function UserList({
   onDMSelected,
   privateDMs,
   isCollapsed,
-  onNoActiveChat,
 }: UserListProps) {
   return (
     <ScrollableUserList>
@@ -47,7 +45,6 @@ const UserList = memo(function UserList({
             selected={selectedDM === dm.contextId}
             key={dm.contextId}
             isCollapsed={isCollapsed}
-            onNoActiveChat={onNoActiveChat}
           />
         ))}
     </ScrollableUserList>

@@ -6,8 +6,11 @@ import {
 } from "../constants/config";
 import {
   canCreateGroupContexts,
+  canCreateSubgroup,
+  canDeleteSubgroup,
   canInviteWorkspaceMembers,
   canJoinOpenSubgroups,
+  canManageVisibility,
 } from "../utils/groupCapabilities";
 
 interface CurrentGroupPermissionsState {
@@ -19,6 +22,9 @@ interface CurrentGroupPermissionsState {
   canCreateContext: boolean;
   canInviteMembers: boolean;
   canJoinOpenSubgroups: boolean;
+  canCreateSubgroup: boolean;
+  canDeleteSubgroup: boolean;
+  canManageVisibility: boolean;
 }
 
 const initialState: CurrentGroupPermissionsState = {
@@ -30,7 +36,12 @@ const initialState: CurrentGroupPermissionsState = {
   canCreateContext: false,
   canInviteMembers: false,
   canJoinOpenSubgroups: false,
+  canCreateSubgroup: false,
+  canDeleteSubgroup: false,
+  canManageVisibility: false,
 };
+
+const POLL_INTERVAL_MS = 30_000;
 
 export function useCurrentGroupPermissions(groupId: string) {
   const [state, setState] = useState<CurrentGroupPermissionsState>(initialState);
@@ -43,8 +54,19 @@ export function useCurrentGroupPermissions(groupId: string) {
 
     let cancelled = false;
 
-    const loadPermissions = async () => {
-      setState((previous) => ({ ...previous, loading: true }));
+    // Poll on a 30s cadence: capabilities/role can change at any time when
+    // an admin grants or revokes a member's permissions, and there's no
+    // SSE channel for governance ops, so the hook must re-fetch to reflect
+    // server state (e.g. the "+" channel button reappearing after an admin
+    // re-grants CAN_CREATE_SUBGROUP).
+    //
+    // `silent=true` on polled refreshes: don't flip `loading` back to true
+    // mid-session, otherwise consumers that gate on `!loading` would
+    // flicker between "resolved" and "loading" every 30s.
+    const loadPermissions = async (silent: boolean = false) => {
+      if (!silent) {
+        setState((previous) => ({ ...previous, loading: true }));
+      }
 
       const api = new GroupApiDataSource();
       const storedMemberIdentity = getGroupMemberIdentity(groupId);
@@ -58,7 +80,11 @@ export function useCurrentGroupPermissions(groupId: string) {
       }
 
       if (identityResponse.error || !identityResponse.data) {
-        setState(initialState);
+        // On the initial load surface the failure (UI shows "no
+        // permissions" until something works). On polled refreshes
+        // swallow transient errors — keep the last known-good state so
+        // a single flaky request doesn't briefly hide gated buttons.
+        if (!silent) setState(initialState);
         return;
       }
 
@@ -70,7 +96,7 @@ export function useCurrentGroupPermissions(groupId: string) {
       );
 
       if (!currentMember) {
-        setState(initialState);
+        if (!silent) setState(initialState);
         return;
       }
 
@@ -86,6 +112,9 @@ export function useCurrentGroupPermissions(groupId: string) {
           canCreateContext: true,
           canInviteMembers: true,
           canJoinOpenSubgroups: true,
+          canCreateSubgroup: true,
+          canDeleteSubgroup: true,
+          canManageVisibility: true,
         });
         return;
       }
@@ -100,6 +129,9 @@ export function useCurrentGroupPermissions(groupId: string) {
           canCreateContext: true,
           canInviteMembers: true,
           canJoinOpenSubgroups: true,
+          canCreateSubgroup: true,
+          canDeleteSubgroup: true,
+          canManageVisibility: true,
         });
         return;
       }
@@ -124,13 +156,20 @@ export function useCurrentGroupPermissions(groupId: string) {
         canCreateContext: canCreateGroupContexts(capabilities),
         canInviteMembers: canInviteWorkspaceMembers(capabilities),
         canJoinOpenSubgroups: canJoinOpenSubgroups(capabilities),
+        canCreateSubgroup: canCreateSubgroup(capabilities),
+        canDeleteSubgroup: canDeleteSubgroup(capabilities),
+        canManageVisibility: canManageVisibility(capabilities),
       });
     };
 
     void loadPermissions();
+    const interval = setInterval(() => {
+      void loadPermissions(true);
+    }, POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [groupId]);
 

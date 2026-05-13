@@ -44,6 +44,7 @@ const EmptyState = styled.div`
 interface SettingsTabProps {
   groupId: string;
   group: GroupInfo | null;
+  subgroupCount: number | null;
   actionLoading: boolean;
   onSetDefaultCapabilities: (
     groupId: string,
@@ -58,6 +59,7 @@ interface SettingsTabProps {
 export default function SettingsTab({
   groupId: _groupId,
   group,
+  subgroupCount,
   actionLoading: _actionLoading,
   onSetDefaultCapabilities: _onSetDefaultCapabilities,
   onSetSubgroupVisibility: _onSetSubgroupVisibility,
@@ -81,8 +83,11 @@ export default function SettingsTab({
           </Value>
           <Label>Members</Label>
           <Value>{group.memberCount}</Value>
-          <Label>Contexts</Label>
-          <Value>{group.contextCount}</Value>
+          {/* 1-group-per-context model: contexts live inside subgroups, not on
+              the namespace root, so the root's contextCount is always 0 / not
+              meaningful. Show the subgroup count (channels + DMs) instead. */}
+          <Label>Subgroups</Label>
+          <Value>{subgroupCount ?? "—"}</Value>
           <Label>Upgrade Policy</Label>
           <Value>
             {typeof group.upgradePolicy === "string"

@@ -147,16 +147,30 @@ describe("ChannelHeader (1-group-per-context)", () => {
     expect(screen.getByTestId("create-channel-toggle")).toBeInTheDocument();
   });
 
-  it("hides the create-channel toggle once the role is definitively resolved as non-admin", () => {
+  it("hides the create-channel toggle for a resolved non-admin without CAN_CREATE_SUBGROUP", () => {
     mockUseCurrentGroupPermissions.mockReturnValue({
       loading: false,
       isAdmin: false,
+      canCreateSubgroup: false,
       memberIdentity: "me",
     });
 
     render(<ChannelHeader title="Channels" />);
 
     expect(screen.queryByTestId("create-channel-toggle")).toBeNull();
+  });
+
+  it("shows the create-channel toggle for a non-admin member with CAN_CREATE_SUBGROUP", () => {
+    mockUseCurrentGroupPermissions.mockReturnValue({
+      loading: false,
+      isAdmin: false,
+      canCreateSubgroup: true,
+      memberIdentity: "me",
+    });
+
+    render(<ChannelHeader title="Channels" />);
+
+    expect(screen.getByTestId("create-channel-toggle")).toBeInTheDocument();
   });
 
   it("creates a new open subgroup + context for a public channel", async () => {

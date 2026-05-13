@@ -49,6 +49,7 @@ import {
   getDmDisplayName,
 } from "../../utils/dmContext";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
+import { useNamespaceMembershipWatch } from "../../hooks/useNamespaceMembershipWatch";
 import { buildDmMemberOptions } from "../../utils/dmMemberOptions";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
@@ -66,6 +67,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       navigate("/login", { replace: true });
     }
   }, [currentGroupId, navigate]);
+
+  // Poll for admin-initiated removal: if the server has cascaded us out of
+  // the namespace, redirect to /login. Without this, the user's stale
+  // sidebar keeps showing channels they're no longer a member of (since
+  // there's no SSE channel for governance ops yet).
+  useNamespaceMembershipWatch();
   const [isOpenSearchChannel, setIsOpenSearchChannel] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
@@ -165,11 +172,33 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     return getChannelUsersRef.current(id);
   }, []);
 
+  // Pin the channel→subgroup resolver in a ref so re-renders don't
+  // recreate `reFetchChannelMembers` on every tick. Depending on the whole
+  // `groupContextsHook` object (which is fresh each render) made this
+  // callback unstable, which spiraled into a render loop in any popup
+  // whose useEffect listed `reFetchChannelMembers` in its deps
+  // (ChannelDetailsPopup, where the loop fires fetchAll →
+  // listSubgroups/getGroup/getUpgradeStatus, exhausting browser sockets
+  // with ERR_INSUFFICIENT_RESOURCES).
+  const getSubgroupForContextRef = useRef(groupContextsHook.getSubgroupForContext);
+  getSubgroupForContextRef.current = groupContextsHook.getSubgroupForContext;
+
   const reFetchChannelMembers = useCallback(async () => {
     const isDM = activeChatRef.current?.type === "direct_message";
-    await getChannelUsersRef.current(
-      (isDM ? "private_dm" : activeChatRef.current?.id) || "",
-    );
+    const channelId = (isDM ? "private_dm" : activeChatRef.current?.id) || "";
+    // Pass the channel's subgroupId so `useChannelMembers` can read the
+    // canonical member list from the admin API. Without this it falls
+    // back to `get_profiles` which misses members who haven't set a
+    // profile yet (the typical state for freshly-added users). The
+    // namespaceId provides a final alias fallback so users render with
+    // their workspace handle (e.g. "NodeUser") instead of their raw
+    // identity until they post their first message in the channel.
+    const contextId = activeChatRef.current?.contextId ?? activeChatRef.current?.id;
+    const subgroupId = contextId
+      ? getSubgroupForContextRef.current(contextId)
+      : undefined;
+    const namespaceId = getGroupId() || undefined;
+    await getChannelUsersRef.current(channelId, subgroupId, namespaceId);
   }, []);
 
   const lastSelectedChatIdRef = useRef<string>("");

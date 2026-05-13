@@ -12,6 +12,7 @@ import { useGroupAdmin } from "../../hooks/useGroupAdmin";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { getGroupId } from "../../constants/config";
 import type { GroupMember } from "../../api/groupApi";
+import { useToast } from "../../contexts/ToastContext";
 
 interface ChannelDetailsPopupProps {
   toggle: React.ReactNode;
@@ -61,6 +62,10 @@ export default function ChannelDetailsPopup({
   const groupId = getGroupId();
   const { members: groupMembers, fetchAll } = useGroupAdmin();
   const { isAdmin } = useCurrentGroupPermissions(groupId ?? "");
+  const { addToast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const isBusy = isDeleting || isLeaving;
 
   const channelName = chat.type === "channel" ? chat.name : chat.id;
 
@@ -97,26 +102,85 @@ export default function ChannelDetailsPopup({
   const contextSubgroupId = chat.contextId ? getSubgroupForContext?.(chat.contextId) : undefined;
 
   const handleDeleteChannel = async () => {
-    if (!chat.contextId) return;
-    const result = await new ContextApiDataSource().deleteContext({ contextId: chat.contextId });
-    if (result.error) return;
-    if (contextSubgroupId) {
-      await new GroupApiDataSource().deleteGroup(contextSubgroupId).catch(() => {});
+    if (!chat.contextId || isBusy) return;
+    setIsDeleting(true);
+    try {
+      // 1-group-per-context model: the channel lives inside a dedicated
+      // subgroup. Use the deleteGroup cascade (auth: namespace-admin OR
+      // CAN_DELETE_SUBGROUP at the namespace root OR subgroup-owner) — its
+      // apply path unregisters the contained context as part of the
+      // cascade. Calling deleteContext FIRST would re-check require_admin
+      // *on the subgroup itself* (delete_context.rs:67), which blocks
+      // namespace admins who didn't create the channel.
+      //
+      // Legacy fallback: if we couldn't resolve a subgroup for this
+      // context (shouldn't happen with current channel creation), drop
+      // back to deleteContext so older-data channels still work.
+      if (contextSubgroupId) {
+        const result = await new GroupApiDataSource().deleteGroup(contextSubgroupId);
+        if (result.error) {
+          addToast({
+            title: "Delete channel",
+            message: result.error.message || "Failed to delete channel",
+            type: "channel",
+            duration: 4000,
+          });
+          return;
+        }
+      } else {
+        const result = await new ContextApiDataSource().deleteContext({ contextId: chat.contextId });
+        if (result.error) {
+          addToast({
+            title: "Delete channel",
+            message: result.error.message || "Failed to delete channel",
+            type: "channel",
+            duration: 4000,
+          });
+          return;
+        }
+      }
+      onChannelLeft?.(chat.contextId);
+      setActiveChat(null);
+      fetchChannels();
+      setIsOpen(false);
+      addToast({
+        title: "Channel",
+        message: `Channel "${channelName}" deleted`,
+        type: "channel",
+        duration: 2500,
+      });
+    } finally {
+      setIsDeleting(false);
     }
-    onChannelLeft?.(chat.contextId);
-    setActiveChat(null);
-    fetchChannels();
-    setIsOpen(false);
   };
 
   const handleLeaveChannel = async () => {
-    if (!chat.contextId) return;
-    const result = await new GroupApiDataSource().leaveContext(chat.contextId);
-    if (result.error) return;
-    onChannelLeft?.(chat.contextId);
-    setActiveChat(null);
-    fetchChannels();
-    setIsOpen(false);
+    if (!chat.contextId || isBusy) return;
+    setIsLeaving(true);
+    try {
+      const result = await new GroupApiDataSource().leaveContext(chat.contextId);
+      if (result.error) {
+        addToast({
+          title: "Leave channel",
+          message: result.error.message || "Failed to leave channel",
+          type: "channel",
+          duration: 4000,
+        });
+        return;
+      }
+      onChannelLeft?.(chat.contextId);
+      setActiveChat(null);
+      fetchChannels();
+      setIsOpen(false);
+      addToast({
+        title: "Channel",
+        message: `Left channel "${channelName}"`,
+        type: "channel",
+        duration: 2500,
+      });
+    } finally {
+      setIsLeaving(false);
+    }
   };
 
   useEffect(() => {
@@ -146,6 +210,8 @@ export default function ChannelDetailsPopup({
       canLeave={canLeave}
       handleDeleteChannel={handleDeleteChannel}
       handleLeaveChannel={handleLeaveChannel}
+      isDeleting={isDeleting}
+      isLeaving={isLeaving}
       promoteModerator={() => {}}
       reFetchChannelMembers={reFetchChannelMembers}
     />
@@ -156,7 +222,13 @@ export default function ChannelDetailsPopup({
       toggle={toggle}
       content={popupContent}
       open={isOpen}
-      onOpenChange={setIsOpen}
+      onOpenChange={(open) => {
+        // While a delete/leave is in flight, swallow close requests
+        // (Radix fires onOpenChange(false) on outside click, Escape, and
+        // the X button — blocking here covers all three).
+        if (isBusy && !open) return;
+        setIsOpen(open);
+      }}
     />
   );
 }

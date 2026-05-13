@@ -375,29 +375,35 @@ export default function SettingsPopup({
         <RoleBadge $admin={isAdmin} $mod={isModerator}>{isAdmin ? "Admin" : isModerator ? "Moderator" : "Member"}</RoleBadge>
       </WorkspaceCard>
 
-      {/* Leave workspace (danger) */}
-      <DangerZone>
-        {confirmLeave ? (
-          <>
-            <DangerLabel>Leave this workspace? You'll need a new invitation to return.</DangerLabel>
-            <ConfirmActions>
-              <CancelLeaveButton onClick={() => setConfirmLeave(false)} disabled={leaving}>
-                Cancel
-              </CancelLeaveButton>
-              <LeaveWorkspaceButton onClick={handleLeaveWorkspace} disabled={leaving}>
-                {leaving ? "Leaving…" : "Confirm leave"}
+      {/* Leave workspace (danger). Hidden for admins — server-side leave
+          would either fail (last-admin protection) or hand the workspace
+          off to an unintended successor. Admins who want out should
+          transfer ownership / promote a successor first, or delete the
+          namespace via the admin panel. */}
+      {!isAdmin && (
+        <DangerZone>
+          {confirmLeave ? (
+            <>
+              <DangerLabel>Leave this workspace? You'll need a new invitation to return.</DangerLabel>
+              <ConfirmActions>
+                <CancelLeaveButton onClick={() => setConfirmLeave(false)} disabled={leaving}>
+                  Cancel
+                </CancelLeaveButton>
+                <LeaveWorkspaceButton onClick={handleLeaveWorkspace} disabled={leaving}>
+                  {leaving ? "Leaving…" : "Confirm leave"}
+                </LeaveWorkspaceButton>
+              </ConfirmActions>
+            </>
+          ) : (
+            <>
+              <DangerLabel>Leave workspace</DangerLabel>
+              <LeaveWorkspaceButton onClick={() => setConfirmLeave(true)}>
+                Leave workspace
               </LeaveWorkspaceButton>
-            </ConfirmActions>
-          </>
-        ) : (
-          <>
-            <DangerLabel>Leave workspace</DangerLabel>
-            <LeaveWorkspaceButton onClick={() => setConfirmLeave(true)}>
-              Leave workspace
-            </LeaveWorkspaceButton>
-          </>
-        )}
-      </DangerZone>
+            </>
+          )}
+        </DangerZone>
+      )}
 
       <LogoutSection>
         <LogoutLabel>Session</LogoutLabel>

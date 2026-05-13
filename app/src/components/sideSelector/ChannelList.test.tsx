@@ -17,7 +17,7 @@ vi.mock("../../utils/channelEntry", () => ({
 }));
 
 describe("ChannelList", () => {
-  it("shows the alias in the sidebar while keeping channel selection names on the legacy fallback", () => {
+  it("shows the alias in the sidebar and uses it for the active-chat name when info is not yet loaded", () => {
     const selectChannel = vi.fn();
 
     render(
@@ -42,10 +42,13 @@ describe("ChannelList", () => {
 
     fireEvent.click(channelRow);
 
+    // The navbar's activeChatName now falls back to the alias (matching the
+    // sidebar) instead of the contextId substring, so users don't see an
+    // ID-looking string in the navbar right after joining.
     expect(mockBuildChannelEntryChat).toHaveBeenCalledWith(
       expect.objectContaining({
         contextId: "abcdefgh12345678",
-        name: "abcdefgh",
+        name: "Project Alpha",
       }),
     );
   });

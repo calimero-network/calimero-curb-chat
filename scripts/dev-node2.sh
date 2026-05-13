@@ -120,6 +120,49 @@ merod --node "$NODE_NAME" --home "$NODE_HOME" init \
   --auth-mode embedded
 green "Node2 initialised"
 
+# ── Bootstrap directly to node1 ───────────────────────────────────────────────
+# Two merods on the same host race over UDP/5353 (mDNS) with each other and
+# anything else on the box (browsers, etc.), so mDNS discovery is unreliable
+# and rendezvous-only pairing is slow. Skip discovery entirely by adding
+# node1's loopback multiaddr to node2's bootstrap list.
+
+NODE1_LOG="/tmp/curb-dev-node.log"
+NODE1_P2P_PORT="${CURB_DEV_P2P_PORT:-2528}"
+NODE1_PEER_ID=""
+if [ -f "$NODE1_LOG" ]; then
+  for _ in $(seq 1 10); do
+    NODE1_PEER_ID=$(grep -m1 "Listening on: /ip4/127.0.0.1/tcp/${NODE1_P2P_PORT}/p2p/" "$NODE1_LOG" 2>/dev/null \
+      | grep -oE '12D3KooW[A-Za-z0-9]+' | head -1 || true)
+    [ -n "$NODE1_PEER_ID" ] && break
+    sleep 1
+  done
+fi
+
+if [ -n "$NODE1_PEER_ID" ]; then
+  CFG_FILE="${NODE_HOME}/${NODE_NAME}/config.toml"
+  python3 - "$CFG_FILE" "$NODE1_P2P_PORT" "$NODE1_PEER_ID" <<'PYEOF'
+import sys, re
+cfg_path, p2p_port, peer_id = sys.argv[1], sys.argv[2], sys.argv[3]
+txt = open(cfg_path).read()
+new_entries = [
+    f'/ip4/127.0.0.1/tcp/{p2p_port}/p2p/{peer_id}',
+    f'/ip4/127.0.0.1/udp/{p2p_port}/quic-v1/p2p/{peer_id}',
+]
+for addr in new_entries:
+    if addr in txt:
+        continue
+    txt = re.sub(
+        r'(\[bootstrap\]\s*\nnodes\s*=\s*\[)',
+        lambda m, a=addr: m.group(1) + f'\n    "{a}",',
+        txt, count=1,
+    )
+open(cfg_path, 'w').write(txt)
+PYEOF
+  green "Bootstrap injected: node1 ($NODE1_PEER_ID) at 127.0.0.1:${NODE1_P2P_PORT}"
+else
+  yellow "Could not read node1 peer-id from $NODE1_LOG — node2 will rely on mDNS/rendezvous (may flake)"
+fi
+
 # ── Start node2 ───────────────────────────────────────────────────────────────
 
 step "Starting node2"

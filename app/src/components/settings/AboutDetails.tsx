@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { timestampToDate } from "../../utils/time";
+import Loader from "../loader/Loader";
 
 interface AboutDetailsProps {
   channelName: string;
@@ -10,6 +11,8 @@ interface AboutDetailsProps {
   handleDeleteChannel?: () => void;
   handleLeaveChannel?: () => void;
   canLeave?: boolean;
+  isDeleting?: boolean;
+  isLeaving?: boolean;
 }
 
 const InfoCard = styled.div`
@@ -60,11 +63,20 @@ const ActionButton = styled.button<{ $danger?: boolean }>`
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: rgba(255, 59, 59, 0.12);
     border-color: rgba(255, 59, 59, 0.35);
     color: #ff8585;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
   }
 
   & + & {
@@ -86,13 +98,23 @@ const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
         </InfoRow>
       </InfoCard>
       {props.isOwner && (
-        <ActionButton onClick={props.handleDeleteChannel}>
-          Delete Channel
+        <ActionButton
+          type="button"
+          onClick={props.handleDeleteChannel}
+          disabled={props.isDeleting || props.isLeaving}
+        >
+          <span>{props.isDeleting ? "Deleting…" : "Delete Channel"}</span>
+          {props.isDeleting && <Loader size={16} />}
         </ActionButton>
       )}
       {props.canLeave && (
-        <ActionButton onClick={props.handleLeaveChannel}>
-          Leave Channel
+        <ActionButton
+          type="button"
+          onClick={props.handleLeaveChannel}
+          disabled={props.isDeleting || props.isLeaving}
+        >
+          <span>{props.isLeaving ? "Leaving…" : "Leave Channel"}</span>
+          {props.isLeaving && <Loader size={16} />}
         </ActionButton>
       )}
     </>

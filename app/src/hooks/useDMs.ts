@@ -48,14 +48,23 @@ export function useDMs() {
 
       const membersResponse = await groupApi.listMembers(groupId);
       const memberAliasByIdentity = new Map<string, string>();
+      const namespaceMemberIdentities = new Set<string>();
       if (membersResponse.data) {
         membersResponse.data.members.forEach((member) => {
+          namespaceMemberIdentities.add(member.identity);
           const alias = member.alias?.trim();
           if (alias) {
             memberAliasByIdentity.set(member.identity, alias);
           }
         });
       }
+      // Only treat the namespace member list as authoritative when we can
+      // confirm our OWN identity is in it. Otherwise (older merods that 405
+      // on GET /members, transient errors, or an empty response) fall back
+      // to the legacy behaviour of showing all DM contexts.
+      const membersAuthoritative =
+        Boolean(currentMemberIdentity) &&
+        namespaceMemberIdentities.has(currentMemberIdentity);
 
       // 1-group-per-context model: DMs are subgroups under the namespace
       // (restricted visibility, 2 members) with one context inside whose
@@ -150,6 +159,19 @@ export function useDMs() {
             } catch {
               log.debug("useDMs", `get_profiles failed for ${ctxId}`);
             }
+          }
+
+          // Hide DMs whose counterpart is no longer in the namespace member
+          // list. The server's MemberRemoved cascade strips the kicked user
+          // from this DM subgroup, so the namespace member list is the source
+          // of truth. Without this, the kicked user's name falls back to a
+          // raw identity string and the dead DM lingers in the sidebar.
+          if (
+            membersAuthoritative &&
+            otherIdentity &&
+            !namespaceMemberIdentities.has(otherIdentity)
+          ) {
+            return null;
           }
 
           return {

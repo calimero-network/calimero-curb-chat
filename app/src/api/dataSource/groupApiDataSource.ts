@@ -388,8 +388,14 @@ export class GroupApiDataSource implements GroupApi {
 
   async deleteGroup(groupId: string): ApiResponse<boolean> {
     try {
+      // Server uses ValidatedJson<DeleteGroupApiRequest> even on DELETE
+      // (delete_group.rs:22), so it rejects with "Expected request with
+      // Content-Type: application/json" unless we send both the header and
+      // a JSON body. Both fields on DeleteGroupApiRequest are optional, so
+      // an empty `{}` body is accepted.
       const response = await axios.delete(`${this.base()}/groups/${groupId}`, {
-        headers: getAuthHeaders(),
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        data: {},
       });
       return response.status === 200
         ? ok(response.data.data?.isDeleted ?? true)

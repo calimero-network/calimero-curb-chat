@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { styled } from "styled-components";
 import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import { buildChannelEntryChat } from "../../utils/channelEntry";
@@ -121,18 +121,32 @@ const LockIcon = () => (
 const ChannelList = memo(function ChannelList(props: ChannelListProps) {
   const { channels, selectedChannelId, selectChannel, isCollapsed } = props;
 
+  // Stable display order: backend fetch order is non-deterministic; sort by
+  // the same display name fallback used in the row below, case-insensitive.
+  const sortedChannels = useMemo(() => {
+    const nameOf = (c: GroupContextChannel) =>
+      c.info?.name ?? c.alias ?? c.contextId.substring(0, 8);
+    return [...channels].sort((a, b) =>
+      nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: "base" }),
+    );
+  }, [channels]);
+
   return (
     <ChannelListContainer>
       <ScrollableChannelList>
-        {channels.length === 0 && !isCollapsed && (
+        {sortedChannels.length === 0 && !isCollapsed && (
           <EmptyChannelState>
             No channels yet. Create one to start chatting.
           </EmptyChannelState>
         )}
-        {channels.map((channel) => {
+        {sortedChannels.map((channel) => {
           const displayName =
             channel.info?.name ?? channel.alias ?? channel.contextId.substring(0, 8);
-          const activeChatName = channel.info?.name ?? channel.contextId.substring(0, 8);
+          // Match the sidebar fallback chain so the navbar shows the alias
+          // immediately after joining, instead of waiting for `info` to load
+          // (and showing the contextId prefix in the meantime).
+          const activeChatName =
+            channel.info?.name ?? channel.alias ?? channel.contextId.substring(0, 8);
           const isRestricted = channel.visibility === "restricted";
           const isSelected = selectedChannelId === channel.contextId;
 

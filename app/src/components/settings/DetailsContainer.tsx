@@ -59,6 +59,8 @@ interface DetailsContainerProps {
   canLeave?: boolean;
   handleDeleteChannel?: () => void;
   handleLeaveChannel?: () => void;
+  isDeleting?: boolean;
+  isLeaving?: boolean;
   promoteModerator: (user: string) => void;
   reFetchChannelMembers: () => void;
 }
@@ -152,6 +154,8 @@ const DetailsContainer: React.FC<DetailsContainerProps> = (props) => {
           canLeave={canLeave}
           handleDeleteChannel={handleDeleteChannel}
           handleLeaveChannel={handleLeaveChannel}
+          isDeleting={props.isDeleting}
+          isLeaving={props.isLeaving}
           channelName={channelName}
         />
       )}

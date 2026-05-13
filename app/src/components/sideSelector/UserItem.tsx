@@ -2,8 +2,6 @@ import { useCallback, memo, useState } from "react";
 import { styled } from "styled-components";
 import { Avatar } from "@calimero-network/mero-ui";
 import type { DMContextInfo } from "../../hooks/useDMs";
-import { ContextApiDataSource } from "../../api/dataSource/nodeApiDataSource";
-import { useToast } from "../../contexts/ToastContext";
 import ConfirmPopup from "../popups/ConfirmPopup";
 import { getDmDisplayName } from "../../utils/dmContext";
 
@@ -55,30 +53,11 @@ const ActionsContainer = styled.div`
   flex-shrink: 0;
 `;
 
-const TrashButton = styled.button`
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.2);
-  cursor: pointer;
-  padding: 3px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: rgba(255, 80, 80, 0.1);
-    color: rgba(255, 100, 100, 0.8);
-  }
-`;
-
 interface UserItemProps {
   onDMSelected: (dm: DMContextInfo) => void;
   selected: boolean;
   dm: DMContextInfo;
   isCollapsed?: boolean;
-  onNoActiveChat: () => void;
 }
 
 function UserItem({
@@ -86,10 +65,7 @@ function UserItem({
   selected,
   dm,
   isCollapsed,
-  onNoActiveChat,
 }: UserItemProps) {
-  const { addToast } = useToast();
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
 
   const displayName = getDmDisplayName({
@@ -111,24 +87,6 @@ function UserItem({
   const confirmJoin = useCallback(async () => {
     await onDMSelected(dm);
   }, [dm, onDMSelected]);
-
-  const confirmDelete = useCallback(async () => {
-    try {
-      const del = await new ContextApiDataSource().deleteContext({ contextId: dm.contextId });
-      if (del.error) {
-        const msg = del.error.message?.toLowerCase() ?? "";
-        const friendly = msg.includes("not an admin") || msg.includes("requester")
-          ? "Only the creator of this DM can delete it"
-          : del.error.message || "Failed to delete DM";
-        addToast({ title: "DM", message: friendly, type: "dm", duration: 4000 });
-        return;
-      }
-      addToast({ title: "DM", message: "DM deleted", type: "dm", duration: 2500 });
-      onNoActiveChat();
-    } catch {
-      addToast({ title: "DM", message: "Failed to delete DM", type: "dm", duration: 3000 });
-    }
-  }, [dm, addToast, onNoActiveChat]);
 
   return (
     <UserListItem
@@ -155,34 +113,6 @@ function UserItem({
               toggle={<span />}
               isOpen={isJoinOpen}
               setIsOpen={setIsJoinOpen}
-              isChild
-            />
-            <ConfirmPopup
-              title="Delete DM"
-              message="This will delete the DM context. Are you sure?"
-              confirmLabel="Delete"
-              cancelLabel="Cancel"
-              onConfirm={confirmDelete}
-              onCancel={() => {}}
-              toggle={
-                <TrashButton
-                  title="Delete DM"
-                  aria-label="Delete DM"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsDeleteOpen(true);
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6M14 11v6" />
-                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                  </svg>
-                </TrashButton>
-              }
-              isOpen={isDeleteOpen}
-              setIsOpen={setIsDeleteOpen}
               isChild
             />
           </ActionsContainer>

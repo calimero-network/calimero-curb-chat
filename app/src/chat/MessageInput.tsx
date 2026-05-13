@@ -318,22 +318,25 @@ const Placeholder = styled.div<{
   }
 `;
 
-const ReadOnlyField = styled.div`
-  background-color: #111111;
+const ReadOnlyField = styled.div<{ $banned?: boolean }>`
+  background-color: ${(p) => (p.$banned ? "rgba(255, 59, 59, 0.07)" : "#111111")};
+  border: 1px solid
+    ${(p) => (p.$banned ? "rgba(255, 59, 59, 0.25)" : "transparent")};
   height: 2rem;
   border-radius: 4px;
-  padding: 4px 8px 4px 8px;
+  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-family: Helvetica Neue;
   font-size: 16px;
   font-style: normal;
-  font-weight: 400;
+  font-weight: ${(p) => (p.$banned ? 600 : 400)};
   line-height: 150%;
-  color: #797978;
+  color: ${(p) => (p.$banned ? "#ff6b6b" : "#797978")};
   flex: 1;
   @media (max-width: 1024px) {
     font-size: 14px;
-    display: flex;
-    align-items: center;
   }
 `;
 
@@ -371,6 +374,9 @@ interface MessageInputProps {
   isReadOnly: boolean;
   isOwner: boolean;
   isModerator: boolean;
+  /// App-level (WASM) `Role::Banned`. Overrides isReadOnly / owner / mod —
+  /// banned users can't write even if they'd otherwise have permission.
+  isBanned?: boolean;
 }
 
 export default function MessageInput({
@@ -383,6 +389,7 @@ export default function MessageInput({
   isReadOnly,
   isOwner,
   isModerator,
+  isBanned,
 }: MessageInputProps) {
   const [canWriteMessage, setCanWriteMessage] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -686,6 +693,13 @@ export default function MessageInput({
   }, [setShowUpload, setEmojiSelectorOpen]);
 
   useEffect(() => {
+    // Banned overrides everything else: even an owner who's been banned
+    // (edge case but possible while we still allow self-ban in WASM) is
+    // blocked from posting.
+    if (isBanned) {
+      setCanWriteMessage(false);
+      return;
+    }
     setCanWriteMessage(false);
     if (isReadOnly) {
       if (isModerator || isOwner) {
@@ -696,7 +710,7 @@ export default function MessageInput({
     } else {
       setCanWriteMessage(true);
     }
-  }, [isReadOnly, isModerator, isOwner]);
+  }, [isReadOnly, isModerator, isOwner, isBanned]);
 
   // Memoize custom style to avoid recalculation on every render
   const customStyle = useMemo(() => {
@@ -843,8 +857,10 @@ export default function MessageInput({
       )}
       {!canWriteMessage && (
         <Container style={customStyle}>
-          <ReadOnlyField>
-            You don&apos;t have permissions to write in this channel
+          <ReadOnlyField $banned={isBanned}>
+            {isBanned
+              ? "You are banned from this channel."
+              : "You don’t have permissions to write in this channel"}
           </ReadOnlyField>
         </Container>
       )}

@@ -9,6 +9,7 @@ import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type { GroupContextChannel } from "../types/Common";
 import type { SubgroupEntry } from "../api/groupApi";
 import { log } from "../utils/logger";
+import { DM_CONTEXT_ALIAS_PREFIX } from "../utils/dmContext";
 
 const LEFT_CONTEXTS_KEY = "curb:left_contexts";
 
@@ -69,6 +70,54 @@ export function useGroupContexts() {
             }
           })
         );
+        // Auto-join is **scoped to RESTRICTED (private) channels only**.
+        // Server-side, restricted subgroups require an explicit
+        // `add_group_members` call by an admin — so if we're a direct
+        // member of one and lack a local ContextIdentity, an admin just
+        // added us and we should follow the context to surface the
+        // channel in the sidebar (the server-side auto-follow gap, see
+        // `add_group_members.rs` — it publishes MemberAdded + KeyDelivery
+        // but never creates the local ContextIdentity row).
+        //
+        // Open (public) channels are intentionally NOT auto-joined: every
+        // namespace member is an inherited member via
+        // CAN_JOIN_OPEN_SUBGROUPS, so auto-join would silently enroll
+        // everyone in every public channel the moment it's created. Users
+        // discover public channels via search and join explicitly. The
+        // creator already has a local identity from the `createContext`
+        // round-trip, so their own channel still appears immediately.
+        //
+        // Contexts the user explicitly left are already excluded above.
+        if (visibility === "restricted") {
+          await Promise.all(
+            ids.filter((id) => !idMap[id]).map(async (ctxId) => {
+              try {
+                const joinResp = await groupApi.joinGroupContext(groupId, {
+                  contextId: ctxId,
+                });
+                if (joinResp.error) {
+                  log.warn(
+                    "useGroupContexts",
+                    `Auto-join rejected for restricted context ${ctxId}: ${joinResp.error.message}`,
+                  );
+                  return;
+                }
+                const key = joinResp.data?.memberPublicKey;
+                if (key) {
+                  idMap[ctxId] = key;
+                  log.info("useGroupContexts", `Auto-joined restricted context ${ctxId}`);
+                } else {
+                  log.warn(
+                    "useGroupContexts",
+                    `Auto-join returned no memberPublicKey for restricted context ${ctxId}; will retry on next tick`,
+                  );
+                }
+              } catch (err) {
+                log.warn("useGroupContexts", `Auto-join threw for restricted context ${ctxId}`, err);
+              }
+            })
+          );
+        }
         return Promise.all(
           filtered.map(async ({ contextId: ctxId, alias }) => {
             const executor = idMap[ctxId];
@@ -120,7 +169,15 @@ export function useGroupContexts() {
       try {
         const sgResp = await groupApi.listSubgroups(groupId);
         if (sgResp.data && sgResp.data.length > 0) {
-          subgroupList = sgResp.data;
+          // Strip DM subgroups from the channels pipeline by alias prefix.
+          // A DM is technically a subgroup, but it should never appear in
+          // the channels sidebar — even momentarily. Filtering by alias is
+          // a hard signal that doesn't depend on the context's `info` being
+          // loaded yet (which caused DMs to briefly show as channels on
+          // the receiver until `context_type === "Dm"` arrived).
+          subgroupList = sgResp.data.filter(
+            (sg) => !(sg.alias ?? "").startsWith(DM_CONTEXT_ALIAS_PREFIX),
+          );
           await Promise.all(
             subgroupList.map(async (sg) => {
               const [sgListResp, sgInfoResp] = await Promise.all([
@@ -129,7 +186,13 @@ export function useGroupContexts() {
               ]);
               const visibility = sgInfoResp?.data?.subgroupVisibility;
               if (sgListResp.data) {
-                const sgChannels = await enrichEntries(sgListResp.data, visibility);
+                // Belt-and-suspenders: also drop any context whose own
+                // alias is DM-prefixed, in case a subgroup is renamed but
+                // still hosts DM contexts.
+                const channelEntries = sgListResp.data.filter(
+                  (e) => !(e.alias ?? "").startsWith(DM_CONTEXT_ALIAS_PREFIX),
+                );
+                const sgChannels = await enrichEntries(channelEntries, visibility);
                 subgroupChannelsMap.set(sg.groupId, sgChannels);
               }
             })

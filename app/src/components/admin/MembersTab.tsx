@@ -319,52 +319,25 @@ export default function MembersTab({
                   <CapabilityInfo>
                     <CapabilityTitle>Create channels</CapabilityTitle>
                     <CapabilityDescription>
-                      Allow this member to create new channels in the workspace.
+                      Allow this member to create new channels (root-level
+                      subgroups) in the workspace.
                     </CapabilityDescription>
                   </CapabilityInfo>
+                  {/* A channel = root-level subgroup + a context inside it.
+                      Creating a subgroup requires CAN_CREATE_SUBGROUP;
+                      registering the context requires CAN_CREATE_CONTEXT
+                      (the creator becomes the subgroup's admin, but
+                      flipping both keeps the cap mask coherent if the
+                      member ever has to create a context they don't own).
+                      We toggle both together so the label matches reality. */}
                   <CapabilityToggle
                     type="checkbox"
-                    checked={capToggles.canCreateContext}
+                    checked={capToggles.canCreateSubgroup}
                     onChange={(e) =>
                       setCapToggles((current) => ({
                         ...current,
+                        canCreateSubgroup: e.target.checked,
                         canCreateContext: e.target.checked,
-                      }))
-                    }
-                  />
-                </CapabilityRow>
-                <CapabilityRow>
-                  <CapabilityInfo>
-                    <CapabilityTitle>Invite members</CapabilityTitle>
-                    <CapabilityDescription>
-                      Allow this member to invite other people into the workspace.
-                    </CapabilityDescription>
-                  </CapabilityInfo>
-                  <CapabilityToggle
-                    type="checkbox"
-                    checked={capToggles.canInviteMembers}
-                    onChange={(e) =>
-                      setCapToggles((current) => ({
-                        ...current,
-                        canInviteMembers: e.target.checked,
-                      }))
-                    }
-                  />
-                </CapabilityRow>
-                <CapabilityRow>
-                  <CapabilityInfo>
-                    <CapabilityTitle>Join open channels</CapabilityTitle>
-                    <CapabilityDescription>
-                      Allow this member to join channels marked as open.
-                    </CapabilityDescription>
-                  </CapabilityInfo>
-                  <CapabilityToggle
-                    type="checkbox"
-                    checked={capToggles.canJoinOpenSubgroups}
-                    onChange={(e) =>
-                      setCapToggles((current) => ({
-                        ...current,
-                        canJoinOpenSubgroups: e.target.checked,
                       }))
                     }
                   />

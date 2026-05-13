@@ -181,7 +181,7 @@ export default function AdminPanel({
 
   const tabs: { id: AdminTab; label: string }[] = [
     { id: "members", label: `Members${admin.members.length ? ` (${admin.members.length})` : ""}` },
-    { id: "settings", label: "Settings" },
+    { id: "settings", label: "Details" },
   ];
 
   const content = (
@@ -240,6 +240,7 @@ export default function AdminPanel({
             <SettingsTab
               groupId={groupId}
               group={admin.group}
+              subgroupCount={admin.subgroupCount}
               actionLoading={admin.actionLoading}
               onSetDefaultCapabilities={admin.setDefaultCapabilities}
               onSetSubgroupVisibility={admin.setSubgroupVisibility}

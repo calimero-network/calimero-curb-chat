@@ -23,6 +23,7 @@ import EmojiSelectorPopup from "../emojiSelector/EmojiSelectorPopup";
 import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import { scrollbarStyles } from "../styles/scrollbar";
 import { log } from "../utils/logger";
+import { useMyChannelRole } from "../hooks/useMyChannelRole";
 import {
   getMessengerDisplayName,
   setMessengerDisplayName,
@@ -305,6 +306,12 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
     return getGlobalContextId() ?? "";
   }, [activeChat.contextId]);
 
+  // App-level moderation role for THIS channel. `Banned` users are blocked
+  // from posting via the MessageInput banner below; the rest of the chat
+  // still renders so they can read.
+  const myChannelRole = useMyChannelRole(resolvedContextId, accountId);
+  const isBanned = myChannelRole === "Banned";
+
   const renderMessage = (message: CurbMessage, prevMessage?: CurbMessage) => {
     const params: MessageRendererProps = {
       accountId: username,
@@ -393,6 +400,7 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
           isReadOnly={isReadOnly}
           isOwner={isOwner}
           isModerator={isModerator}
+          isBanned={isBanned}
         />
       </Wrapper>
       {isEmojiSelectorVisible && (

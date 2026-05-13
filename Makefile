@@ -153,6 +153,25 @@ workflows-extra: logic-build
 integration-shell:
 	@bash scripts/integration-test.sh
 
+# ── Stop dev nodes ─────────────────────────────────────────────────────────────
+
+# Kill both dev nodes, free their ports (admin: 2428/2429, p2p: 2528/2529),
+# and delete their home directories + tmp pid/log files. Idempotent.
+stop:
+	@bash scripts/dev-node.sh --clean 2>/dev/null || true
+	@bash scripts/dev-node2.sh --clean 2>/dev/null || true
+	@-pkill -f 'merod --node curb-dev'   2>/dev/null || true
+	@-pkill -f 'merod --node curb-dev-2' 2>/dev/null || true
+	@for p in 2428 2429 2528 2529; do \
+	  for proto in tcp udp; do \
+	    pids=$$(lsof -ti $$proto:$$p 2>/dev/null); \
+	    [ -n "$$pids" ] && { echo "  killing pid(s) on $$proto:$$p: $$pids"; kill -9 $$pids 2>/dev/null || true; } || true; \
+	  done; \
+	done
+	@rm -f /tmp/curb-dev-node.pid /tmp/curb-dev-node2.pid \
+	       /tmp/curb-dev-node.log /tmp/curb-dev-node2.log
+	@printf '\033[32m  ✓  dev nodes stopped & cleaned\033[0m\n'
+
 # ── Clean ──────────────────────────────────────────────────────────────────────
 
 clean:

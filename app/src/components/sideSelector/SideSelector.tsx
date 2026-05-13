@@ -294,7 +294,6 @@ const SideMenuContent = memo(function SideMenuContent({
         createDM={createDM}
         privateDMs={privateDMs}
         isCollapsed={isCollapsed}
-        onNoActiveChat={setIsOpenSearchChannel}
         onFetchDmMembers={onFetchDmMembers}
       />
     </>

@@ -74,11 +74,13 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
   const groupId = getGroupId();
   const permissionsGroupId = props.targetGroupId ?? groupId;
   const permissions = useCurrentGroupPermissions(permissionsGroupId);
-  // Optimistic gate: only hide when we've definitively resolved a non-admin
-  // role. While loading, on API failure, or before memberIdentity is known,
-  // show the button — the create API enforces the real check anyway.
+  // Optimistic gate: while loading, on API failure, or before memberIdentity
+  // is known, show the button — the create API enforces the real check.
+  // Once resolved, show for admins or members holding CAN_CREATE_SUBGROUP
+  // (rc.37+: regular namespace members can start root-level channel-groups).
   const resolved = !permissions.loading && permissions.memberIdentity !== "";
-  const canShowCreate = !resolved || permissions.isAdmin;
+  const canShowCreate =
+    !resolved || permissions.isAdmin || permissions.canCreateSubgroup;
 
   const channelNameValidator = useCallback(
     (value: string) => {

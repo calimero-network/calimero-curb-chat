@@ -173,6 +173,136 @@ describe("useDMs (1-group-per-context)", () => {
     );
   });
 
+  it("hides DMs whose counterpart was removed from the namespace", async () => {
+    // Two DM subgroups: one with a still-present member, one with a removed
+    // member. The kicked member is absent from listMembers, so the
+    // corresponding DM should not appear in the returned list.
+    mockListSubgroups.mockResolvedValue({
+      data: [
+        { groupId: "dm-sg-active", alias: "DM_CONTEXT_member-me_member-you" },
+        { groupId: "dm-sg-removed", alias: "DM_CONTEXT_member-me_member-kicked" },
+      ],
+      error: null,
+    });
+    mockListGroupContexts.mockImplementation(async (id: string) => {
+      if (id === "dm-sg-active") {
+        return {
+          data: [{ contextId: "ctx-active", alias: "DM_CONTEXT_member-me_member-you" }],
+          error: null,
+        };
+      }
+      if (id === "dm-sg-removed") {
+        return {
+          data: [{ contextId: "ctx-removed", alias: "DM_CONTEXT_member-me_member-kicked" }],
+          error: null,
+        };
+      }
+      return { data: [], error: null };
+    });
+    // Namespace member list is authoritative — current user is present, kicked
+    // user is not.
+    mockListMembers.mockResolvedValue({
+      data: {
+        members: [
+          { identity: "member-me", role: "Member" },
+          { identity: "member-you", role: "Member" },
+        ],
+      },
+      error: null,
+    });
+    mockFetchContextIdentities.mockResolvedValue({
+      data: { data: { identities: ["member-me"] } },
+    });
+    mockGetContextInfo.mockResolvedValue({
+      data: { name: "DM", context_type: "Dm" },
+      error: null,
+    });
+    mockGetProfiles.mockImplementation(async (contextId: string) => {
+      if (contextId === "ctx-active") {
+        return {
+          data: [
+            { identity: "member-me", username: "Me" },
+            { identity: "member-you", username: "You" },
+          ],
+          error: null,
+        };
+      }
+      return {
+        data: [
+          { identity: "member-me", username: "Me" },
+          { identity: "member-kicked", username: "Kicked" },
+        ],
+        error: null,
+      };
+    });
+
+    const { result } = renderHook(() => useDMs());
+
+    let dms: Awaited<ReturnType<typeof result.current.fetchDms>> = [];
+    await act(async () => {
+      dms = await result.current.fetchDms("namespace-1");
+    });
+
+    expect(dms).toHaveLength(1);
+    expect(dms[0]).toEqual(
+      expect.objectContaining({
+        contextId: "ctx-active",
+        otherIdentity: "member-you",
+      }),
+    );
+  });
+
+  it("falls back to showing all DMs when the namespace member list is unavailable", async () => {
+    // Older merods return 405 on GET /members; listMembers fails. In that
+    // case we must NOT aggressively hide DMs — fall back to the legacy
+    // behaviour and surface everything.
+    mockListSubgroups.mockResolvedValue({
+      data: [{ groupId: "dm-sg-1", alias: "DM_CONTEXT_member-me_member-you" }],
+      error: null,
+    });
+    mockListGroupContexts.mockImplementation(async (id: string) =>
+      id === "dm-sg-1"
+        ? {
+            data: [{ contextId: "ctx-1", alias: "DM_CONTEXT_member-me_member-you" }],
+            error: null,
+          }
+        : { data: [], error: null },
+    );
+    mockListMembers.mockResolvedValue({
+      data: null,
+      error: { code: 405, message: "Method Not Allowed" },
+    });
+    mockFetchContextIdentities.mockResolvedValue({
+      data: { data: { identities: ["member-me"] } },
+    });
+    mockGetContextInfo.mockResolvedValue({
+      data: { name: "DM", context_type: "Dm" },
+      error: null,
+    });
+    mockGetProfiles.mockResolvedValue({
+      data: [
+        { identity: "member-me", username: "Me" },
+        { identity: "member-you", username: "You" },
+      ],
+      error: null,
+    });
+
+    const { result } = renderHook(() => useDMs());
+
+    let dms: Awaited<ReturnType<typeof result.current.fetchDms>> = [];
+    await act(async () => {
+      dms = await result.current.fetchDms("namespace-1");
+    });
+
+    expect(dms).toHaveLength(1);
+    expect(dms[0]).toEqual(
+      expect.objectContaining({
+        contextId: "ctx-1",
+        otherIdentity: "member-you",
+      }),
+    );
+  });
+
   it("uses the member alias when DM profiles do not provide a username", async () => {
     mockListSubgroups.mockResolvedValue({
       data: [{ groupId: "dm-sg-1", alias: "DM_CONTEXT_member-me_member-you" }],

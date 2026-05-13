@@ -22,6 +22,7 @@ export interface GroupAdminState {
 export function useGroupAdmin() {
   const [group, setGroup] = useState<GroupInfo | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
+  const [subgroupCount, setSubgroupCount] = useState<number | null>(null);
   const [upgradeStatus, setUpgradeStatus] =
     useState<GroupUpgradeStatus | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,14 +35,16 @@ export function useGroupAdmin() {
     setLoading(true);
     setError(null);
     try {
-      const [groupResp, membersResp, upgradeResp] = await Promise.all([
+      const [groupResp, membersResp, subgroupsResp, upgradeResp] = await Promise.all([
         api.getGroup(groupId),
         api.listMembers(groupId),
+        api.listSubgroups(groupId),
         api.getUpgradeStatus(groupId),
       ]);
 
       if (groupResp.data) setGroup(groupResp.data);
       if (membersResp.data) setMembers(membersResp.data.members);
+      if (subgroupsResp.data) setSubgroupCount(subgroupsResp.data.length);
       if (upgradeResp.data !== undefined) setUpgradeStatus(upgradeResp.data);
 
       const firstError =
@@ -338,6 +341,7 @@ export function useGroupAdmin() {
   return {
     group,
     members,
+    subgroupCount,
     upgradeStatus,
     loading,
     actionLoading,

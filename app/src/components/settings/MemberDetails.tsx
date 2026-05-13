@@ -581,9 +581,12 @@ const MemberDetails: React.FC<MemberDetailsProps> = (props) => {
                   </Text>
                 </UserInfo>
 
-                <RowActions>
-                  <RoleBadge $role={targetRole}>{targetRole}</RoleBadge>
+                {/* Badge sits outside RowActions so it's always visible
+                    (RowActions is opacity:0 until row hover; that gate
+                    applies only to the action buttons below). */}
+                <RoleBadge $role={targetRole}>{targetRole}</RoleBadge>
 
+                <RowActions>
                   {canModerate && showPromote && (
                     <ActionBtn
                       title={`Promote to ${promoteTo}`}

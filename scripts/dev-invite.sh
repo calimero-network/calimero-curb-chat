@@ -51,12 +51,35 @@ green "Invitation generated"
 # ── 2. Node2 joins the namespace ─────────────────────────────────────────────
 
 step "Node2 joining namespace $GROUP_ID"
-curl -sf -X POST "${NODE_2_URL}/admin-api/namespaces/${GROUP_ID}/join" \
-  -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
-  -H "Content-Type: application/json" \
-  -d "$(jq -n --argjson inv "$INVITE_DATA" '{invitation: $inv}')" >/dev/null \
-  && green "Joined namespace" \
-  || { red "Namespace join failed"; exit 1; }
+# Retry on "no mesh peers for namespace" — node2 needs time to discover node1
+# on libp2p (mDNS/rendezvous) before the gossipsub mesh for this namespace
+# topic exists. The server-side join waits ~10s for mesh peers internally,
+# so each failed attempt is itself a backoff.
+JOIN_BODY=$(jq -n --argjson inv "$INVITE_DATA" '{invitation: $inv}')
+JOIN_OK=0
+for i in $(seq 1 5); do
+  JOIN_RES_FILE=$(mktemp)
+  JOIN_HTTP=$(curl -sS -X POST "${NODE_2_URL}/admin-api/namespaces/${GROUP_ID}/join" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN_2}" \
+    -H "Content-Type: application/json" \
+    -d "$JOIN_BODY" -o "$JOIN_RES_FILE" -w "%{http_code}" 2>/dev/null || echo "000")
+  if [ "$JOIN_HTTP" = "200" ] || [ "$JOIN_HTTP" = "201" ] || [ "$JOIN_HTTP" = "204" ]; then
+    rm -f "$JOIN_RES_FILE"
+    green "Joined namespace (attempt $i)"
+    JOIN_OK=1
+    break
+  fi
+  JOIN_ERR=$(jq -r '.error.message // .message // empty' "$JOIN_RES_FILE" 2>/dev/null || cat "$JOIN_RES_FILE")
+  rm -f "$JOIN_RES_FILE"
+  if echo "$JOIN_ERR" | grep -q "no mesh peers"; then
+    [ "$i" -eq 1 ] && yellow "Waiting for node2 to peer with node1 over libp2p..."
+    sleep 1
+    continue
+  fi
+  red "Namespace join failed (HTTP $JOIN_HTTP): $JOIN_ERR"
+  exit 1
+done
+[ "$JOIN_OK" -eq 1 ] || { red "Namespace join failed after 5 attempts: no mesh peers"; exit 1; }
 
 # ── 3. Sync namespace to node2 ───────────────────────────────────────────────
 
