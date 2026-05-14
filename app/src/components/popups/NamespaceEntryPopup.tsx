@@ -331,6 +331,20 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
     if (memberIdentity) {
       setGroupMemberIdentity(namespaceId, memberIdentity);
       setIdentityDisplayName(memberIdentity, username);
+      // Propagate the chosen handle as the **namespace-level member alias**.
+      // Without this, other users' `listMembers(namespaceId)` returns this
+      // member with `alias: ""` and the channel/DM/admin UIs all fall through
+      // to displaying the raw identity string until the user logs out and
+      // back in (which back-fills via the cached-name branch in
+      // `checkNamespace`). Best-effort — alias is a comfort, not a critical
+      // state machine.
+      if (username) {
+        api.current
+          .setMemberAlias(namespaceId, memberIdentity, { alias: username })
+          .catch(() => {
+            /* non-fatal */
+          });
+      }
     }
     clearStoredSession();
     setStep("joining");

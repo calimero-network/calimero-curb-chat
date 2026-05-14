@@ -326,6 +326,21 @@ export default function SearchChannelsContainer({
           groupApi
             .setMemberAlias(contextId, memberKey, { alias: seedAlias })
             .catch(() => {/* non-fatal — alias is best-effort */});
+          // Register the WASM-level `profile` for this context too — without
+          // this, `get_profiles` on the channel never returns us, and
+          // channel-members / mention / DM-invite UIs all fall through to
+          // displaying our raw identity hash. The auto-join path in
+          // `useGroupContexts` does this for restricted (admin-added)
+          // channels; this is the equivalent for the public/browse "Join"
+          // flow which routes here.
+          new ClientApiDataSource()
+            .joinChat({
+              contextId,
+              executorPublicKey: memberKey,
+              username: seedAlias,
+              isDM: false,
+            })
+            .catch(() => {/* non-fatal — set_profile is best-effort */});
         }
 
         setAllChannels((prev) =>
