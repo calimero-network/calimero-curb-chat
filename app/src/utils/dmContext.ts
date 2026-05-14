@@ -239,12 +239,11 @@ export function getDmDisplayName(params: {
     return alias;
   }
 
-  const identity = params.otherIdentity?.trim();
-  if (identity) {
-    return identity;
-  }
-
-  return `${params.contextId.substring(0, 8)}...`;
+  // Never expose the raw identity hash or context id as the DM title.
+  // Display a placeholder until the other party's name metadata
+  // propagates (set_profile via WASM, or namespace-level metadata via
+  // the new core /metadata API).
+  return "Direct message";
 }
 
 export async function createDmContextInGroup(

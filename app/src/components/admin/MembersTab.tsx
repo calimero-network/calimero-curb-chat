@@ -184,7 +184,11 @@ function truncateIdentity(id: string): string {
 }
 
 function getMemberDisplayName(member: GroupMember): string {
-  return member.alias?.trim() || truncateIdentity(member.identity);
+  // Never leak the raw identity hash as the visible name — show
+  // "Unnamed member" until the name metadata propagates from the
+  // member's node. The full identity stays available via the row's
+  // `title` tooltip and as a confirm-modal argument.
+  return member.alias?.trim() || "Unnamed member";
 }
 
 interface MembersTabProps {
@@ -265,11 +269,6 @@ export default function MembersTab({
                 <Identity title={member.identity}>
                   {getMemberDisplayName(member)}
                 </Identity>
-                {member.alias?.trim() && (
-                  <SecondaryIdentity title={member.identity}>
-                    {truncateIdentity(member.identity)}
-                  </SecondaryIdentity>
-                )}
               </IdentityStack>
               <RoleBadge $admin={member.role === "Admin"}>
                 {member.role}
@@ -287,7 +286,7 @@ export default function MembersTab({
               {member.role !== "Admin" && (
                 <ConfirmPopup
                   title="Remove Member"
-                  message={`Remove ${truncateIdentity(member.identity)} from the group? This will revoke access to all group contexts (cascade removal).`}
+                  message={`Remove ${getMemberDisplayName(member)} from the group? This will revoke access to all group contexts (cascade removal).`}
                   confirmLabel="Remove"
                   onConfirm={handleRemove}
                   toggle={
@@ -312,7 +311,7 @@ export default function MembersTab({
           {member.role !== "Admin" && capEditIdentity === member.identity && (
             <CapabilitiesOverlay>
               <CapLabel>
-                Member permissions for {truncateIdentity(member.identity)}
+                Member permissions for {getMemberDisplayName(member)}
               </CapLabel>
               <CapabilitiesList>
                 <CapabilityRow>

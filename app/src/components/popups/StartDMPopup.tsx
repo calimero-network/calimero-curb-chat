@@ -262,7 +262,11 @@ const StartDMPopup = memo(function StartDMPopup({
   const handleSuggestionClick = (s: MemberSuggestion) => {
     setSelectedIdentity(s.identity);
     updateValidation(s.identity);
-    setInputValue(s.label || s.identity);
+    // Only ever show the human-readable label in the visible input. The
+    // identity hash stays internal (selectedIdentity), used as the actual
+    // target for the DM. If the member has no label yet, leave the input
+    // empty rather than dumping the public key into the UI.
+    setInputValue(s.label || "");
     setShowSuggestions(false);
     setSuggestions([]);
   };
@@ -300,7 +304,6 @@ const StartDMPopup = memo(function StartDMPopup({
               {suggestions.map((s) => (
                 <SuggestionItem key={s.identity} onClick={() => handleSuggestionClick(s)}>
                   <SuggestionName>{s.label}</SuggestionName>
-                  {s.identity && <SuggestionId>{s.identity}</SuggestionId>}
                 </SuggestionItem>
               ))}
             </SuggestionsDropdown>

@@ -6,6 +6,8 @@ export interface CreateContextProps {
   groupId?: string;
   /** Hex-encoded 32-byte private key for group context creation. Optional — the node derives it from its group identity when omitted. */
   identitySecret?: string;
+  /** Human-readable name persisted in the context's MetadataRecord (post-054a784f). */
+  name?: string;
 }
 
 export interface CreateContextResponse {

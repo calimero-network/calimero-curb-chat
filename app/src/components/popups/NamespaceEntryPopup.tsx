@@ -17,7 +17,6 @@ import {
   getStoredGroupAlias,
   setStoredGroupAlias,
   setContextMemberIdentity,
-  getContextMemberIdentity,
 } from "../../constants/config";
 import {
   getMessengerDisplayName,
@@ -297,47 +296,21 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
   const [inviteStatus, setInviteStatus] = useState("");
   const [error, setError] = useState("");
 
-  // Auto-join all contexts in a namespace (fire-and-forget)
-  const autoJoinContexts = useCallback(async (namespaceId: string) => {
-    try {
-      const ctxRes = await api.current.listGroupContexts(namespaceId);
-      if (!ctxRes.data) return;
-      const namespaceIdentity = getGroupMemberIdentity(namespaceId);
-      const seedAlias =
-        (namespaceIdentity ? getIdentityDisplayName(namespaceIdentity) : "") ||
-        getMessengerDisplayName() ||
-        "";
-      for (const ctx of ctxRes.data) {
-        try {
-          const joinRes = await api.current.joinGroupContext(namespaceId, { contextId: ctx.contextId });
-          const memberKey = joinRes.data?.memberPublicKey;
-          if (memberKey) {
-            setContextMemberIdentity(ctx.contextId, memberKey);
-            if (seedAlias) {
-              api.current
-                .setMemberAlias(ctx.contextId, memberKey, { alias: seedAlias })
-                .catch(() => {/* non-fatal — alias is best-effort */});
-            }
-          }
-        } catch { /* already a member or restricted — ignore */ }
-      }
-    } catch { /* non-fatal */ }
-  }, []);
-
-  // Final step: commit selection, join all contexts, write WASM profiles, then navigate to chat
+  // Final step: commit selection, persist the chosen handle as the
+  // namespace-level member name, then navigate to chat. The user only
+  // gets the channels they explicitly join (self-join for Open subgroups,
+  // admin-add for Restricted) — no force-joining contexts at workspace
+  // entry.
   const enterChat = useCallback(async (namespaceId: string, username: string, memberIdentity: string) => {
     setGroupId(namespaceId);
     setMessengerDisplayName(username);
     if (memberIdentity) {
       setGroupMemberIdentity(namespaceId, memberIdentity);
       setIdentityDisplayName(memberIdentity, username);
-      // Propagate the chosen handle as the **namespace-level member alias**.
-      // Without this, other users' `listMembers(namespaceId)` returns this
-      // member with `alias: ""` and the channel/DM/admin UIs all fall through
-      // to displaying the raw identity string until the user logs out and
-      // back in (which back-fills via the cached-name branch in
-      // `checkNamespace`). Best-effort — alias is a comfort, not a critical
-      // state machine.
+      // Propagate the chosen handle as the namespace-level member name.
+      // Without this, other users' `listMembers(namespaceId)` returns
+      // this member with `name: null` and the channel/DM/admin UIs all
+      // fall through to displaying the raw identity string.
       if (username) {
         api.current
           .setMemberAlias(namespaceId, memberIdentity, { alias: username })
@@ -347,30 +320,9 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       }
     }
     clearStoredSession();
-    setStep("joining");
-    await autoJoinContexts(namespaceId);
-
-    // Write WASM profile on every context so other members see the name immediately
-    if (username && memberIdentity) {
-      const ctxRes = await api.current.listGroupContexts(namespaceId);
-      if (ctxRes.data?.length) {
-        const clientApi = new ClientApiDataSource();
-        for (const ctx of ctxRes.data) {
-          const ctxIdentity = getContextMemberIdentity(ctx.contextId);
-          if (ctxIdentity) {
-            clientApi.joinChat({
-              contextId: ctx.contextId,
-              executorPublicKey: ctxIdentity,
-              username,
-            }).catch(() => {});
-          }
-        }
-      }
-    }
-
     setNamespaceReady();
     navigate("/");
-  }, [autoJoinContexts, navigate]);
+  }, [navigate]);
 
   // Check whether this node already has identity + username for a namespace.
   // Recovery order: server alias (node) → per-identity cache → WASM profiles → enter-name.
@@ -460,36 +412,6 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
 
       setInviteStatus("Syncing…");
       await api.current.syncGroup(groupId).catch(() => {});
-
-      setInviteStatus("Joining channels…");
-      const ctxRes = await api.current.listGroupContexts(groupId);
-      if (ctxRes.data) {
-        // Display name to seed the per-context member alias with —
-        // priority: the namespace-level identity name, then the
-        // messenger-level cached name, then the typed `afterJoin` value.
-        // Without this, node-2 shows up to other members as a raw
-        // identity hash for the first session in each newly-joined
-        // context (the explainer's "random ID displayed as name" bug).
-        const seedAlias =
-          getIdentityDisplayName(memberIdentity) ||
-          getMessengerDisplayName() ||
-          afterJoin?.trim() ||
-          "";
-        for (const ctx of ctxRes.data) {
-          try {
-            const joinCtx = await api.current.joinGroupContext(groupId, { contextId: ctx.contextId });
-            const memberKey = joinCtx.data?.memberPublicKey;
-            if (memberKey) {
-              setContextMemberIdentity(ctx.contextId, memberKey);
-              if (seedAlias) {
-                api.current
-                  .setMemberAlias(ctx.contextId, memberKey, { alias: seedAlias })
-                  .catch(() => {/* non-fatal — alias is best-effort */});
-              }
-            }
-          } catch { /* non-fatal */ }
-        }
-      }
 
       clearInvitationFromStorage();
 
@@ -654,7 +576,9 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
         const base = getNodeUrl() || DEFAULT_ENDPOINT;
         const ctxRes = await axios.post<{ data: { contextId: string; memberPublicKey: string } }>(
           `${base}/admin-api/contexts`,
-          { applicationId: appId, groupId, alias: "general" },
+          // Send both `name` (new, persisted into MetadataRecord on core
+          // post-054a784f) and `alias` (old, for transition compatibility).
+          { applicationId: appId, groupId, alias: "general", name: "general" },
           { headers: authHeaders() },
         );
         const ctxData = ctxRes.data?.data;

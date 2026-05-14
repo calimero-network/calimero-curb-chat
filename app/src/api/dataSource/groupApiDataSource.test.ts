@@ -56,6 +56,9 @@ describe("GroupApiDataSource", () => {
         applicationId: "app-1",
         upgradePolicy: "LazyOnAccess",
         alias: "Product Team",
+        // Post-054a784f the server field is `name`; createGroup now sends
+        // both for transition compat.
+        name: "Product Team",
       },
       {
         headers: {
@@ -286,8 +289,8 @@ describe("GroupApiDataSource", () => {
     });
 
     expect(mockAxiosPut).toHaveBeenCalledWith(
-      "http://localhost:2428/admin-api/groups/group-1/members/member-1/alias",
-      { alias: "Taylor" },
+      "http://localhost:2428/admin-api/groups/group-1/members/member-1/metadata",
+      { name: "Taylor" },
       {
         headers: {
           "Content-Type": "application/json",

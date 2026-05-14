@@ -105,7 +105,11 @@ describe("StartDMPopup", () => {
     });
 
     expect(screen.getByText("Bob Alias")).toBeInTheDocument();
-    expect(screen.getByText("member-b")).toBeInTheDocument();
+    // The raw identity hash is no longer displayed in the suggestion
+    // dropdown — only the human-readable label. The identity is still
+    // captured internally (selectedIdentity) and passed to functionLoader
+    // on submit.
+    expect(screen.queryByText("member-b")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Bob Alias"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));

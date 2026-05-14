@@ -81,7 +81,7 @@ export function useChannelMembers() {
               profileUsernameByIdentity.get(m.identity) ||
               m.alias?.trim() ||
               namespaceAliasByIdentity.get(m.identity) ||
-              m.identity;
+              "Unnamed member";
             memberMap.set(m.identity, display);
           });
           setChannelUsers(memberMap);

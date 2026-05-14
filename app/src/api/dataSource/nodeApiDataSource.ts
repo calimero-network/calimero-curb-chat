@@ -62,6 +62,11 @@ export class ContextApiDataSource implements NodeApi {
       if (props.identitySecret) {
         body.identitySecret = props.identitySecret;
       }
+      if (props.name) {
+        // Post-054a784f the context-create request accepts a `name`
+        // field that is stored directly into the context's MetadataRecord.
+        body.name = props.name;
+      }
 
       const response = await axios.post(
         `${nodeEndpoint}/admin-api/contexts`,
@@ -276,7 +281,12 @@ export class ContextApiDataSource implements NodeApi {
         body.identitySecret = params.identitySecret;
       }
       if (params.alias) {
+        // Post-054a784f the context-create request accepts `name` and
+        // stores it on the context's MetadataRecord. Send both for
+        // transition compatibility (old nodes read `alias`, new nodes
+        // read `name`).
         body.alias = params.alias;
+        body.name = params.alias;
       }
 
       const response = await axios.post(

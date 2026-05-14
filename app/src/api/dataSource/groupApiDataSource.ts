@@ -137,6 +137,7 @@ function normalizeGroupContextEntry(entry: unknown): GroupContextEntry | null {
   const typedEntry = entry as {
     contextId?: unknown;
     alias?: unknown;
+    name?: unknown;
     contextType?: unknown;
     context_type?: unknown;
     memberIdentities?: unknown;
@@ -179,9 +180,17 @@ function normalizeGroupContextEntry(entry: unknown): GroupContextEntry | null {
       )
     : undefined;
 
+  // Post-054a784f the server returns `name` on context entries; older
+  // shapes still carried `alias`. Either is accepted; we expose it under
+  // the frontend's `alias` key so consumers don't have to branch.
   return {
     contextId: normalizeContextId(typedEntry.contextId),
-    alias: typeof typedEntry.alias === "string" ? typedEntry.alias : undefined,
+    alias:
+      typeof typedEntry.name === "string"
+        ? typedEntry.name
+        : typeof typedEntry.alias === "string"
+          ? typedEntry.alias
+          : undefined,
     sharedContextType,
     memberIdentities: memberIdentities && memberIdentities.length > 0 ? memberIdentities : undefined,
     metadata,
@@ -296,7 +305,9 @@ export class GroupApiDataSource implements GroupApi {
     request: CreateGroupRequest,
   ): ApiResponse<CreateGroupResponse> {
     try {
-      const response = await axios.post(`${this.base()}/namespaces`, request, {
+      // Server expects `name` post-054a784f; keep `alias` for older nodes.
+      const body = { ...request, name: request.alias };
+      const response = await axios.post(`${this.base()}/namespaces`, body, {
         headers: getAuthHeaders(),
       });
       if (response.status !== 200) {
@@ -365,7 +376,13 @@ export class GroupApiDataSource implements GroupApi {
         .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
         .map((item) => ({
           groupId: String(item.groupId ?? item.namespaceId ?? item.id ?? ""),
-          alias: typeof item.alias === "string" ? item.alias : undefined,
+          // Server returns `name` post-054a784f; fall back to `alias` for older nodes.
+          alias:
+            typeof item.name === "string"
+              ? item.name
+              : typeof item.alias === "string"
+                ? item.alias
+                : undefined,
           appKey: String(item.appKey ?? item.app_key ?? ""),
           targetApplicationId: String(
             item.targetApplicationId ?? item.target_application_id ?? "",
@@ -479,11 +496,20 @@ export class GroupApiDataSource implements GroupApi {
         // Handle both wrapped ({ data: { members, selfIdentity } }) and
         // unwrapped ({ members, selfIdentity }) API response shapes.
         const raw: unknown = response.data.data ?? response.data;
-        const members: GroupMember[] = Array.isArray(raw)
-          ? (raw as GroupMember[])
+        const rawMembers: Array<{ identity: string; role: string; name?: string; alias?: string }> = Array.isArray(raw)
+          ? (raw as Array<{ identity: string; role: string; name?: string; alias?: string }>)
           : Array.isArray((raw as { members?: unknown })?.members)
-            ? ((raw as { members: GroupMember[] }).members)
+            ? ((raw as { members: Array<{ identity: string; role: string; name?: string; alias?: string }> }).members)
             : [];
+        // Post-054a784f the server returns `name` (not `alias`). Map to the
+        // frontend's `alias` field — keeps every display-chain callsite
+        // (`useChannelMembers`, MembersTab, AddMember dropdown, DM picker)
+        // working without touching them.
+        const members: GroupMember[] = rawMembers.map((m) => ({
+          identity: m.identity,
+          role: m.role as GroupMember["role"],
+          alias: m.name ?? m.alias,
+        }));
         const selfIdentity: string | undefined =
           raw && typeof raw === "object" && "selfIdentity" in raw
             ? String((raw as { selfIdentity: unknown }).selfIdentity)
@@ -804,10 +830,14 @@ export class GroupApiDataSource implements GroupApi {
     identity: string,
     request: SetMemberAliasRequest,
   ): ApiResponse<void> {
+    // Migrated 2026-05-14 to the post-054a784f metadata API. The old
+    // /alias endpoint was deleted in that commit; the new one stores a
+    // generic MetadataRecord keyed by `name` on the server side.
+    // Frontend type field stays `alias` (cosmetic) — we map at the wire.
     try {
       const response = await axios.put(
-        `${this.base()}/groups/${groupId}/members/${identity}/alias`,
-        request,
+        `${this.base()}/groups/${groupId}/members/${identity}/metadata`,
+        { name: request.alias },
         { headers: getAuthHeaders() },
       );
       return response.status === 200
@@ -815,6 +845,36 @@ export class GroupApiDataSource implements GroupApi {
         : httpFail(response.status, response.statusText);
     } catch (error) {
       return catchError("setMemberAlias", error);
+    }
+  }
+
+  async setGroupAlias(groupId: string, name: string): ApiResponse<void> {
+    try {
+      const response = await axios.put(
+        `${this.base()}/groups/${groupId}/metadata`,
+        { name },
+        { headers: getAuthHeaders() },
+      );
+      return response.status === 200
+        ? ok(undefined as void)
+        : httpFail(response.status, response.statusText);
+    } catch (error) {
+      return catchError("setGroupAlias", error);
+    }
+  }
+
+  async setContextAlias(groupId: string, contextId: string, name: string): ApiResponse<void> {
+    try {
+      const response = await axios.put(
+        `${this.base()}/groups/${groupId}/contexts/${contextId}/metadata`,
+        { name },
+        { headers: getAuthHeaders() },
+      );
+      return response.status === 200
+        ? ok(undefined as void)
+        : httpFail(response.status, response.statusText);
+    } catch (error) {
+      return catchError("setContextAlias", error);
     }
   }
 
@@ -861,9 +921,11 @@ export class GroupApiDataSource implements GroupApi {
         { headers: getAuthHeaders() },
       );
       return response.status === 200
-        ? ok((response.data.subgroups as Array<{ group_id?: string; groupId?: string; alias?: string }>).map(s => ({
+        ? ok((response.data.subgroups as Array<{ group_id?: string; groupId?: string; name?: string; alias?: string }>).map(s => ({
             groupId: (s.group_id ?? s.groupId) as string,
-            alias: s.alias,
+            // Server returns `name` post-054a784f (formerly `alias`).
+            // Keep frontend field name as `alias` so display code stays put.
+            alias: s.name ?? s.alias,
           })))
         : httpFail(response.status, response.statusText);
     } catch (error) {
@@ -876,9 +938,12 @@ export class GroupApiDataSource implements GroupApi {
     request: CreateSubgroupRequest,
   ): ApiResponse<CreateSubgroupResponse> {
     try {
+      // Post-054a784f the server field is `groupName` (was `groupAlias`).
+      // Send both for transition compatibility — old nodes that still
+      // expect `groupAlias` will pick it up, new nodes read `groupName`.
       const response = await axios.post(
         `${this.base()}/namespaces/${namespaceId}/groups`,
-        { groupAlias: request.groupAlias },
+        { groupName: request.groupAlias, groupAlias: request.groupAlias },
         { headers: getAuthHeaders() },
       );
       return response.status === 200
