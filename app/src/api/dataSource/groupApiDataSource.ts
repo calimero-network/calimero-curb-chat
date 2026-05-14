@@ -938,12 +938,17 @@ export class GroupApiDataSource implements GroupApi {
     request: CreateSubgroupRequest,
   ): ApiResponse<CreateSubgroupResponse> {
     try {
-      // Post-054a784f the server field is `groupName` (was `groupAlias`).
-      // Send both for transition compatibility — old nodes that still
-      // expect `groupAlias` will pick it up, new nodes read `groupName`.
+      // Two separate concerns:
+      //   - groupAlias: routing identifier, no length cap (DM aliases are
+      //     long and structural).
+      //   - groupName : human-readable, stored in MetadataRecord, capped
+      //     at 64 bytes server-side. Only send if the caller passed one.
+      const body: Record<string, unknown> = {};
+      if (request.groupAlias) body.groupAlias = request.groupAlias;
+      if (request.name) body.groupName = request.name;
       const response = await axios.post(
         `${this.base()}/namespaces/${namespaceId}/groups`,
-        { groupName: request.groupAlias, groupAlias: request.groupAlias },
+        body,
         { headers: getAuthHeaders() },
       );
       return response.status === 200

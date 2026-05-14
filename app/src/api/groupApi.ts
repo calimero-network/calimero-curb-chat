@@ -168,7 +168,12 @@ export interface SubgroupEntry {
 }
 
 export interface CreateSubgroupRequest {
+  /** Routing identifier — may be long (e.g. `DM_CONTEXT_<id>_<id>`). */
   groupAlias?: string;
+  /** Human-readable display name stored in the subgroup's MetadataRecord.
+   *  Capped at 64 bytes server-side. Omit for DM subgroups whose alias is
+   *  structural and not user-facing. */
+  name?: string;
 }
 
 export interface CreateSubgroupResponse {

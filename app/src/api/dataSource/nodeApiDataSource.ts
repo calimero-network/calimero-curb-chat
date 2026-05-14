@@ -264,7 +264,11 @@ export class ContextApiDataSource implements NodeApi {
     groupId: string;
     initializationParams: Record<string, unknown>;
     identitySecret?: string;
+    /** Routing alias — may be long (e.g. DM aliases). No length cap. */
     alias?: string;
+    /** Human display name stored in the context's MetadataRecord. Capped
+     *  at 64 bytes server-side; omit for DM contexts. */
+    name?: string;
   }): ApiResponse<CreateContextResponse> {
     try {
       const nodeEndpoint = getAppEndpointKey() || DEFAULT_NODE_ENDPOINT;
@@ -280,14 +284,11 @@ export class ContextApiDataSource implements NodeApi {
       if (params.identitySecret) {
         body.identitySecret = params.identitySecret;
       }
-      if (params.alias) {
-        // Post-054a784f the context-create request accepts `name` and
-        // stores it on the context's MetadataRecord. Send both for
-        // transition compatibility (old nodes read `alias`, new nodes
-        // read `name`).
-        body.alias = params.alias;
-        body.name = params.alias;
-      }
+      // alias is the routing identifier (may be long for DM contexts).
+      // name is the human-readable display (server-capped at 64 bytes).
+      // Send only what was passed — never auto-derive name from alias.
+      if (params.alias) body.alias = params.alias;
+      if (params.name) body.name = params.name;
 
       const response = await axios.post(
         `${nodeEndpoint}/admin-api/contexts`,

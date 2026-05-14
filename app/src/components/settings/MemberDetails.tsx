@@ -248,20 +248,26 @@ const AddUserDialog = ({
 
   const handleSuggestionClick = (identity: string, label: string) => {
     setSelectedIdentity(identity);
-    setInputValue(label || identity);
+    // Show the human-readable label in the visible input. Identity stays
+    // internal (selectedIdentity), used as the actual add target. Never
+    // surface the raw public key in the UI.
+    setInputValue(label || "");
     setShowSuggestions(false);
   };
 
   const handleInvite = useCallback(async () => {
-    const identity = selectedIdentity || inputValue.trim();
-    if (!identity) return;
+    // Require a real identity from the suggestion list — typing a
+    // username and submitting without picking sends the typed string
+    // as `identity` to the server, which fails to parse it as a
+    // PublicKey and rejects the request.
+    if (!selectedIdentity) return;
     setIsProcessing(true);
-    addMember(identity, channelName);
+    addMember(selectedIdentity, channelName);
     setInputValue("");
     setSelectedIdentity("");
     setIsOpen(false);
     setIsProcessing(false);
-  }, [selectedIdentity, inputValue, addMember, channelName]);
+  }, [selectedIdentity, addMember, channelName]);
 
   const content = (
     <ModalContent>
@@ -281,7 +287,7 @@ const AddUserDialog = ({
                   key={s.identity}
                   onMouseDown={(e) => { e.preventDefault(); handleSuggestionClick(s.identity, s.label); }}
                 >
-                  {s.label || s.identity}
+                  {s.label || "Unnamed member"}
                 </SuggestionItem>
               ))}
             </SuggestionsDropdown>
@@ -293,7 +299,7 @@ const AddUserDialog = ({
         variant="primary"
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
         onClick={() => void handleInvite()}
-        disabled={isProcessing || !(selectedIdentity || inputValue.trim())}
+        disabled={isProcessing || !selectedIdentity}
       >
         Invite
       </Button>

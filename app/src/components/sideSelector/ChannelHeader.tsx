@@ -127,8 +127,14 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     // channel-groups thanks to the CAN_CREATE_SUBGROUP / CAN_MANAGE_VISIBILITY
     // namespace caps granted in dev-node.sh.
 
-    // 1) Create the channel's subgroup under the namespace root.
-    const sgResp = await groupApi.createSubgroup(namespaceId, { groupAlias: channelName });
+    // 1) Create the channel's subgroup under the namespace root. For
+    //    user-created channels the alias and the display name are the
+    //    same string (and short — UI input is constrained well under
+    //    the 64-byte cap).
+    const sgResp = await groupApi.createSubgroup(namespaceId, {
+      groupAlias: channelName,
+      name: channelName,
+    });
     if (sgResp.error || !sgResp.data) {
       log.error("ChannelHeader", "Failed to create channel subgroup", sgResp.error);
       return;
@@ -149,6 +155,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
       protocol: "near",
       groupId: channelGroupId,
       alias: channelName,
+      name: channelName,
       initializationParams: {
         name: channelName,
         context_type: "Channel",

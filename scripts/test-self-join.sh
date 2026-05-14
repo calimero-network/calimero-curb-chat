@@ -457,6 +457,66 @@ assert_eq "  node2 GET own member metadata"       "$NODE2_NAME" \
   "$(get_metadata_name "$NODE_2_URL" "$TOKEN_2" \
        "groups/$NAMESPACE_ID/members/$NODE2_NS_ID/metadata")"
 
+# ── Phase 8.5: admin adds node2 to PRIVATE subgroup (newprivate) ────────────
+#
+# Verifies the desired model: "owner of a Restricted subgroup adds a
+# member; the added member auto-joins it". Asserts:
+#   - POST /groups/:newprivate/members succeeds
+#   - node2's listSubgroups now INCLUDES newprivate (was filtered out
+#     before because they weren't a member)
+#   - node2 can resolve their identity on the newprivate context via
+#     /admin-api/contexts/:cid/join (mirrors what the frontend's
+#     useGroupContexts auto-joins for direct members)
+#   - admin and node2 exchange a message in newprivate
+
+phase "Phase 8.5: admin adds node2 to PRIVATE subgroup, then verify visibility + propagation"
+
+step "admin: POST /groups/:newprivate/members  (add node2)"
+ADD_RES=$(curl -sf -X POST "$NODE_1_URL/admin-api/groups/$NEWPRIVATE_SG/members" \
+  -H "Authorization: Bearer $TOKEN_1" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg id "$NODE2_NS_ID" '{members: [{identity: $id, role: "Member"}]}')") \
+  || { red "add failed: $ADD_RES"; FAIL=1; }
+green "add request returned"
+
+step "waiting 5s for MemberAdded + KeyDelivery to propagate"
+sleep 5
+
+step "node2: now sees newprivate in /subgroups (member-only filter passes)"
+NODE2_SUBGROUPS_POST_ADD=$(list_subgroup_ids "$NODE_2_URL" "$TOKEN_2")
+assert_contains "  node2 sees newprivate after add" \
+  "$NODE2_SUBGROUPS_POST_ADD" "$NEWPRIVATE_SG"
+
+step "node2: POST /admin-api/contexts/:newprivate_ctx/join"
+JOIN_RES=$(curl -sf -X POST "$NODE_2_URL/admin-api/contexts/$NEWPRIVATE_CTX/join" \
+  -H "Authorization: Bearer $TOKEN_2" \
+  -H "Content-Type: application/json" -d '{}' || true)
+NODE2_NEWPRIVATE_PK=$(echo "$JOIN_RES" | jq -r '.data.memberPublicKey // empty')
+if [ -z "$NODE2_NEWPRIVATE_PK" ]; then
+  NODE2_NEWPRIVATE_PK=$(curl -sf "$NODE_2_URL/admin-api/contexts/$NEWPRIVATE_CTX/identities-owned" \
+    -H "Authorization: Bearer $TOKEN_2" | jq -r '.data.identities[0] // empty')
+fi
+if [ -n "$NODE2_NEWPRIVATE_PK" ]; then
+  green "node2 newprivate pk: $NODE2_NEWPRIVATE_PK"
+else
+  red "node2 could not materialise identity in newprivate context"
+  FAIL=1
+fi
+
+if [ -n "$NODE2_NEWPRIVATE_PK" ]; then
+  step "node2: set_profile in newprivate"
+  curl -sf -X POST "$NODE_2_URL/jsonrpc" \
+    -H "Authorization: Bearer $TOKEN_2" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n \
+          --arg ctx "$NEWPRIVATE_CTX" --arg pk "$NODE2_NEWPRIVATE_PK" --arg u "$NODE2_NAME" \
+          '{jsonrpc:"2.0",id:1,method:"execute",
+            params:{contextId:$ctx, executorPublicKey:$pk,
+                    method:"set_profile", argsJson:{username:$u, avatar:null}}}')" >/dev/null || true
+  green "set"
+  sleep 2
+fi
+
 # ── Phase 9: DM subgroup + context ──────────────────────────────────────────
 
 phase "Phase 9: DM subgroup (restricted, admin + node2)"
@@ -591,6 +651,8 @@ ADMIN_GEN_MSG="admin→general $T"
 NODE2_GEN_MSG="node2→general $T"
 ADMIN_PUB_MSG="admin→newpublic $T"
 NODE2_PUB_MSG="node2→newpublic $T"
+ADMIN_PRIV_MSG="admin→newprivate $T"
+NODE2_PRIV_MSG="node2→newprivate $T"
 ADMIN_DM_MSG="admin→dm $T"
 NODE2_DM_MSG="node2→dm $T"
 
@@ -599,6 +661,12 @@ send_msg "$NODE_1_URL" "$TOKEN_1" "$GENERAL_CTX"   "$ADMIN_GENERAL_PK"   "$ADMIN
 send_msg "$NODE_2_URL" "$TOKEN_2" "$GENERAL_CTX"   "$NODE2_GENERAL_PK"   "$NODE2_GEN_MSG"  "$NODE2_NAME" >/dev/null
 send_msg "$NODE_1_URL" "$TOKEN_1" "$NEWPUBLIC_CTX" "$ADMIN_NEWPUBLIC_PK" "$ADMIN_PUB_MSG"  "$ADMIN_NAME" >/dev/null
 send_msg "$NODE_2_URL" "$TOKEN_2" "$NEWPUBLIC_CTX" "$NODE2_NEWPUBLIC_PK" "$NODE2_PUB_MSG"  "$NODE2_NAME" >/dev/null
+# Restricted (private) channel after admin-add — admin signs both, node2
+# also signs from their joined identity.
+send_msg "$NODE_1_URL" "$TOKEN_1" "$NEWPRIVATE_CTX" "$ADMIN_NEWPRIVATE_PK" "$ADMIN_PRIV_MSG" "$ADMIN_NAME" >/dev/null
+if [ -n "$NODE2_NEWPRIVATE_PK" ]; then
+  send_msg "$NODE_2_URL" "$TOKEN_2" "$NEWPRIVATE_CTX" "$NODE2_NEWPRIVATE_PK" "$NODE2_PRIV_MSG" "$NODE2_NAME" >/dev/null
+fi
 if [ -n "$NODE2_DM_PK" ]; then
   send_msg "$NODE_1_URL" "$TOKEN_1" "$DM_CTX" "$ADMIN_DM_PK"  "$ADMIN_DM_MSG"  "$ADMIN_NAME" >/dev/null
   send_msg "$NODE_2_URL" "$TOKEN_2" "$DM_CTX" "$NODE2_DM_PK"  "$NODE2_DM_MSG"  "$NODE2_NAME" >/dev/null
@@ -613,6 +681,10 @@ ADMIN_VIEW_GEN=$(read_msgs "$NODE_1_URL" "$TOKEN_1" "$GENERAL_CTX"   "$ADMIN_GEN
 NODE2_VIEW_GEN=$(read_msgs "$NODE_2_URL" "$TOKEN_2" "$GENERAL_CTX"   "$NODE2_GENERAL_PK")
 ADMIN_VIEW_PUB=$(read_msgs "$NODE_1_URL" "$TOKEN_1" "$NEWPUBLIC_CTX" "$ADMIN_NEWPUBLIC_PK")
 NODE2_VIEW_PUB=$(read_msgs "$NODE_2_URL" "$TOKEN_2" "$NEWPUBLIC_CTX" "$NODE2_NEWPUBLIC_PK")
+ADMIN_VIEW_PRIV=$(read_msgs "$NODE_1_URL" "$TOKEN_1" "$NEWPRIVATE_CTX" "$ADMIN_NEWPRIVATE_PK")
+if [ -n "$NODE2_NEWPRIVATE_PK" ]; then
+  NODE2_VIEW_PRIV=$(read_msgs "$NODE_2_URL" "$TOKEN_2" "$NEWPRIVATE_CTX" "$NODE2_NEWPRIVATE_PK")
+fi
 if [ -n "$NODE2_DM_PK" ]; then
   ADMIN_VIEW_DM=$(read_msgs "$NODE_1_URL" "$TOKEN_1" "$DM_CTX" "$ADMIN_DM_PK")
   NODE2_VIEW_DM=$(read_msgs "$NODE_2_URL" "$TOKEN_2" "$DM_CTX" "$NODE2_DM_PK")
@@ -625,6 +697,12 @@ assert_contains "  node2 sees admin's #general msg" "$NODE2_VIEW_GEN" "$ADMIN_GE
 step "newpublic"
 assert_contains "  admin sees node2's newpublic msg" "$ADMIN_VIEW_PUB" "$NODE2_PUB_MSG"
 assert_contains "  node2 sees admin's newpublic msg" "$NODE2_VIEW_PUB" "$ADMIN_PUB_MSG"
+
+if [ -n "$NODE2_NEWPRIVATE_PK" ]; then
+  step "newprivate (admin-added member)"
+  assert_contains "  admin sees node2's newprivate msg" "$ADMIN_VIEW_PRIV" "$NODE2_PRIV_MSG"
+  assert_contains "  node2 sees admin's newprivate msg" "$NODE2_VIEW_PRIV" "$ADMIN_PRIV_MSG"
+fi
 
 if [ -n "$NODE2_DM_PK" ]; then
   step "DM"
