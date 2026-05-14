@@ -168,8 +168,8 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const getChannelUsersRef = useRef(channelMembersHook.fetchChannelMembers);
   getChannelUsersRef.current = channelMembersHook.fetchChannelMembers;
 
-  const getChannelUsers = useCallback(async (id: string) => {
-    return getChannelUsersRef.current(id);
+  const getChannelUsers = useCallback(async (id: string, subgroupId?: string, namespaceId?: string) => {
+    return getChannelUsersRef.current(id, subgroupId, namespaceId);
   }, []);
 
   // Pin the channel→subgroup resolver in a ref so re-renders don't
@@ -209,6 +209,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
    * RPC calls (messages, reactions, etc.) target the correct context.
    */
   const updateSelectedActiveChat = async (selectedChat: ActiveChat) => {
+    mainMessages.clear();
     threadMessages.clear();
     setOpenThread(undefined);
     setCurrentOpenThread(undefined);
@@ -257,7 +258,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       lastSelectedChatIdRef.current = chatId;
 
       if (resolvedChat.type === "channel" && resolvedChat.contextIdentity) {
-        getChannelUsers(resolvedChat.id);
+        const subgroupId = resolvedChat.contextId
+          ? getSubgroupForContextRef.current(resolvedChat.contextId)
+          : undefined;
+        const namespaceId = getGroupId() || undefined;
+        getChannelUsers(resolvedChat.id, subgroupId, namespaceId);
       }
     }
 
@@ -481,6 +486,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           groupApi
             .setMemberAlias(contextId, resolvedIdentity, { alias: seedAlias })
             .catch(() => {/* non-fatal — alias is best-effort */});
+          // Register WASM-level profile so the other node's get_profiles
+          // returns our username. Without this, the other side always sees
+          // "Direct message" because their useDMs otherUsername is "".
+          new ClientApiDataSource()
+            .joinChat({ contextId, executorPublicKey: resolvedIdentity, username: seedAlias, isDM: true })
+            .catch(() => {/* non-fatal — set_profile is best-effort */});
         }
         const refreshedDms = await fetchDmsWithGroup();
         const refreshedDm = refreshedDms.find(
@@ -500,7 +511,12 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         type: "direct_message",
         contextId,
         id: contextId,
-        name: getDmDisplayName(selectedDm),
+        name: getDmDisplayName({
+          otherUsername: selectedDm.otherUsername,
+          otherAlias: selectedDm.otherAlias,
+          otherIdentity: selectedDm.otherIdentity,
+          contextId: selectedDm.contextId,
+        }),
         username: selectedDm.otherUsername || undefined,
         readOnly: false,
         isSynced: true,

@@ -199,6 +199,7 @@ function AppContainer({
           <Wrapper>
             {!isOpenSearchChannel && activeChat && (
               <ChatContainer
+                key={activeChat.contextId || activeChat.id}
                 activeChat={activeChat}
                 setIsOpenSearchChannel={() => openSearchPage()}
                 onJoinedChat={onJoinedChat}

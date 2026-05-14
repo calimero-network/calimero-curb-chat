@@ -352,7 +352,7 @@ green "set"
 
 phase "Phase 5: node2 self-joins newpublic (Inherited path)"
 
-JOIN_RES=$(curl -sf -X POST "$NODE_2_URL/admin-api/contexts/$NEWPUBLIC_CTX/join" \
+JOIN_RES=$(curl --max-time 30 -sf -X POST "$NODE_2_URL/admin-api/contexts/$NEWPUBLIC_CTX/join" \
   -H "Authorization: Bearer $TOKEN_2" \
   -H "Content-Type: application/json" -d '{}')
 NODE2_NEWPUBLIC_PK=$(echo "$JOIN_RES" | jq -r '.data.memberPublicKey // empty')
@@ -482,20 +482,30 @@ green "add request returned"
 step "waiting 5s for MemberAdded + KeyDelivery to propagate"
 sleep 5
 
+# Direct-member auto-follow gap (project_curb_governance_quirks #2):
+# admin-add doesn't materialise node2's ContextIdentity row. Calling
+# /join here is what the curb frontend does in useGroupContexts when
+# it detects isDirectMember. `--max-time 30` keeps the call bounded
+# in case the handler races sync — most of the time it returns in
+# well under a second.
+step "node2: POST /admin-api/contexts/:newprivate_ctx/join"
+JOIN_RES=$(curl --max-time 30 -sf -X POST \
+  "$NODE_2_URL/admin-api/contexts/$NEWPRIVATE_CTX/join" \
+  -H "Authorization: Bearer $TOKEN_2" \
+  -H "Content-Type: application/json" -d '{}' 2>/dev/null || echo "")
+NODE2_NEWPRIVATE_PK=$(echo "$JOIN_RES" | jq -r '.data.memberPublicKey // empty' 2>/dev/null || echo "")
+if [ -z "$NODE2_NEWPRIVATE_PK" ]; then
+  # Fallback: identities-owned (auto-follow may have raced the response)
+  NODE2_NEWPRIVATE_PK=$(curl --max-time 3 -sf \
+    "$NODE_2_URL/admin-api/contexts/$NEWPRIVATE_CTX/identities-owned" \
+    -H "Authorization: Bearer $TOKEN_2" 2>/dev/null \
+    | jq -r '.data.identities[0] // empty' 2>/dev/null || echo "")
+fi
+
 step "node2: now sees newprivate in /subgroups (member-only filter passes)"
 NODE2_SUBGROUPS_POST_ADD=$(list_subgroup_ids "$NODE_2_URL" "$TOKEN_2")
 assert_contains "  node2 sees newprivate after add" \
   "$NODE2_SUBGROUPS_POST_ADD" "$NEWPRIVATE_SG"
-
-step "node2: POST /admin-api/contexts/:newprivate_ctx/join"
-JOIN_RES=$(curl -sf -X POST "$NODE_2_URL/admin-api/contexts/$NEWPRIVATE_CTX/join" \
-  -H "Authorization: Bearer $TOKEN_2" \
-  -H "Content-Type: application/json" -d '{}' || true)
-NODE2_NEWPRIVATE_PK=$(echo "$JOIN_RES" | jq -r '.data.memberPublicKey // empty')
-if [ -z "$NODE2_NEWPRIVATE_PK" ]; then
-  NODE2_NEWPRIVATE_PK=$(curl -sf "$NODE_2_URL/admin-api/contexts/$NEWPRIVATE_CTX/identities-owned" \
-    -H "Authorization: Bearer $TOKEN_2" | jq -r '.data.identities[0] // empty')
-fi
 if [ -n "$NODE2_NEWPRIVATE_PK" ]; then
   green "node2 newprivate pk: $NODE2_NEWPRIVATE_PK"
 else
@@ -580,9 +590,9 @@ step "waiting 5s for MemberAdded + KeyDelivery to node2"
 sleep 5
 
 step "node2: join the DM context"
-DM_JOIN_RES=$(curl -sf -X POST "$NODE_2_URL/admin-api/contexts/$DM_CTX/join" \
+DM_JOIN_RES=$(curl --max-time 10 -sf -X POST "$NODE_2_URL/admin-api/contexts/$DM_CTX/join" \
   -H "Authorization: Bearer $TOKEN_2" \
-  -H "Content-Type: application/json" -d '{}' || true)
+  -H "Content-Type: application/json" -d '{}' 2>/dev/null || echo "")
 NODE2_DM_PK=$(echo "$DM_JOIN_RES" | jq -r '.data.memberPublicKey // empty')
 if [ -z "$NODE2_DM_PK" ]; then
   # Restricted-subgroup adds don't always need an explicit /join from the
@@ -711,6 +721,97 @@ if [ -n "$NODE2_DM_PK" ]; then
 fi
 
 sleep 1
+
+# ── Phase 11.5: member-leave propagation (UI vs core/WASM) ──────────────────
+#
+# Reproduces the reported symptom "user leaves a channel but is still
+# shown in members". After node2 leaves the newprivate context, we check
+# which layer keeps the stale entry:
+#   - listMembers(newprivate_subgroup) is the *governance* view (signed
+#     GroupMember rows). If node2 stays here, MemberRemoved either didn't
+#     fire or didn't propagate.
+#   - get_profiles via WASM is the *channel-contract* view (set_profile
+#     entries). If node2 stays here, the WASM contract has no
+#     leave/remove counterpart to set_profile.
+#   - identities-owned on node2 is the *local-store* view (ContextIdentity
+#     row). leaveContext clears this locally; other nodes don't observe
+#     it directly.
+phase "Phase 11.5: node2 leaves newprivate — verify which layer drops them"
+
+# Curb's "Leave channel" now calls leaveGroup(subgroupId) followed by
+# leaveContext(contextId). leaveGroup is the one that publishes
+# GroupOp::MemberLeft — leaveContext alone is node-local-only by design
+# ("No governance op is published. Peers never observe the leave." —
+# crates/context/src/handlers/leave_context.rs:21). The test exercises
+# the same sequence the UI now uses.
+step "node2: POST /admin-api/groups/:newprivate_sg/leave  (publishes MemberLeft)"
+LEAVE_GROUP_RES=$(curl -sf -X POST "$NODE_2_URL/admin-api/groups/$NEWPRIVATE_SG/leave" \
+  -H "Authorization: Bearer $TOKEN_2" \
+  -H "Content-Type: application/json" -d '{}' 2>&1 || true)
+green "leaveGroup issued"
+
+step "node2: POST /admin-api/contexts/:newprivate_ctx/leave  (local cleanup)"
+LEAVE_CTX_RES=$(curl -sf -X POST "$NODE_2_URL/admin-api/contexts/$NEWPRIVATE_CTX/leave" \
+  -H "Authorization: Bearer $TOKEN_2" \
+  -H "Content-Type: application/json" -d '{}' 2>&1 || true)
+green "leaveContext issued"
+
+step "waiting 5s for any MemberRemoved governance op to propagate"
+sleep 5
+
+step "governance: listMembers(newprivate) from admin"
+NODE2_STILL_IN_SUBGROUP=$(curl -sf "$NODE_1_URL/admin-api/groups/$NEWPRIVATE_SG/members" \
+  -H "Authorization: Bearer $TOKEN_1" \
+  | jq -r --arg id "$NODE2_NS_ID" \
+      '(.data.members // .members)[] | select(.identity == $id) | .identity // empty' 2>/dev/null)
+assert_eq "  governance: node2 removed from newprivate's GroupMember list" "" "$NODE2_STILL_IN_SUBGROUP"
+
+step "WASM: get_profiles (channel-member list) from admin"
+PROFILES_RES=$(curl -sf -X POST "$NODE_1_URL/jsonrpc" \
+  -H "Authorization: Bearer $TOKEN_1" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg ctx "$NEWPRIVATE_CTX" --arg pk "$ADMIN_NEWPRIVATE_PK" \
+        '{jsonrpc:"2.0",id:1,method:"execute",
+          params:{contextId:$ctx, executorPublicKey:$pk,
+                  method:"get_profiles", argsJson:{}}}')" 2>&1 || true)
+if echo "$PROFILES_RES" | grep -qF "$NODE2_NAME"; then
+  yellow "  WASM: get_profiles STILL contains \"$NODE2_NAME\" (no leave-from-WASM hook)"
+else
+  green "  WASM: get_profiles no longer contains \"$NODE2_NAME\""
+fi
+
+step "local store: identities-owned on node2 for newprivate"
+NODE2_LOCAL_AFTER=$(curl -sf "$NODE_2_URL/admin-api/contexts/$NEWPRIVATE_CTX/identities-owned" \
+  -H "Authorization: Bearer $TOKEN_2" \
+  | jq -r '(.data.identities // .identities) | length // 0' 2>/dev/null || echo "0")
+if [ "$NODE2_LOCAL_AFTER" = "0" ]; then
+  green "  local store: node2 has 0 identities for newprivate (leaveContext cleared it)"
+else
+  yellow "  local store: node2 still has $NODE2_LOCAL_AFTER identity entries"
+fi
+
+step "diagnosis"
+DIAG_GOV="$([ -n "$NODE2_STILL_IN_SUBGROUP" ] && echo "STALE" || echo "ok")"
+DIAG_WASM="$(echo "$PROFILES_RES" | grep -qF "$NODE2_NAME" && echo "STALE" || echo "ok")"
+DIAG_LOCAL="$([ "$NODE2_LOCAL_AFTER" = "0" ] && echo "ok" || echo "STALE")"
+printf '     governance(subgroup-membership): %s\n' "$DIAG_GOV"
+printf '     wasm(channel-member-list):       %s\n' "$DIAG_WASM"
+printf '     local(leaver-node-state):        %s\n' "$DIAG_LOCAL"
+printf '\n'
+if [ "$DIAG_GOV" = "STALE" ] && [ "$DIAG_WASM" = "STALE" ]; then
+  yellow "  → leaveContext only clears the leaver's local store; neither the"
+  yellow "    subgroup GroupMember row nor the WASM profile is removed. Other"
+  yellow "    members will keep seeing node2 in both views — that's the bug."
+  yellow "    Fix surface: curb should call leaveGroup(subgroupId) in addition"
+  yellow "    to (or instead of) leaveContext, AND the WASM contract needs a"
+  yellow "    leave/remove-profile method called from the same handler."
+elif [ "$DIAG_GOV" = "STALE" ]; then
+  yellow "  → governance layer keeps node2; WASM dropped them. Core-side gap."
+elif [ "$DIAG_WASM" = "STALE" ]; then
+  yellow "  → core dropped node2; WASM contract still has them. WASM-side gap."
+else
+  green "  → all three layers consistent"
+fi
 
 # ── Phase 11: log-marker checks ─────────────────────────────────────────────
 

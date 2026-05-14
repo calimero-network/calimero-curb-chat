@@ -114,6 +114,11 @@ describe("dmContext", () => {
       }),
     ).toBe("Alice Alias");
 
+    // Both per-viewer sources empty → fall back to placeholder, never
+    // the raw identity hash. (The WASM info.name fallback was removed
+    // because info.name is shared across both DM participants, so
+    // using it would make the recipient see their own name as the DM
+    // title.)
     expect(
       getDmDisplayName({
         contextId: "ctx-1",
@@ -121,6 +126,6 @@ describe("dmContext", () => {
         otherAlias: "",
         otherIdentity: "member-a",
       }),
-    ).toBe("member-a");
+    ).toBe("Direct message");
   });
 });

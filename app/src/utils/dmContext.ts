@@ -229,6 +229,16 @@ export function getDmDisplayName(params: {
   otherIdentity?: string;
   contextId: string;
 }): string {
+  // Display chain — both sources are inherently per-viewer:
+  //   - otherUsername: from the WASM `get_profiles` query on this node,
+  //     filtered to the participant who isn't our own joined identity.
+  //   - otherAlias:    from `listMembers(namespace)` on this node,
+  //     looked up by the participant's namespace identity.
+  // We deliberately do NOT consult the DM context's WASM `info.name`,
+  // because it's stamped once at create time by the inviter as
+  // `"DM: <otherUsername>"` and replicates as the same string to both
+  // parties — using it would make the recipient see their own name as
+  // the DM title instead of the inviter's.
   const username = params.otherUsername?.trim();
   if (username) {
     return username;
@@ -239,10 +249,9 @@ export function getDmDisplayName(params: {
     return alias;
   }
 
-  // Never expose the raw identity hash or context id as the DM title.
-  // Display a placeholder until the other party's name metadata
-  // propagates (set_profile via WASM, or namespace-level metadata via
-  // the new core /metadata API).
+  // Both per-viewer sources empty → namespace metadata for the other
+  // party hasn't propagated to this node yet, and they haven't called
+  // set_profile. Show a placeholder rather than leak the raw identity.
   return "Direct message";
 }
 

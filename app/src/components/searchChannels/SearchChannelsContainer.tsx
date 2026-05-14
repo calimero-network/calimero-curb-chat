@@ -170,9 +170,9 @@ function getChannelListName(channel: Pick<GroupContextChannel, "contextId" | "al
 }
 
 function getActiveChannelName(
-  channel: Pick<GroupContextChannel, "contextId" | "info">,
+  channel: Pick<GroupContextChannel, "contextId" | "alias" | "info">,
 ) {
-  return channel.info?.name ?? channel.contextId.substring(0, 8);
+  return channel.info?.name ?? channel.alias ?? channel.contextId.substring(0, 8);
 }
 
 export default function SearchChannelsContainer({

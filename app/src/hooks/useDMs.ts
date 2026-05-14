@@ -153,7 +153,10 @@ export function useDMs() {
                 if (other) {
                   otherUsername = other.username;
                   otherIdentity = other.identity;
-                  otherAlias = memberAliasByIdentity.get(other.identity) || "";
+                  // memberAliasByIdentity is keyed by namespace identity, not context
+                  // identity — so the get() here always misses. Preserve the alias
+                  // resolved from the namespace member list before get_profiles ran.
+                  otherAlias = otherAlias || memberAliasByIdentity.get(other.identity) || "";
                 }
               }
             } catch {

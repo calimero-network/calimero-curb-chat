@@ -64,8 +64,7 @@ export default function ChannelDetailsPopup({
   const { isAdmin } = useCurrentGroupPermissions(groupId ?? "");
   const { addToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isLeaving, setIsLeaving] = useState(false);
-  const isBusy = isDeleting || isLeaving;
+  const isBusy = isDeleting;
 
   const channelName = chat.type === "channel" ? chat.name : chat.id;
 
@@ -97,8 +96,6 @@ export default function ChannelDetailsPopup({
 
   const currentIdentity = getContextIdentity() as string;
   const isOwner = !!channelMeta.createdBy && channelMeta.createdBy === currentIdentity;
-  const canDelete = isOwner || isAdmin;
-  const canLeave = !!chat.contextId && !isOwner;
   const contextSubgroupId = chat.contextId ? getSubgroupForContext?.(chat.contextId) : undefined;
 
   const handleDeleteChannel = async () => {
@@ -154,35 +151,6 @@ export default function ChannelDetailsPopup({
     }
   };
 
-  const handleLeaveChannel = async () => {
-    if (!chat.contextId || isBusy) return;
-    setIsLeaving(true);
-    try {
-      const result = await new GroupApiDataSource().leaveContext(chat.contextId);
-      if (result.error) {
-        addToast({
-          title: "Leave channel",
-          message: result.error.message || "Failed to leave channel",
-          type: "channel",
-          duration: 4000,
-        });
-        return;
-      }
-      onChannelLeft?.(chat.contextId);
-      setActiveChat(null);
-      fetchChannels();
-      setIsOpen(false);
-      addToast({
-        title: "Channel",
-        message: `Left channel "${channelName}"`,
-        type: "channel",
-        duration: 2500,
-      });
-    } finally {
-      setIsLeaving(false);
-    }
-  };
-
   useEffect(() => {
     if (!isOpen || !chat.name) return;
     void getChannelMetadata(chat.name);
@@ -206,12 +174,10 @@ export default function ChannelDetailsPopup({
       nonInvitedUserList={nonInvitedUserList}
       nonChannelMembers={nonChannelMembers}
       channelMeta={channelMeta}
-      isOwner={canDelete}
-      canLeave={canLeave}
+      isOwner={isOwner}
+      canManageMembers={isOwner || isAdmin}
       handleDeleteChannel={handleDeleteChannel}
-      handleLeaveChannel={handleLeaveChannel}
       isDeleting={isDeleting}
-      isLeaving={isLeaving}
       promoteModerator={() => {}}
       reFetchChannelMembers={reFetchChannelMembers}
     />

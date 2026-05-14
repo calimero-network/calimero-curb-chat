@@ -9,10 +9,7 @@ interface AboutDetailsProps {
   manager: string;
   isOwner?: boolean;
   handleDeleteChannel?: () => void;
-  handleLeaveChannel?: () => void;
-  canLeave?: boolean;
   isDeleting?: boolean;
-  isLeaving?: boolean;
 }
 
 const InfoCard = styled.div`
@@ -101,20 +98,10 @@ const AboutDetails: React.FC<AboutDetailsProps> = (props) => {
         <ActionButton
           type="button"
           onClick={props.handleDeleteChannel}
-          disabled={props.isDeleting || props.isLeaving}
+          disabled={props.isDeleting}
         >
           <span>{props.isDeleting ? "Deleting…" : "Delete Channel"}</span>
           {props.isDeleting && <Loader size={16} />}
-        </ActionButton>
-      )}
-      {props.canLeave && (
-        <ActionButton
-          type="button"
-          onClick={props.handleLeaveChannel}
-          disabled={props.isDeleting || props.isLeaving}
-        >
-          <span>{props.isLeaving ? "Leaving…" : "Leave Channel"}</span>
-          {props.isLeaving && <Loader size={16} />}
         </ActionButton>
       )}
     </>
