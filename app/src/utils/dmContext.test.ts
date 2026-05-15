@@ -57,6 +57,7 @@ describe("dmContext", () => {
       data: undefined,
       error: null,
     });
+    const setMemberAlias = vi.fn().mockResolvedValue({ data: undefined, error: null });
 
     const result = await createDmContextInGroup({
       applicationId: "app-1",
@@ -71,6 +72,7 @@ describe("dmContext", () => {
         createSubgroup,
         setSubgroupVisibility,
         addGroupMember,
+        setMemberAlias,
       },
     });
 
@@ -95,7 +97,7 @@ describe("dmContext", () => {
     );
   });
 
-  it("prefers the username but falls back to the participant identity", () => {
+  it("prefers the username, falls back to alias, then truncated identity", () => {
     expect(
       getDmDisplayName({
         contextId: "ctx-1",
@@ -114,11 +116,8 @@ describe("dmContext", () => {
       }),
     ).toBe("Alice Alias");
 
-    // Both per-viewer sources empty → fall back to placeholder, never
-    // the raw identity hash. (The WASM info.name fallback was removed
-    // because info.name is shared across both DM participants, so
-    // using it would make the recipient see their own name as the DM
-    // title.)
+    // Both sources empty → truncated identity (first4…last4 if len >= 8,
+    // otherwise the full id). "member-a" is 8 chars so gets truncated.
     expect(
       getDmDisplayName({
         contextId: "ctx-1",
@@ -126,6 +125,6 @@ describe("dmContext", () => {
         otherAlias: "",
         otherIdentity: "member-a",
       }),
-    ).toBe("Direct message");
+    ).toBe("memb…er-a");
   });
 });

@@ -22,7 +22,9 @@ describe("buildDmMemberOptions", () => {
     ]);
   });
 
-  it("omits the current identity even when no labels are known", () => {
+  it("omits members with no label (no alias and not in labelsByIdentity)", () => {
+    // Members without any display name are excluded from the picker —
+    // showing raw identity hashes in the DM/channel member list is confusing.
     const options = buildDmMemberOptions({
       groupMembers: [
         { identity: "member-me", role: "Member" },
@@ -32,8 +34,8 @@ describe("buildDmMemberOptions", () => {
       labelsByIdentity: new Map(),
     });
 
-    expect(Array.from(options.keys())).toEqual(["member-a"]);
-    expect(options.get("member-a")).toBe("member-a");
+    expect(options.size).toBe(0);
     expect(options.has("member-me")).toBe(false);
+    expect(options.has("member-a")).toBe(false);
   });
 });

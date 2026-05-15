@@ -42,6 +42,11 @@ interface CreateDmContextParams {
       groupId: string,
       identity: string,
     ): ApiResponse<void>;
+    setMemberAlias(
+      groupId: string,
+      identity: string,
+      request: { alias: string },
+    ): ApiResponse<void>;
   };
   onWarning?: (message: string) => void;
 }
