@@ -482,9 +482,13 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           (namespaceIdentity ? getIdentityDisplayName(namespaceIdentity) : "") ||
           getMessengerDisplayName() ||
           "";
-        if (seedAlias) {
+        if (seedAlias && groupId && namespaceIdentity) {
+          // Must use the NAMESPACE group ID + namespace identity, not the DM
+          // context ID — setMemberAlias stores to the governance DAG which
+          // listMembers(namespaceId) reads. Passing contextId here silently
+          // hits a non-existent group and the alias is never stored.
           groupApi
-            .setMemberAlias(contextId, resolvedIdentity, { alias: seedAlias })
+            .setMemberAlias(groupId, namespaceIdentity, { alias: seedAlias })
             .catch(() => {/* non-fatal — alias is best-effort */});
           // Register WASM-level profile so the other node's get_profiles
           // returns our username. Without this, the other side always sees
@@ -746,6 +750,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       }
 
       const otherUsername = dmMembers.get(otherIdentity) || chatMembers.get(otherIdentity) || "";
+      const myUsername = getIdentityDisplayName(myIdentity) || getMessengerDisplayName();
 
       // 1-group-per-context model: DM = a new restricted subgroup under the
       // namespace + one context inside. The helper handles both steps and
@@ -754,6 +759,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
         applicationId: getApplicationId(),
         groupId,
         myIdentity,
+        myUsername,
         otherIdentity,
         otherUsername,
         contextApi: nodeApi,

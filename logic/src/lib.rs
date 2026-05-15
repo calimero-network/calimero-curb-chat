@@ -456,14 +456,28 @@ impl MeroChat {
         context_type: ContextType,
         description: String,
         created_at: u64,
+        creator_username: String,
     ) -> MeroChat {
         app::emit!(Event::Initialized());
 
         let creator = encode_blob_id_base58(&env::executor_id());
 
-        // Seed the creator as Admin so they can moderate from day one.
         let mut roles = UnorderedMap::new();
         let _ = roles.insert(UserId::new(env::executor_id()), LwwRegister::new(Role::Admin));
+
+        // Pre-seed the creator's profile so get_profiles returns their name
+        // immediately after context state gossip, without waiting for an
+        // explicit set_profile call from the creator.
+        let mut profiles = AuthoredMap::new();
+        if !creator_username.trim().is_empty() {
+            let _ = profiles.insert(
+                UserId::new(env::executor_id()),
+                StoredProfile {
+                    username: LwwRegister::new(creator_username),
+                    avatar: None,
+                },
+            );
+        }
 
         MeroChat {
             name: LwwRegister::new(name),
@@ -474,7 +488,7 @@ impl MeroChat {
             messages: AuthoredVector::new(),
             threads: UnorderedMap::new(),
             reactions: UnorderedMap::new(),
-            profiles: AuthoredMap::new(),
+            profiles,
             roles,
         }
     }

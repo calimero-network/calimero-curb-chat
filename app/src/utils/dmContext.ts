@@ -16,6 +16,7 @@ interface CreateDmContextParams {
   /** The namespace id — the new DM subgroup is created directly under it. */
   groupId: string;
   myIdentity: string;
+  myUsername?: string;
   otherIdentity: string;
   otherUsername?: string;
   contextApi: {
@@ -294,6 +295,20 @@ export async function createDmContextInGroup(
     );
   }
 
+  // 2b) Record both parties' display names as namespace-level member aliases
+  // so listMembers(namespaceId) returns them immediately after governance
+  // sync — no WASM state required. This is what useDMs reads for the DM list.
+  if (params.otherUsername) {
+    params.groupApi
+      .setMemberAlias(params.groupId, params.otherIdentity, { alias: params.otherUsername })
+      .catch(() => {/* best-effort */});
+  }
+  if (params.myUsername) {
+    params.groupApi
+      .setMemberAlias(params.groupId, params.myIdentity, { alias: params.myUsername })
+      .catch(() => {/* best-effort */});
+  }
+
   // 3) Create the DM's single context inside the new subgroup.
   const createResponse = await params.contextApi.createGroupContext({
     applicationId: params.applicationId,
@@ -307,6 +322,7 @@ export async function createDmContextInGroup(
       context_type: "Dm",
       description: "",
       created_at: Date.now(),
+      creator_username: params.myUsername || "",
     },
   });
 

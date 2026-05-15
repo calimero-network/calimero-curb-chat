@@ -161,6 +161,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
         context_type: "Channel",
         description: "",
         created_at: Math.floor(Date.now() / 1000),
+        creator_username: "",
       },
     });
 
