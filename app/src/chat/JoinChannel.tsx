@@ -116,16 +116,17 @@ export default function JoinChannel({
       const memberKey = joinRes.data?.memberPublicKey;
       if (memberKey) {
         setContextMemberIdentity(activeChat.contextId, memberKey);
-        // Seed server-side member alias so other members see a display
-        // name instead of a raw identity hash on rc.35.
+        // Seed server-side member alias in the NAMESPACE so listMembers
+        // returns our name. Must use namespace groupId + namespace identity,
+        // not the context ID — setMemberAlias targets the governance DAG.
         const namespaceIdentity = getGroupMemberIdentity(groupId);
         const seedAlias =
           (namespaceIdentity ? getIdentityDisplayName(namespaceIdentity) : "") ||
           getMessengerDisplayName() ||
           "";
-        if (seedAlias) {
+        if (seedAlias && namespaceIdentity) {
           groupApi
-            .setMemberAlias(activeChat.contextId, memberKey, { alias: seedAlias })
+            .setMemberAlias(groupId, namespaceIdentity, { alias: seedAlias })
             .catch(() => {/* non-fatal — alias is best-effort */});
         }
       }

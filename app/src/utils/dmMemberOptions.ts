@@ -15,12 +15,12 @@ export function buildDmMemberOptions(params: {
       return;
     }
 
-    options.set(
-      member.identity,
-      member.alias?.trim() ||
-        params.labelsByIdentity.get(member.identity) ||
-        member.identity,
-    );
+    const label =
+      member.alias?.trim() || params.labelsByIdentity.get(member.identity) || "";
+    if (!label) {
+      return;
+    }
+    options.set(member.identity, label);
   });
 
   return options;

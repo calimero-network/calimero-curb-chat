@@ -250,10 +250,13 @@ export function getDmDisplayName(params: {
     return alias;
   }
 
-  // Both per-viewer sources empty → namespace metadata for the other
-  // party hasn't propagated to this node yet, and they haven't called
-  // set_profile. Show a placeholder rather than leak the raw identity.
-  return "Direct message";
+  // Both per-viewer sources empty → governance sync hasn't propagated yet.
+  // Use a truncated identity so the DM is at least identifiable.
+  const id = params.otherIdentity?.trim();
+  if (id && id.length >= 8) {
+    return `${id.slice(0, 4)}…${id.slice(-4)}`;
+  }
+  return id || params.contextId.slice(0, 8);
 }
 
 export async function createDmContextInGroup(
