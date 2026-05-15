@@ -142,7 +142,24 @@ export function useDMs() {
             ? memberAliasByIdentity.get(otherIdentity) || ""
             : "";
 
-          if (joinedIdentity) {
+          // Primary: description encodes { c: creatorName, o: otherName } at
+          // DM creation time. Compare info.creator to our own joined identity
+          // to know which slot is ours. This works as soon as get_info works
+          // (context joined + WASM state gossiped) — no set_profile needed.
+          if (joinedIdentity && info?.description) {
+            try {
+              const meta = JSON.parse(info.description) as { c?: string; o?: string };
+              if (meta && (meta.c || meta.o)) {
+                const isCreator = info.creator === joinedIdentity;
+                otherUsername = (isCreator ? meta.o : meta.c)?.trim() || "";
+              }
+            } catch {
+              // not our format — old DM or channel, fall through
+            }
+          }
+
+          // Fallback: get_profiles (requires both sides to have called set_profile)
+          if (!otherUsername && joinedIdentity) {
             try {
               const profilesResp = await clientApi.getProfiles(ctxId, joinedIdentity);
               if (profilesResp.data && Array.isArray(profilesResp.data)) {

@@ -313,6 +313,15 @@ export async function createDmContextInGroup(
   }
 
   // 3) Create the DM's single context inside the new subgroup.
+  // Encode both participant names in description so any node can derive the
+  // display name from get_info without needing get_profiles or gossip of
+  // namespace aliases. Format: JSON { c: creatorName, o: otherName }.
+  // Each side compares info.creator to its own joined identity to know which
+  // slot is "them" and which is "the other person".
+  const participantMeta = JSON.stringify({
+    c: params.myUsername || "",
+    o: params.otherUsername || "",
+  });
   const createResponse = await params.contextApi.createGroupContext({
     applicationId: params.applicationId,
     protocol: "near",
@@ -323,7 +332,7 @@ export async function createDmContextInGroup(
         ? `DM: ${params.otherUsername}`
         : `DM: ${params.otherIdentity}`,
       context_type: "Dm",
-      description: "",
+      description: participantMeta,
       created_at: Date.now(),
       creator_username: params.myUsername || "",
     },
