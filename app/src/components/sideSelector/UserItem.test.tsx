@@ -26,7 +26,7 @@ vi.mock("../popups/ConfirmPopup", () => ({
 }));
 
 describe("UserItem", () => {
-  it("falls back to the participant identity when no DM profile username exists", () => {
+  it("shows 'Direct message' placeholder when no username or alias exists", () => {
     render(
       <UserItem
         dm={{
@@ -44,7 +44,7 @@ describe("UserItem", () => {
       />,
     );
 
-    expect(screen.getAllByText("user-2")).toHaveLength(2);
+    expect(screen.getAllByText("Direct message")).toHaveLength(2);
   });
 
   it("prefers the member alias when no DM profile username exists", () => {
