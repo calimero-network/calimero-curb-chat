@@ -284,8 +284,8 @@ describe("GroupApiDataSource", () => {
     });
 
     const dataSource = new GroupApiDataSource();
-    const response = await dataSource.setMemberAlias("group-1", "member-1", {
-      alias: "Taylor",
+    const response = await dataSource.setMemberMetadata("group-1", "member-1", {
+      name: "Taylor",
     });
 
     expect(mockAxiosPut).toHaveBeenCalledWith(

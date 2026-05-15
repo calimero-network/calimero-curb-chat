@@ -1,5 +1,7 @@
-# Run merobox workflow tests when logic changes.
-# Only triggers on pushes/PRs that modify files under logic/
+# Runs merobox workflow tests when logic or workflow files change.
+# Builds curb.wasm, then validates all merobox workflow definitions against
+# real merod nodes (e2e.yml = 3-node comprehensive, integration-setup.yml =
+# 2-node setup for Playwright).
 
 name: Workflow Tests
 
@@ -8,20 +10,25 @@ on:
     branches: [main, master]
     paths:
       - 'logic/**'
+      - 'workflows/**'
   pull_request:
     branches: [main, master]
     paths:
       - 'logic/**'
+      - 'workflows/**'
+
+concurrency:
+  group: workflow-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   workflow-tests:
+    name: merobox Workflow Tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -36,6 +43,16 @@ jobs:
           toolchain: "1.89.0"
           targets: wasm32-unknown-unknown
 
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            logic/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('logic/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
       - name: Build curb WASM
         run: |
           cd logic
@@ -44,12 +61,9 @@ jobs:
           cp target/wasm32-unknown-unknown/app-release/curb.wasm res/
 
       - name: Install merobox
-        run: pip install merobox==0.4.6
+        run: pip install merobox==0.6.14 && merobox --version
 
-      - name: Verify merobox installation
-        run: merobox --version
-
-      - name: Run E2E workflow
+      - name: Run E2E workflow (3-node)
         working-directory: workflows
         run: |
           max_attempts=2
@@ -69,9 +83,9 @@ jobs:
           done
           merobox stop --all || true
           merobox nuke --force || true
-          if [ "$success" = false ]; then exit 1; fi
+          [ "$success" = true ] || exit 1
 
-      - name: Run integration-setup workflow
+      - name: Run integration-setup workflow (2-node)
         working-directory: workflows
         run: |
           max_attempts=2
@@ -91,4 +105,4 @@ jobs:
           done
           merobox stop --all || true
           merobox nuke --force || true
-          if [ "$success" = false ]; then exit 1; fi
+          [ "$success" = true ] || exit 1

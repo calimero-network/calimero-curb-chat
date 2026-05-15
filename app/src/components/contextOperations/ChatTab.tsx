@@ -242,14 +242,14 @@ export default function ChatTab({
         const { memberIdentity } = await resolveWorkspaceMember(groupId);
 
         try {
-          const aliasResponse = await groupApi.setMemberAlias(groupId, memberIdentity, {
-            alias: trimmedName,
+          const aliasResponse = await groupApi.setMemberMetadata(groupId, memberIdentity, {
+            name: trimmedName,
           });
           if (aliasResponse.error) {
-            console.warn("setMemberAlias failed (non-fatal):", aliasResponse.error.message);
+            console.warn("setMemberMetadata failed (non-fatal):", aliasResponse.error.message);
           }
         } catch {
-          console.warn("setMemberAlias threw (non-fatal)");
+          console.warn("setMemberMetadata threw (non-fatal)");
         }
 
         setGroupId(groupId);

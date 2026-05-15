@@ -488,7 +488,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
           // listMembers(namespaceId) reads. Passing contextId here silently
           // hits a non-existent group and the alias is never stored.
           groupApi
-            .setMemberAlias(groupId, namespaceIdentity, { alias: seedAlias })
+            .setMemberMetadata(groupId, namespaceIdentity, { name: seedAlias })
             .catch(() => {/* non-fatal — alias is best-effort */});
           // Register WASM-level profile so the other node's get_profiles
           // returns our username. Without this, the other side always sees

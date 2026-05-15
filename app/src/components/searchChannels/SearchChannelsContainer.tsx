@@ -324,7 +324,7 @@ export default function SearchChannelsContainer({
           "";
         if (seedAlias) {
           groupApi
-            .setMemberAlias(contextId, memberKey, { alias: seedAlias })
+            .setMemberMetadata(contextId, memberKey, { name: seedAlias })
             .catch(() => {/* non-fatal — alias is best-effort */});
           // Register the WASM-level `profile` for this context too — without
           // this, `get_profiles` on the channel never returns us, and

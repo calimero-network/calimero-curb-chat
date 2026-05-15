@@ -185,7 +185,7 @@ describe("ChannelHeader (1-group-per-context)", () => {
 
     await waitFor(() => {
       expect(mockCreateSubgroup).toHaveBeenCalledWith("namespace-1", {
-        groupAlias: "project-alpha",
+        groupName: "project-alpha",
         name: "project-alpha",
       });
     });
@@ -216,7 +216,7 @@ describe("ChannelHeader (1-group-per-context)", () => {
 
     await waitFor(() => {
       expect(mockCreateSubgroup).toHaveBeenCalledWith("namespace-1", {
-        groupAlias: "secret-room",
+        groupName: "secret-room",
         name: "secret-room",
       });
     });

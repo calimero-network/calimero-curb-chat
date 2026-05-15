@@ -313,7 +313,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       // fall through to displaying the raw identity string.
       if (username) {
         api.current
-          .setMemberAlias(namespaceId, memberIdentity, { alias: username })
+          .setMemberMetadata(namespaceId, memberIdentity, { name: username })
           .catch(() => {
             /* non-fatal */
           });
@@ -354,7 +354,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
         const cachedName = getIdentityDisplayName(memberIdentity);
         if (cachedName) {
           // Back-fill server alias so future re-logins don't reach enter-name
-          api.current.setMemberAlias(namespaceId, memberIdentity, { alias: cachedName }).catch(() => {});
+          api.current.setMemberMetadata(namespaceId, memberIdentity, { name: cachedName }).catch(() => {});
           enterChat(namespaceId, cachedName, memberIdentity);
           return;
         }
@@ -368,7 +368,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
             if (profilesRes.data) {
               const myProfile = profilesRes.data.find((p) => p.identity === memberIdentity);
               if (myProfile?.username) {
-                api.current.setMemberAlias(namespaceId, memberIdentity, { alias: myProfile.username }).catch(() => {});
+                api.current.setMemberMetadata(namespaceId, memberIdentity, { name: myProfile.username }).catch(() => {});
                 setIdentityDisplayName(memberIdentity, myProfile.username);
                 enterChat(namespaceId, myProfile.username, memberIdentity);
                 return;
@@ -432,7 +432,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       // If user already has a name (same identity from another workspace), go straight in
       const existingName = getIdentityDisplayName(memberIdentity) || getMessengerDisplayName();
       if (existingName) {
-        api.current.setMemberAlias(groupId, memberIdentity, { alias: existingName }).catch(() => {});
+        api.current.setMemberMetadata(groupId, memberIdentity, { name: existingName }).catch(() => {});
         enterChat(groupId, existingName, memberIdentity);
         return;
       }
@@ -531,7 +531,7 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
       const memberIdentity = res.data?.memberIdentity ?? storedIdentity;
 
       if (memberIdentity) {
-        await api.current.setMemberAlias(selectedId, memberIdentity, { alias: trimmed }).catch(() => {});
+        await api.current.setMemberMetadata(selectedId, memberIdentity, { name: trimmed }).catch(() => {});
       }
 
       enterChat(selectedId, trimmed, memberIdentity);

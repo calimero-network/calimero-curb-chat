@@ -49,14 +49,7 @@ const IdentityStack = styled.div`
   min-width: 0;
 `;
 
-const SecondaryIdentity = styled.span`
-  font-size: 0.68rem;
-  color: rgba(255, 255, 255, 0.45);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 240px;
-`;
+
 
 const RoleBadge = styled.span<{ $admin: boolean }>`
   font-size: 0.65rem;
@@ -178,10 +171,6 @@ const CapActions = styled.div`
   justify-content: flex-end;
 `;
 
-function truncateIdentity(id: string): string {
-  if (id.length <= 16) return id;
-  return `${id.slice(0, 8)}...${id.slice(-8)}`;
-}
 
 function getMemberDisplayName(member: GroupMember): string {
   // Never leak the raw identity hash as the visible name — show

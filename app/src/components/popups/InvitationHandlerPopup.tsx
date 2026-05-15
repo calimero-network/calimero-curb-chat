@@ -268,7 +268,7 @@ export default function InvitationHandlerPopup({
               setContextMemberIdentity(entry.contextId, memberKey);
               if (seedAlias) {
                 groupApi
-                  .setMemberAlias(entry.contextId, memberKey, { alias: seedAlias })
+                  .setMemberMetadata(entry.contextId, memberKey, { name: seedAlias })
                   .catch(() => {/* non-fatal — alias is best-effort */});
               }
             }

@@ -60,7 +60,7 @@ vi.mock("../../api/dataSource/groupApiDataSource", () => ({
     listGroups = mockListGroups;
     joinGroup = mockJoinGroup;
     resolveCurrentMemberIdentity = mockResolveCurrentMemberIdentity;
-    setMemberAlias = mockSetMemberAlias;
+    setMemberMetadata = mockSetMemberAlias;
   },
 }));
 

@@ -112,7 +112,7 @@ export function useGroupAdmin() {
     [],
   );
 
-  const setMemberAlias = useCallback(
+  const setMemberMetadata = useCallback(
     async (
       groupId: string,
       identity: string,
@@ -121,7 +121,7 @@ export function useGroupAdmin() {
       setActionLoading(true);
       setError(null);
       try {
-        const resp = await api.setMemberAlias(groupId, identity, { alias });
+        const resp = await api.setMemberMetadata(groupId, identity, { name: alias });
         if (resp.error) {
           setError(resp.error.message);
           return false;
@@ -350,7 +350,7 @@ export function useGroupAdmin() {
     fetchAll,
     removeMember,
     setMemberCapabilities,
-    setMemberAlias,
+    setMemberMetadata,
     getMemberCapabilities,
     getContextVisibility,
     setContextVisibility,

@@ -44,12 +44,15 @@ function isWrappedGroupInvitationPayload(
   const typedValue = value as {
     invitation?: unknown;
     groupAlias?: unknown;
+    groupName?: unknown;
   };
 
   return (
     isSignedGroupOpenInvitation(typedValue.invitation) &&
     (typedValue.groupAlias === undefined ||
-      typeof typedValue.groupAlias === "string")
+      typeof typedValue.groupAlias === "string") &&
+    (typedValue.groupName === undefined ||
+      typeof typedValue.groupName === "string")
   );
 }
 
@@ -60,10 +63,16 @@ function normalizeGroupInvitationPayload(
     return { invitation: payload };
   }
 
+  const p = payload as GroupInvitationPayload & { groupName?: string };
   return {
     invitation: payload.invitation,
+    // groupName (mero-js ≥2.1) takes precedence; groupAlias kept for older nodes
     groupAlias:
-      typeof payload.groupAlias === "string" ? payload.groupAlias : undefined,
+      typeof p.groupName === "string"
+        ? p.groupName
+        : typeof payload.groupAlias === "string"
+          ? payload.groupAlias
+          : undefined,
   };
 }
 

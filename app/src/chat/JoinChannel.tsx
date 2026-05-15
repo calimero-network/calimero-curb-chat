@@ -126,7 +126,7 @@ export default function JoinChannel({
           "";
         if (seedAlias && namespaceIdentity) {
           groupApi
-            .setMemberAlias(groupId, namespaceIdentity, { alias: seedAlias })
+            .setMemberMetadata(groupId, namespaceIdentity, { name: seedAlias })
             .catch(() => {/* non-fatal — alias is best-effort */});
         }
       }

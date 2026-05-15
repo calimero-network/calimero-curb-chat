@@ -132,7 +132,7 @@ const ChannelHeader = memo(function ChannelHeader(props: ChannelHeaderProps) {
     //    same string (and short — UI input is constrained well under
     //    the 64-byte cap).
     const sgResp = await groupApi.createSubgroup(namespaceId, {
-      groupAlias: channelName,
+      groupName: channelName,
       name: channelName,
     });
     if (sgResp.error || !sgResp.data) {

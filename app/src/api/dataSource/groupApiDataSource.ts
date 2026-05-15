@@ -33,7 +33,7 @@ import type {
   CreateSubgroupRequest,
   CreateSubgroupResponse,
   ReparentGroupRequest,
-  SetMemberAliasRequest,
+  SetMemberMetadataRequest,
   SetMemberCapabilitiesRequest,
   SyncGroupResponse,
   UpgradeGroupRequest,
@@ -234,14 +234,18 @@ function normalizeGroupInvitationPayload(
       invitation?: unknown;
       payload?: unknown;
       groupAlias?: unknown;
+      groupName?: unknown;
     };
     if (typedValue.invitation && isSignedGroupOpenInvitation(typedValue.invitation)) {
       return {
         invitation: typedValue.invitation,
+        // groupName (mero-js ≥2.1) takes precedence; groupAlias kept for older nodes
         groupAlias:
-          typeof typedValue.groupAlias === "string"
-            ? typedValue.groupAlias
-            : undefined,
+          typeof typedValue.groupName === "string"
+            ? typedValue.groupName
+            : typeof typedValue.groupAlias === "string"
+              ? typedValue.groupAlias
+              : undefined,
       };
     }
     if (typeof typedValue.payload === "string") {
@@ -825,30 +829,26 @@ export class GroupApiDataSource implements GroupApi {
     }
   }
 
-  async setMemberAlias(
+  async setMemberMetadata(
     groupId: string,
     identity: string,
-    request: SetMemberAliasRequest,
+    request: SetMemberMetadataRequest,
   ): ApiResponse<void> {
-    // Migrated 2026-05-14 to the post-054a784f metadata API. The old
-    // /alias endpoint was deleted in that commit; the new one stores a
-    // generic MetadataRecord keyed by `name` on the server side.
-    // Frontend type field stays `alias` (cosmetic) — we map at the wire.
     try {
       const response = await axios.put(
         `${this.base()}/groups/${groupId}/members/${identity}/metadata`,
-        { name: request.alias },
+        { name: request.name },
         { headers: getAuthHeaders() },
       );
       return response.status === 200
         ? ok(undefined as void)
         : httpFail(response.status, response.statusText);
     } catch (error) {
-      return catchError("setMemberAlias", error);
+      return catchError("setMemberMetadata", error);
     }
   }
 
-  async setGroupAlias(groupId: string, name: string): ApiResponse<void> {
+  async setGroupMetadata(groupId: string, name: string): ApiResponse<void> {
     try {
       const response = await axios.put(
         `${this.base()}/groups/${groupId}/metadata`,
@@ -859,7 +859,7 @@ export class GroupApiDataSource implements GroupApi {
         ? ok(undefined as void)
         : httpFail(response.status, response.statusText);
     } catch (error) {
-      return catchError("setGroupAlias", error);
+      return catchError("setGroupMetadata", error);
     }
   }
 
@@ -944,7 +944,7 @@ export class GroupApiDataSource implements GroupApi {
       //   - groupName : human-readable, stored in MetadataRecord, capped
       //     at 64 bytes server-side. Only send if the caller passed one.
       const body: Record<string, unknown> = {};
-      if (request.groupAlias) body.groupAlias = request.groupAlias;
+      if (request.groupName) body.groupName = request.groupName;
       if (request.name) body.groupName = request.name;
       const response = await axios.post(
         `${this.base()}/namespaces/${namespaceId}/groups`,

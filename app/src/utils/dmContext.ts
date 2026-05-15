@@ -32,7 +32,7 @@ interface CreateDmContextParams {
   groupApi: {
     createSubgroup(
       namespaceId: string,
-      request: { groupAlias?: string },
+      request: { groupName?: string },
     ): ApiResponse<{ groupId: string }>;
     setSubgroupVisibility(
       groupId: string,
@@ -42,10 +42,10 @@ interface CreateDmContextParams {
       groupId: string,
       identity: string,
     ): ApiResponse<void>;
-    setMemberAlias(
+    setMemberMetadata(
       groupId: string,
       identity: string,
-      request: { alias: string },
+      request: { name: string },
     ): ApiResponse<void>;
   };
   onWarning?: (message: string) => void;
@@ -271,7 +271,7 @@ export async function createDmContextInGroup(
 
   // 1) Create a restricted subgroup under the namespace for the DM.
   const sgResponse = await params.groupApi.createSubgroup(params.groupId, {
-    groupAlias: alias,
+    groupName: alias,
   });
   if (sgResponse.error || !sgResponse.data) {
     return {
@@ -308,12 +308,12 @@ export async function createDmContextInGroup(
   // sync — no WASM state required. This is what useDMs reads for the DM list.
   if (params.otherUsername) {
     params.groupApi
-      .setMemberAlias(params.groupId, params.otherIdentity, { alias: params.otherUsername })
+      .setMemberMetadata(params.groupId, params.otherIdentity, { name: params.otherUsername })
       .catch(() => {/* best-effort */});
   }
   if (params.myUsername) {
     params.groupApi
-      .setMemberAlias(params.groupId, params.myIdentity, { alias: params.myUsername })
+      .setMemberMetadata(params.groupId, params.myIdentity, { name: params.myUsername })
       .catch(() => {/* best-effort */});
   }
 

@@ -150,8 +150,8 @@ export interface SetMemberCapabilitiesRequest {
   capabilities: number;
 }
 
-export interface SetMemberAliasRequest {
-  alias: string;
+export interface SetMemberMetadataRequest {
+  name: string;
 }
 
 export interface MemberCapabilities {
@@ -169,7 +169,7 @@ export interface SubgroupEntry {
 
 export interface CreateSubgroupRequest {
   /** Routing identifier — may be long (e.g. `DM_CONTEXT_<id>_<id>`). */
-  groupAlias?: string;
+  groupName?: string;
   /** Human-readable display name stored in the subgroup's MetadataRecord.
    *  Capped at 64 bytes server-side. Omit for DM subgroups whose alias is
    *  structural and not user-facing. */
@@ -265,10 +265,10 @@ export interface GroupApi {
     identity: string,
     request: SetMemberCapabilitiesRequest,
   ): ApiResponse<void>;
-  setMemberAlias(
+  setMemberMetadata(
     groupId: string,
     identity: string,
-    request: SetMemberAliasRequest,
+    request: SetMemberMetadataRequest,
   ): ApiResponse<void>;
   setDefaultCapabilities(
     groupId: string,

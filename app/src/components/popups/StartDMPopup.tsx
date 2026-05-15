@@ -132,14 +132,6 @@ const SuggestionName = styled.div`
   color: #fff;
 `;
 
-const SuggestionId = styled.div`
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.35);
-  font-family: monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 import {
   getContextId,
   getContextIdentity as getExecutorPublicKey,
-  getNodeUrl as getAppEndpointKey,
+
 } from "@calimero-network/mero-react";
 import type { ExecuteParams } from "@calimero-network/mero-js";
 import type { ApiResponse } from "../types";
