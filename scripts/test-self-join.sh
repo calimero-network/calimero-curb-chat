@@ -261,7 +261,7 @@ green "set"
 
 step "admin: POST /admin-api/contexts (create context inside newpublic)"
 NOW=$(date +%s)
-INIT_JSON="{\"name\":\"$NEWPUBLIC_ALIAS\",\"context_type\":\"Channel\",\"description\":\"\",\"created_at\":${NOW}}"
+INIT_JSON="{\"name\":\"$NEWPUBLIC_ALIAS\",\"context_type\":\"Channel\",\"description\":\"\",\"created_at\":${NOW},\"creator_username\":\"\"}"
 INIT_BYTES=$(printf '%s' "$INIT_JSON" | python3 -c \
   "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')")
 CTX_RES=$(curl -sf -X POST "$NODE_1_URL/admin-api/contexts" \
@@ -324,7 +324,7 @@ put_metadata "$NODE_1_URL" "$TOKEN_1" "groups/$NEWPRIVATE_SG/metadata" "$NEWPRIV
 green "set"
 
 step "admin: create newprivate context"
-INIT_JSON="{\"name\":\"$NEWPRIVATE_ALIAS\",\"context_type\":\"Channel\",\"description\":\"\",\"created_at\":${NOW}}"
+INIT_JSON="{\"name\":\"$NEWPRIVATE_ALIAS\",\"context_type\":\"Channel\",\"description\":\"\",\"created_at\":${NOW},\"creator_username\":\"\"}"
 INIT_BYTES=$(printf '%s' "$INIT_JSON" | python3 -c \
   "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')")
 CTX_RES=$(curl -sf -X POST "$NODE_1_URL/admin-api/contexts" \
@@ -562,7 +562,7 @@ put_metadata "$NODE_1_URL" "$TOKEN_1" "groups/$DM_SG/metadata" "$DM_CHAN_NAME"
 green "set"
 
 step "admin: create DM context (context_type=Dm)"
-DM_INIT_JSON="{\"name\":\"$DM_ALIAS\",\"context_type\":\"Dm\",\"description\":\"\",\"created_at\":${NOW}}"
+DM_INIT_JSON="{\"name\":\"$DM_ALIAS\",\"context_type\":\"Dm\",\"description\":\"\",\"created_at\":${NOW},\"creator_username\":\"\"}"
 DM_INIT_BYTES=$(printf '%s' "$DM_INIT_JSON" | python3 -c \
   "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')")
 DM_CTX_RES=$(curl -sf -X POST "$NODE_1_URL/admin-api/contexts" \

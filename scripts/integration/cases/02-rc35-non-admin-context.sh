@@ -26,7 +26,7 @@ if [ -z "$app_id" ]; then
 fi
 
 # Build init params for a context_type=Channel, name=rc35-probe.
-init_json='{"name":"rc35-probe","context_type":"Channel","description":"probing rc.35 non-admin gate","created_at":1751956000}'
+init_json='{"name":"rc35-probe","context_type":"Channel","description":"probing rc.35 non-admin gate","created_at":1751956000,"creator_username":""}'
 init_bytes=$(printf '%s' "$init_json" | python3 -c "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')")
 
 body=$(jq -n \

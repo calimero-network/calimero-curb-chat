@@ -267,7 +267,7 @@ if [ -n "$NAMESPACE_ID" ]; then
       -d '{"subgroupVisibility":"open"}' &>/dev/null || true
 
     TIMESTAMP=$(date +%s)
-    INIT_JSON="{\"name\":\"general\",\"context_type\":\"Channel\",\"description\":\"\",\"created_at\":${TIMESTAMP}}"
+    INIT_JSON="{\"name\":\"general\",\"context_type\":\"Channel\",\"description\":\"\",\"created_at\":${TIMESTAMP},\"creator_username\":\"\"}"
     INIT_BYTES=$(printf '%s' "$INIT_JSON" | python3 -c \
       "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')" 2>/dev/null || echo "[]")
 

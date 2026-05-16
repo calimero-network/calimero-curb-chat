@@ -41,6 +41,7 @@ const EmptyChannelState = styled.div`
 const ChannelListItem = styled.div<{
   selected: boolean;
   $isCollapsed?: boolean;
+  $hasUnread?: boolean;
 }>`
   display: flex;
   justify-content: ${(props) => (props.$isCollapsed ? "center" : "space-between")};
@@ -55,8 +56,11 @@ const ChannelListItem = styled.div<{
 
   background: ${(props) =>
     props.selected ? "rgba(165,255,17,0.07)" : "transparent"};
-  color: ${(props) => (props.selected ? "#fff" : "#5e5e6e")};
-  fill: ${(props) => (props.selected ? "rgba(165,255,17,0.8)" : "#5e5e6e")};
+  color: ${(props) =>
+    props.selected ? "#fff" : props.$hasUnread ? "#d8d8e0" : "#5e5e6e"};
+  fill: ${(props) =>
+    props.selected ? "rgba(165,255,17,0.8)" : props.$hasUnread ? "#d8d8e0" : "#5e5e6e"};
+  font-weight: ${(props) => (props.$hasUnread && !props.selected ? "600" : "400")};
 
   @media (min-width: 1025px) {
     &:hover {
@@ -177,6 +181,7 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
               key={channel.contextId}
               selected={isSelected}
               $isCollapsed={isCollapsed}
+              $hasUnread={showBadge}
               onClick={() => {
                 if (!channel.contextIdentity) {
                   return;

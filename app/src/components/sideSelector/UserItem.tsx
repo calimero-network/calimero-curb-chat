@@ -9,6 +9,7 @@ import type { ContextUnread } from "../../hooks/useUnreadCounts";
 const UserListItem = styled.div<{
   $selected: boolean;
   $isCollapsed?: boolean;
+  $hasUnread?: boolean;
 }>`
   display: flex;
   justify-content: ${(props) => (props.$isCollapsed ? "center" : "space-between")};
@@ -22,7 +23,9 @@ const UserListItem = styled.div<{
   border-left: 2px solid ${(props) => (props.$selected ? "#a5ff11" : "transparent")};
 
   background: ${(props) => (props.$selected ? "rgba(165,255,17,0.07)" : "transparent")};
-  color: ${(props) => (props.$selected ? "#fff" : "#5e5e6e")};
+  color: ${(props) =>
+    props.$selected ? "#fff" : props.$hasUnread ? "#d8d8e0" : "#5e5e6e"};
+  font-weight: ${(props) => (props.$hasUnread && !props.$selected ? "600" : "400")};
 
   &:hover {
     background: rgba(255, 255, 255, 0.05) !important;
@@ -115,6 +118,7 @@ function UserItem({
       $selected={selected}
       onClick={handleClick}
       $isCollapsed={isCollapsed}
+      $hasUnread={showBadge}
     >
       {isCollapsed ? (
         <Avatar size="xs" name={displayName} />

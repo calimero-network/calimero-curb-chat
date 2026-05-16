@@ -8,22 +8,22 @@ export interface ContextUnread {
 
 export interface ContextForUnread {
   contextId: string;
-  contextIdentity: string;
+  contextIdentity?: string;
 }
 
 export function useUnreadCounts() {
   const [counts, setCounts] = useState<Map<string, ContextUnread>>(new Map());
 
   const loadAll = useCallback(async (contexts: ContextForUnread[]) => {
-    const valid = contexts.filter((c) => c.contextId && c.contextIdentity);
+    const valid = contexts.filter((c) => Boolean(c.contextId));
     if (valid.length === 0) return;
 
     const api = new ClientApiDataSource();
     const results = await Promise.allSettled(
       valid.map(async ({ contextId, contextIdentity }) => {
         const [msgRes, mentionRes] = await Promise.all([
-          api.getUnreadCount({ contextId, executorPublicKey: contextIdentity }),
-          api.getUnreadMentions({ contextId, executorPublicKey: contextIdentity }),
+          api.getUnreadCount({ contextId, executorPublicKey: contextIdentity ?? "" }),
+          api.getUnreadMentions({ contextId, executorPublicKey: contextIdentity ?? "" }),
         ]);
         return {
           contextId,
@@ -80,7 +80,7 @@ export function useUnreadCounts() {
         .markAsRead({
           contextId,
           executorPublicKey: contextIdentity,
-          timestamp: Date.now(),
+          timestamp: Math.floor(Date.now() / 1000),
         })
         .catch(() => {});
     },
