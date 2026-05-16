@@ -3,6 +3,7 @@ import { styled } from "styled-components";
 import type { ActiveChat, GroupContextChannel } from "../../types/Common";
 import { buildChannelEntryChat } from "../../utils/channelEntry";
 import { getContextVisibilityLabel } from "../../utils/channelVisibility";
+import type { ContextUnread } from "../../hooks/useUnreadCounts";
 
 const ChannelListContainer = styled.div`
   background-color: #0e0e10;
@@ -99,11 +100,27 @@ const IconWrapper = styled.div`
   opacity: 0.6;
 `;
 
+const UnreadBadge = styled.span<{ $isMention?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  background: ${({ $isMention }) => ($isMention ? "#a5ff11" : "rgba(255,255,255,0.18)")};
+  color: ${({ $isMention }) => ($isMention ? "#0e0e10" : "#fff")};
+`;
+
 interface ChannelListProps {
   channels: GroupContextChannel[];
   selectedChannelId: string;
   selectChannel: (channel: ActiveChat) => void;
   isCollapsed?: boolean;
+  unreadCounts?: Map<string, ContextUnread>;
 }
 
 const HashIcon = () => (
@@ -119,7 +136,7 @@ const LockIcon = () => (
 );
 
 const ChannelList = memo(function ChannelList(props: ChannelListProps) {
-  const { channels, selectedChannelId, selectChannel, isCollapsed } = props;
+  const { channels, selectedChannelId, selectChannel, isCollapsed, unreadCounts } = props;
 
   // Stable display order: backend fetch order is non-deterministic; sort by
   // the same display name fallback used in the row below, case-insensitive.
@@ -149,6 +166,11 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
             channel.info?.name ?? channel.alias ?? channel.contextId.substring(0, 8);
           const isRestricted = channel.visibility === "restricted";
           const isSelected = selectedChannelId === channel.contextId;
+
+          const unread = unreadCounts?.get(channel.contextId);
+          const unreadMessages = unread?.messages ?? 0;
+          const unreadMentions = unread?.mentions ?? 0;
+          const showBadge = !isSelected && (unreadMessages > 0 || unreadMentions > 0);
 
           return (
             <ChannelListItem
@@ -181,12 +203,19 @@ const ChannelList = memo(function ChannelList(props: ChannelListProps) {
                   {isRestricted ? <LockIcon /> : <HashIcon />}
                 </IconWrapper>
               ) : (
-                <NameContainer>
-                  <IconWrapper>
-                    {isRestricted ? <LockIcon /> : <HashIcon />}
-                  </IconWrapper>
-                  <TextMedium>{displayName}</TextMedium>
-                </NameContainer>
+                <>
+                  <NameContainer>
+                    <IconWrapper>
+                      {isRestricted ? <LockIcon /> : <HashIcon />}
+                    </IconWrapper>
+                    <TextMedium>{displayName}</TextMedium>
+                  </NameContainer>
+                  {showBadge && (
+                    <UnreadBadge $isMention={unreadMentions > 0}>
+                      {unreadMentions > 0 ? unreadMentions : unreadMessages}
+                    </UnreadBadge>
+                  )}
+                </>
               )}
             </ChannelListItem>
           );

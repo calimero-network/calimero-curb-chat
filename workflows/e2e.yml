@@ -56,7 +56,7 @@ steps:
     node: calimero-node-1
     application_id: "{{app_id}}"
     group_id: "{{namespace_id}}"
-    params: '{"name": "General", "context_type": "Channel", "description": "Main channel", "created_at": 1751953000}'
+    params: '{"name": "General", "context_type": "Channel", "description": "Main channel", "created_at": 1751953000, "creator_username": ""}'
     outputs:
       channel_id: contextId
       alice_key: memberPublicKey
@@ -468,7 +468,7 @@ steps:
     node: calimero-node-1
     application_id: "{{app_id}}"
     group_id: "{{namespace_id}}"
-    params: '{"name": "Alice-Bob DM", "context_type": "Dm", "description": "", "created_at": 1751953100}'
+    params: '{"name": "Alice-Bob DM", "context_type": "Dm", "description": "", "created_at": 1751953100, "creator_username": ""}'
     outputs:
       dm_id: contextId
 

@@ -360,7 +360,7 @@ else
   step "Creating #general channel on node-1"
 
   # Build init params as UTF-8 byte array for the WASM init function
-  INIT_JSON='{"name":"general","context_type":"Channel","description":"","created_at":1751952997}'
+  INIT_JSON='{"name":"general","context_type":"Channel","description":"","created_at":1751952997,"creator_username":""}'
   INIT_BYTES=$(printf '%s' "$INIT_JSON" | python3 -c \
     "import sys; d=sys.stdin.buffer.read(); print('['+','.join(str(b) for b in d)+']')" 2>/dev/null || echo "[]")
 

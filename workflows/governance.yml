@@ -109,7 +109,7 @@ steps:
     node: calimero-node-1
     application_id: "{{app_id}}"
     group_id: "{{lounge_id}}"
-    params: '{"name": "lounge", "context_type": "Channel", "description": "open subgroup channel", "created_at": 1751954000}'
+    params: '{"name": "lounge", "context_type": "Channel", "description": "open subgroup channel", "created_at": 1751954000, "creator_username": ""}'
     outputs:
       lounge_ctx_id: contextId
       alice_lounge_key: memberPublicKey

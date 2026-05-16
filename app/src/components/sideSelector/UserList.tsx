@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import UserItem from "./UserItem";
 import { styled } from "styled-components";
+import type { ContextUnread } from "../../hooks/useUnreadCounts";
 
 const ScrollableUserList = styled.div`
   max-height: 240px;
@@ -27,6 +28,7 @@ interface UserListProps {
   onDMSelected: (dm: DMContextInfo) => void;
   privateDMs: DMContextInfo[];
   isCollapsed?: boolean;
+  unreadCounts?: Map<string, ContextUnread>;
 }
 
 const UserList = memo(function UserList({
@@ -34,6 +36,7 @@ const UserList = memo(function UserList({
   onDMSelected,
   privateDMs,
   isCollapsed,
+  unreadCounts,
 }: UserListProps) {
   return (
     <ScrollableUserList>
@@ -45,6 +48,7 @@ const UserList = memo(function UserList({
             selected={selectedDM === dm.contextId}
             key={dm.contextId}
             isCollapsed={isCollapsed}
+            unread={unreadCounts?.get(dm.contextId)}
           />
         ))}
     </ScrollableUserList>

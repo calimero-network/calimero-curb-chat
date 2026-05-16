@@ -51,6 +51,7 @@ import {
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { useNamespaceMembershipWatch } from "../../hooks/useNamespaceMembershipWatch";
 import { buildDmMemberOptions } from "../../utils/dmMemberOptions";
+import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 
 export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const { mero: app } = useCalimero();
@@ -116,6 +117,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const channelMembersHook = useChannelMembers();
   const groupMembersHook = useGroupMembers();
   const currentGroupPermissions = useCurrentGroupPermissions(currentGroupId);
+  const { counts: unreadCounts, loadAll: loadAllUnread, refreshOne: refreshUnread, clearOne: clearUnread } = useUnreadCounts();
 
   const addOptimisticMessage = mainMessages.addOptimistic;
   const addOptimisticThreadMessage = threadMessages.addOptimistic;
@@ -252,6 +254,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     activeChatRef.current = resolvedChat;
     setIsSidebarOpen(false);
     updateSessionChat(resolvedChat);
+
+    // Clear unread badge and persist read position to WASM
+    if (resolvedChat.contextId && resolvedChat.contextIdentity) {
+      void clearUnread(resolvedChat.contextId, resolvedChat.contextIdentity);
+    }
 
     const chatId = resolvedChat.id || resolvedChat.name;
     if (lastSelectedChatIdRef.current !== chatId) {
@@ -416,6 +423,15 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   };
   subscribeToContextRef.current = webSocket.subscribeToContext;
 
+  // Maps kept in sync with the current channel + DM lists so background
+  // message handlers can resolve contextId → identity / display name.
+  const contextIdentityMapRef = useRef<Map<string, string>>(new Map());
+  const contextNameMapRef = useRef<Map<string, string>>(new Map());
+  const onUnreadRefreshRef = useRef<(contextId: string, contextIdentity: string) => Promise<void>>(
+    async () => {},
+  );
+  onUnreadRefreshRef.current = refreshUnread;
+
   const chatHandlersRefs = useRef({
     mainMessages: mainMessagesRef,
     threadMessages: threadMessagesRef,
@@ -431,6 +447,9 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     fetchGroupMembers: { current: debouncedFetchGroupMembers },
     onLeftChannel: onLeftChannelRef,
     subscribeToContext: subscribeToContextRef,
+    contextIdentityMap: contextIdentityMapRef,
+    contextNameMap: contextNameMapRef,
+    onUnreadRefresh: onUnreadRefreshRef,
   }).current;
 
   const updateSelectedActiveChatRef = useRef(updateSelectedActiveChat);
@@ -653,6 +672,51 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     return ids.sort().join(",");
   }, [groupContextsHook.channels, privateDMs]);
 
+  // Keep contextIdentityMap and contextNameMap in sync whenever the channel/DM
+  // lists change. These maps are read by background message handlers in
+  // useChatHandlers without triggering re-renders.
+  // Also snapshot the contexts list for unread loading (read inside the effect
+  // via a ref to avoid stale-closure issues).
+  const allContextsForUnreadRef = useRef<{ contextId: string; contextIdentity: string }[]>([]);
+  useEffect(() => {
+    const identityMap = new Map<string, string>();
+    const nameMap = new Map<string, string>();
+    const forUnread: { contextId: string; contextIdentity: string }[] = [];
+
+    groupContextsHook.channels.forEach((ch) => {
+      if (!ch.contextId) return;
+      if (ch.contextIdentity) {
+        identityMap.set(ch.contextId, ch.contextIdentity);
+        if (ch.isJoined) forUnread.push({ contextId: ch.contextId, contextIdentity: ch.contextIdentity });
+      }
+      const name = ch.info?.name ?? ch.alias ?? ch.contextId.substring(0, 8);
+      nameMap.set(ch.contextId, name);
+    });
+
+    privateDMs.forEach((dm) => {
+      if (!dm.contextId) return;
+      if (dm.contextIdentity) {
+        identityMap.set(dm.contextId, dm.contextIdentity);
+        forUnread.push({ contextId: dm.contextId, contextIdentity: dm.contextIdentity });
+      }
+      const name = dm.otherUsername || dm.otherAlias || dm.contextId.substring(0, 8);
+      nameMap.set(dm.contextId, name);
+    });
+
+    contextIdentityMapRef.current = identityMap;
+    contextNameMapRef.current = nameMap;
+    allContextsForUnreadRef.current = forUnread;
+  }, [groupContextsHook.channels, privateDMs]);
+
+  // Load unread counts from WASM whenever the set of subscribed contexts changes.
+  useEffect(() => {
+    if (!allContextIdsKey) return;
+    if (allContextsForUnreadRef.current.length > 0) {
+      void loadAllUnread(allContextsForUnreadRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allContextIdsKey]);
+
   // Subscribe to ALL group contexts + DM contexts for real-time updates
   useEffect(() => {
     if (!app || !allContextIdsKey) return;
@@ -849,6 +913,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       createDM={createDM}
       privateDMs={privateDMs}
       onFetchDmMembers={debouncedFetchGroupMembers}
+      unreadCounts={unreadCounts}
       loadInitialThreadMessages={loadInitialThreadMessages}
       incomingThreadMessages={threadMessages.incomingMessages}
       clearThreadsMessagesOnSwitch={threadMessages.clear}

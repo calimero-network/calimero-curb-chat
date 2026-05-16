@@ -30,6 +30,8 @@ import {
   type JoinChannelProps,
   type JoinChatProps,
   type LeaveChannelProps,
+  type MarkAsReadProps,
+  type GetUnreadProps,
   type Message,
   type ReadDmProps,
   type ReadMessageProps,
@@ -1506,6 +1508,69 @@ export class ClientApiDataSource implements ClientApi {
       const message =
         error instanceof Error ? error.message : "listRoles failed";
       return { data: null, error: { code: 500, message } };
+    }
+  }
+
+  async markAsRead(props: MarkAsReadProps): ApiResponse<string> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, string>(
+        {
+          contextId: props.contextId,
+          method: ClientMethod.MARK_AS_READ,
+          argsJson: { timestamp: props.timestamp },
+          executorPublicKey: props.executorPublicKey,
+        },
+        { headers: { "Content-Type": "application/json" }, timeout: 5000 },
+      );
+      if (response?.error) {
+        return { data: null, error: { code: response.error.code, message: "mark_as_read failed" } };
+      }
+      return { data: response?.result.output as string, error: null };
+    } catch {
+      return { data: null, error: { code: 500, message: "mark_as_read failed" } };
+    }
+  }
+
+  async getUnreadCount(props: GetUnreadProps): ApiResponse<number> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, number>(
+        {
+          contextId: props.contextId,
+          method: ClientMethod.GET_UNREAD_COUNT,
+          argsJson: {},
+          executorPublicKey: props.executorPublicKey,
+        },
+        { headers: { "Content-Type": "application/json" }, timeout: 5000 },
+      );
+      if (response?.error) {
+        return { data: 0, error: null };
+      }
+      return { data: (response?.result.output as number) ?? 0, error: null };
+    } catch {
+      return { data: 0, error: null };
+    }
+  }
+
+  async getUnreadMentions(props: GetUnreadProps): ApiResponse<number> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await getJsonRpcClient().execute<any, number>(
+        {
+          contextId: props.contextId,
+          method: ClientMethod.GET_UNREAD_MENTIONS,
+          argsJson: {},
+          executorPublicKey: props.executorPublicKey,
+        },
+        { headers: { "Content-Type": "application/json" }, timeout: 5000 },
+      );
+      if (response?.error) {
+        return { data: 0, error: null };
+      }
+      return { data: (response?.result.output as number) ?? 0, error: null };
+    } catch {
+      return { data: 0, error: null };
     }
   }
 }

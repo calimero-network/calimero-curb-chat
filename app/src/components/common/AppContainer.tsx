@@ -15,6 +15,7 @@ import ChatContainer from "../../chat/ChatContainer";
 import type { UserId } from "../../api/clientApi";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
+import type { ContextUnread } from "../../hooks/useUnreadCounts";
 
 const ContentDivContainer = styled.div`
   width: 100%;
@@ -59,6 +60,7 @@ interface AppContainerProps {
   createDM: (value: string) => Promise<CreateContextResult>;
   privateDMs: DMContextInfo[];
   onFetchDmMembers?: () => Promise<void>;
+  unreadCounts?: Map<string, ContextUnread>;
   loadInitialThreadMessages: (
     parentMessageId: string,
   ) => Promise<ChatMessagesData>;
@@ -113,6 +115,7 @@ function AppContainer({
   createDM,
   privateDMs,
   onFetchDmMembers,
+  unreadCounts,
   loadInitialThreadMessages,
   incomingThreadMessages,
   loadPrevThreadMessages,
@@ -194,6 +197,7 @@ function AppContainer({
           onChannelCreated={onChannelCreated}
           onChannelSelected={updateSelectedActiveChat}
           onFetchDmMembers={onFetchDmMembers}
+          unreadCounts={unreadCounts}
         />
         {!isSidebarOpen && (
           <Wrapper>

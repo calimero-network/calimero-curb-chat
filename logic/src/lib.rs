@@ -446,6 +446,9 @@ pub struct MeroChat {
     /// Per-context moderation roles. Missing entry = Role::User (default).
     /// LwwRegister-wrapped so the storage layer has merge semantics.
     roles: UnorderedMap<UserId, LwwRegister<Role>>,
+    /// Per-user last-read timestamp. Enables cross-device unread tracking
+    /// without localStorage — the CRDT replicates read position to all nodes.
+    read_receipts: UnorderedMap<UserId, LwwRegister<u64>>,
 }
 
 #[app::logic]
@@ -490,6 +493,7 @@ impl MeroChat {
             reactions: UnorderedMap::new(),
             profiles,
             roles,
+            read_receipts: UnorderedMap::new(),
         }
     }
 
@@ -517,6 +521,98 @@ impl MeroChat {
         _timestamp: Option<u64>,
     ) -> app::Result<String, String> {
         Ok("ok".to_string())
+    }
+
+    /// Persist the caller's last-read position. No event is emitted so this
+    /// is a silent CRDT write — it gossips to other nodes but does not trigger
+    /// an SSE notification on any subscriber.
+    pub fn mark_as_read(&mut self, timestamp: u64) -> app::Result<String, String> {
+        let caller = Self::executor_id();
+        let _ = self.read_receipts.insert(caller, LwwRegister::new(timestamp));
+        Ok("ok".to_string())
+    }
+
+    /// Count messages newer than the caller's last-read timestamp, excluding
+    /// messages sent by the caller and soft-deleted messages.
+    pub fn get_unread_count(&self) -> u32 {
+        let caller = Self::executor_id();
+        let last_read = self
+            .read_receipts
+            .get(&caller)
+            .ok()
+            .flatten()
+            .map(|r| *r.get())
+            .unwrap_or(0);
+
+        let mut count = 0u32;
+        if let Ok(iter) = self.messages.iter() {
+            for msg in iter {
+                if *msg.timestamp <= last_read {
+                    continue;
+                }
+                if msg.sender == caller {
+                    continue;
+                }
+                let deleted = msg.deleted.as_ref().map(|r| **r).unwrap_or(false);
+                if deleted {
+                    continue;
+                }
+                count += 1;
+            }
+        }
+        count
+    }
+
+    /// Count unread messages that mention the caller directly (@username),
+    /// or use a broadcast mention (@everyone / @here).
+    pub fn get_unread_mentions(&self) -> u32 {
+        let caller = Self::executor_id();
+        let last_read = self
+            .read_receipts
+            .get(&caller)
+            .ok()
+            .flatten()
+            .map(|r| *r.get())
+            .unwrap_or(0);
+
+        let mut count = 0u32;
+        if let Ok(iter) = self.messages.iter() {
+            for msg in iter {
+                if *msg.timestamp <= last_read {
+                    continue;
+                }
+                if msg.sender == caller {
+                    continue;
+                }
+                let deleted = msg.deleted.as_ref().map(|r| **r).unwrap_or(false);
+                if deleted {
+                    continue;
+                }
+
+                // Broadcast mentions (@everyone / @here) always count.
+                let is_broadcast = if let Ok(mut unames) = msg.mentions_usernames.iter() {
+                    unames.any(|r| {
+                        let s = r.get().as_str();
+                        s == "everyone" || s == "here"
+                    })
+                } else {
+                    false
+                };
+
+                if is_broadcast {
+                    count += 1;
+                    continue;
+                }
+
+                // Direct mention: caller's UserId is in the message's mentions set.
+                if let Ok(mut mentions) = msg.mentions.iter() {
+                    if mentions.any(|uid| uid == caller) {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        count
     }
 
     pub fn update_info(

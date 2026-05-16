@@ -11,6 +11,7 @@ import type {
 } from "../types/WebSocketTypes";
 import { getContextIdentity } from "@calimero-network/mero-react";
 import { bytesParser } from "../utils/bytesParser";
+import { getMessengerDisplayName } from "../utils/messengerName";
 
 /**
  * Custom hook for handling chat-related events (messages, DMs, channels)
@@ -70,6 +71,9 @@ interface ChatHandlersRefs {
   fetchGroupMembers: React.MutableRefObject<() => Promise<void>>;
   onLeftChannel: React.MutableRefObject<(contextId: string) => void>;
   subscribeToContext: React.MutableRefObject<(contextId: string) => void>;
+  contextIdentityMap: React.MutableRefObject<Map<string, string>>;
+  contextNameMap: React.MutableRefObject<Map<string, string>>;
+  onUnreadRefresh: React.MutableRefObject<(contextId: string, contextIdentity: string) => Promise<void>>;
 }
 
 export function useChatHandlers(
@@ -287,6 +291,69 @@ export function useChatHandlers(
   );
 
   /**
+   * Handle a MessageSent event for a context that is NOT the active chat.
+   * Fetches the last message (for toast content), shows the notification, and
+   * refreshes the per-context unread counts from WASM.
+   */
+  const handleBackgroundMessage = useCallback(
+    async (contextId: string, isDM: boolean, messageGroup: string) => {
+      const contextIdentity = refs.contextIdentityMap.current.get(contextId);
+      if (!contextIdentity) return;
+
+      try {
+        const api = new ClientApiDataSource();
+        const resp = await api.getMessages({
+          group: { name: isDM ? "private_dm" : (messageGroup || "") },
+          limit: 1,
+          offset: 0,
+          is_dm: isDM,
+          dm_identity: isDM ? contextIdentity : undefined,
+          refetch_context_id: contextId,
+          refetch_identity: contextIdentity,
+        });
+
+        const msgs = resp.data?.messages;
+        if (msgs && msgs.length > 0) {
+          const msg = msgs[msgs.length - 1];
+          // msg.sender is the sender's identity in this context.
+          // contextIdentity is our identity in this context.
+          // Also skip messages the current user sent from their display name
+          // (secondary check via messengerDisplayName for old-style DMs).
+          const isMine =
+            msg.sender === contextIdentity ||
+            msg.sender_username === getMessengerDisplayName();
+
+          if (!isMine && msg.text && !msg.deleted) {
+            if (isDM) {
+              refs.notifyDM.current(msg.id, msg.sender_username, msg.text);
+            } else {
+              const contextName =
+                refs.contextNameMap.current.get(contextId) ?? messageGroup;
+              refs.notifyChannel.current(
+                msg.id,
+                contextName,
+                msg.sender_username,
+                msg.text,
+              );
+            }
+            refs.playSoundForMessage.current(
+              msg.id,
+              isDM ? "dm" : "channel",
+              false,
+            );
+          }
+        }
+      } catch (e) {
+        log.debug("ChatHandlers", "Background message fetch failed", e);
+      }
+
+      // Always refresh unread counts even if the fetch above failed.
+      await refs.onUnreadRefresh.current(contextId, contextIdentity);
+    },
+    [refs],
+  );
+
+  /**
    * Handle DM-specific updates (group-based DMs are just contexts)
    */
   const handleDMUpdates = useCallback(
@@ -478,7 +545,20 @@ export function useChatHandlers(
             isDM = true;
           }
         }
-        handleMessageUpdates(isDM, messageGroup, contextId, actions.shouldNotifyMessage);
+
+        const isActiveContext = contextId === activeChatRef.current?.contextId;
+        if (isActiveContext) {
+          // Active chat: use existing flow (fetch, deduplicate, append, notify)
+          handleMessageUpdates(isDM, messageGroup, contextId, actions.shouldNotifyMessage);
+        } else if (actions.shouldNotifyMessage) {
+          // Background context with notification: lightweight fetch + toast + unread refresh
+          void handleBackgroundMessage(contextId, isDM, messageGroup);
+        } else {
+          // Background context, no notification (e.g. reaction from another context)
+          // Just refresh unread count so badge stays accurate.
+          const bgIdentity = refs.contextIdentityMap.current.get(contextId);
+          if (bgIdentity) void refs.onUnreadRefresh.current(contextId, bgIdentity);
+        }
       }
       if (actions.fetchChannels) {
         refs.fetchChannels.current();
@@ -524,7 +604,7 @@ export function useChatHandlers(
         log.debug("ChatHandlers", "Executing actions:", takenActions);
       }
     },
-    [handleMessageUpdates, refs]
+    [handleMessageUpdates, handleBackgroundMessage, refs]
   );
 
   /**
@@ -544,6 +624,7 @@ export function useChatHandlers(
 
   return {
     handleMessageUpdates,
+    handleBackgroundMessage,
     handleThreadMessageUpdates,
     handleDMUpdates,
     handleStateMutation,

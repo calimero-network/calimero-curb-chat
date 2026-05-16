@@ -47,7 +47,7 @@ steps:
     node: calimero-node-1
     application_id: "{{app_id}}"
     group_id: "{{namespace_id}}"
-    params: '{"name": "Integration Test", "context_type": "Channel", "description": "Playwright e2e context", "created_at": 1751952997}'
+    params: '{"name": "Integration Test", "context_type": "Channel", "description": "Playwright e2e context", "created_at": 1751952997, "creator_username": ""}'
     outputs:
       context_id: contextId
       member_public_key: memberPublicKey

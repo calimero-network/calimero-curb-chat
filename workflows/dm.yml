@@ -117,7 +117,7 @@ steps:
     node: calimero-node-1
     application_id: "{{app_id}}"
     group_id: "{{dm_subgroup_id}}"
-    params: '{"name": "dm", "context_type": "Dm", "description": "alice-bob direct messages", "created_at": 1751955000}'
+    params: '{"name": "dm", "context_type": "Dm", "description": "alice-bob direct messages", "created_at": 1751955000, "creator_username": ""}'
     outputs:
       dm_ctx_id: contextId
       alice_dm_key: memberPublicKey

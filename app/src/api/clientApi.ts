@@ -210,6 +210,16 @@ export interface ReadMessageProps {
   timestamp: number;
 }
 
+export interface MarkAsReadProps {
+  contextId: string;
+  executorPublicKey: string;
+  timestamp: number;
+}
+
+export interface GetUnreadProps {
+  contextId: string;
+  executorPublicKey: string;
+}
 
 export interface ReadDmProps {
   other_user_id: UserId;
@@ -263,6 +273,10 @@ export enum ClientMethod {
   SET_MEMBER_ROLE = "set_member_role",
   GET_MEMBER_ROLE = "get_member_role",
   LIST_ROLES = "list_roles",
+  // Per-context read receipts (WASM-backed, cross-device).
+  MARK_AS_READ = "mark_as_read",
+  GET_UNREAD_COUNT = "get_unread_count",
+  GET_UNREAD_MENTIONS = "get_unread_mentions",
 }
 
 /// Per-context moderation role. Mirrors the Rust `Role` enum.
@@ -323,6 +337,9 @@ export interface ClientApi {
   deleteDM(props: DeleteDMProps): ApiResponse<string>;
   readMessage(props: ReadMessageProps): ApiResponse<string>;
   readDm(props: ReadDmProps): ApiResponse<string>;
+  markAsRead(props: MarkAsReadProps): ApiResponse<string>;
+  getUnreadCount(props: GetUnreadProps): ApiResponse<number>;
+  getUnreadMentions(props: GetUnreadProps): ApiResponse<number>;
   getUsername(props: GetUsernameProps): ApiResponse<string>;
   setMemberRole(props: SetMemberRoleProps): ApiResponse<string>;
   getMemberRole(props: GetMemberRoleProps): ApiResponse<Role>;

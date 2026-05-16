@@ -9,6 +9,7 @@ import DMSideSelector from "./DMSideSelector";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 import { scrollbarStyles } from "../../styles/scrollbar";
+import type { ContextUnread } from "../../hooks/useUnreadCounts";
 
 interface SideSelectorProps {
   channels: GroupContextChannel[];
@@ -28,6 +29,7 @@ interface SideSelectorProps {
   onChannelCreated?: () => void;
   onChannelSelected?: (chat: ActiveChat) => void;
   onFetchDmMembers?: () => Promise<void>;
+  unreadCounts?: Map<string, ContextUnread>;
 }
 
 const HorizontalSeparatorLine = styled.div<{ $isMobile: boolean }>`
@@ -221,6 +223,7 @@ interface SideMenuContentProps {
   onChannelCreated?: () => void;
   onChannelSelected?: (chat: ActiveChat) => void;
   onFetchDmMembers?: () => Promise<void>;
+  unreadCounts?: Map<string, ContextUnread>;
 }
 
 const SideMenuContent = memo(function SideMenuContent({
@@ -241,6 +244,7 @@ const SideMenuContent = memo(function SideMenuContent({
   onChannelCreated,
   onChannelSelected,
   onFetchDmMembers,
+  unreadCounts,
 }: SideMenuContentProps) {
   const selectedChannelId = activeChat?.type === "channel" ? activeChat.id : "";
 
@@ -266,6 +270,7 @@ const SideMenuContent = memo(function SideMenuContent({
         selectChannel={onChatSelected}
         selectedChannelId={selectedChannelId}
         isCollapsed={isCollapsed}
+        unreadCounts={unreadCounts}
       />
     </>
   );
@@ -295,6 +300,7 @@ const SideMenuContent = memo(function SideMenuContent({
         privateDMs={privateDMs}
         isCollapsed={isCollapsed}
         onFetchDmMembers={onFetchDmMembers}
+        unreadCounts={unreadCounts}
       />
     </>
   );
@@ -326,6 +332,7 @@ const SideSelector: React.FC<SideSelectorProps> = (props) => {
     onChannelCreated: props.onChannelCreated,
     onChannelSelected: props.onChannelSelected,
     onFetchDmMembers: props.onFetchDmMembers,
+    unreadCounts: props.unreadCounts,
   };
 
   return (

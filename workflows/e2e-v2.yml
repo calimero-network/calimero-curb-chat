@@ -58,7 +58,7 @@ steps:
     node: calimero-node-1
     application_id: "{{app_id}}"
     group_id: "{{namespace_id}}"
-    params: '{"name": "general", "context_type": "Channel", "description": "main channel", "created_at": 1751953000}'
+    params: '{"name": "general", "context_type": "Channel", "description": "main channel", "created_at": 1751953000, "creator_username": ""}'
     outputs:
       channel_id: contextId
       alice_key: memberPublicKey

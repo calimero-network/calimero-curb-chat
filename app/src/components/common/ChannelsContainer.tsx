@@ -4,6 +4,7 @@ import SideSelector from "../sideSelector/SideSelector";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
 import type { SubgroupEntry } from "../../api/groupApi";
+import type { ContextUnread } from "../../hooks/useUnreadCounts";
 
 interface ChannelsContainerProps {
   onChatSelected: (chat: ActiveChat) => void;
@@ -23,6 +24,7 @@ interface ChannelsContainerProps {
   onChannelCreated?: () => void;
   onChannelSelected?: (chat: ActiveChat) => void;
   onFetchDmMembers?: () => Promise<void>;
+  unreadCounts?: Map<string, ContextUnread>;
 }
 
 function ChannelsContainer(props: ChannelsContainerProps) {
@@ -44,6 +46,7 @@ function ChannelsContainer(props: ChannelsContainerProps) {
     onChannelCreated,
     onChannelSelected,
     onFetchDmMembers,
+    unreadCounts,
   } = props;
 
   return (
@@ -65,6 +68,7 @@ function ChannelsContainer(props: ChannelsContainerProps) {
       onChannelCreated={onChannelCreated}
       onChannelSelected={onChannelSelected}
       onFetchDmMembers={onFetchDmMembers}
+      unreadCounts={unreadCounts}
     />
   );
 }

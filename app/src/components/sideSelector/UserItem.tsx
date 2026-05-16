@@ -4,6 +4,7 @@ import { Avatar } from "@calimero-network/mero-ui";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import ConfirmPopup from "../popups/ConfirmPopup";
 import { getDmDisplayName } from "../../utils/dmContext";
+import type { ContextUnread } from "../../hooks/useUnreadCounts";
 
 const UserListItem = styled.div<{
   $selected: boolean;
@@ -53,11 +54,27 @@ const ActionsContainer = styled.div`
   flex-shrink: 0;
 `;
 
+const UnreadBadge = styled.span<{ $isMention?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  background: ${({ $isMention }) => ($isMention ? "#a5ff11" : "rgba(255,255,255,0.18)")};
+  color: ${({ $isMention }) => ($isMention ? "#0e0e10" : "#fff")};
+`;
+
 interface UserItemProps {
   onDMSelected: (dm: DMContextInfo) => void;
   selected: boolean;
   dm: DMContextInfo;
   isCollapsed?: boolean;
+  unread?: ContextUnread;
 }
 
 function UserItem({
@@ -65,6 +82,7 @@ function UserItem({
   selected,
   dm,
   isCollapsed,
+  unread,
 }: UserItemProps) {
   const [isJoinOpen, setIsJoinOpen] = useState(false);
 
@@ -88,6 +106,10 @@ function UserItem({
     await onDMSelected(dm);
   }, [dm, onDMSelected]);
 
+  const unreadMessages = unread?.messages ?? 0;
+  const unreadMentions = unread?.mentions ?? 0;
+  const showBadge = !selected && (unreadMessages > 0 || unreadMentions > 0);
+
   return (
     <UserListItem
       $selected={selected}
@@ -103,6 +125,11 @@ function UserItem({
             <NameContainer>{displayName}</NameContainer>
           </UserInfoContainer>
           <ActionsContainer>
+            {showBadge && (
+              <UnreadBadge $isMention={unreadMentions > 0}>
+                {unreadMentions > 0 ? unreadMentions : unreadMessages}
+              </UnreadBadge>
+            )}
             <ConfirmPopup
               title="Join DM"
               message={`Join the private DM context with ${displayName}?`}

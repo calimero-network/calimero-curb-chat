@@ -142,9 +142,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "calimero-prelude"
-version = "0.10.1-rc.37"
+version = "0.10.1-rc.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fe565a4a886307487f866b7553aab4d0d15c9a8604310f9ab1e4b119140f10b"
+checksum = "315700f150897b887fad29d815b57965d46330858085af310d049f5316554bb6"
 dependencies = [
  "borsh 1.6.0",
  "calimero-primitives",
@@ -154,9 +154,9 @@ dependencies = [
 
 [[package]]
 name = "calimero-primitives"
-version = "0.10.1-rc.37"
+version = "0.10.1-rc.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c50a6f6125fee1a2bd10f6cf5a625222d83a150aadda276e7c3c83071df02c60"
+checksum = "12cb46fc3473ce496c9f04e508e2adfe986322d4ad3801e5a7dcd09113718294"
 dependencies = [
  "borsh 1.6.0",
  "bs58",
@@ -173,9 +173,9 @@ dependencies = [
 
 [[package]]
 name = "calimero-sdk"
-version = "0.10.1-rc.37"
+version = "0.10.1-rc.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01a3f92fd7c070cf967ed69838761616b762808bde0c8cae34f8524d855907ee"
+checksum = "765002fc9583eef4d9e1891379d57ae2bdc4d5a96fe89e5833b0d579b0928d80"
 dependencies = [
  "borsh 1.6.0",
  "calimero-prelude",
@@ -190,9 +190,9 @@ dependencies = [
 
 [[package]]
 name = "calimero-sdk-macros"
-version = "0.10.1-rc.37"
+version = "0.10.1-rc.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adb32a1cbe71c790c8f9f50c36d2da8febe3d008a0319e936aa208c0f574904b"
+checksum = "2faa9aca11b6ce8b4bfbbce58343914b4d7db25d4854ba45ee7e174cc8d93494"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -204,9 +204,9 @@ dependencies = [
 
 [[package]]
 name = "calimero-storage"
-version = "0.10.1-rc.37"
+version = "0.10.1-rc.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58cd049cdc92816d4e278526947bf78a2d7fd6f0356a3135c889a7cff8652545"
+checksum = "a9d4e2134416ba2ae386243a01f52d901f559eda44f341c8f1c777bd22ac4d61"
 dependencies = [
  "borsh 1.6.0",
  "calimero-prelude",
@@ -227,9 +227,9 @@ dependencies = [
 
 [[package]]
 name = "calimero-storage-macros"
-version = "0.10.1-rc.37"
+version = "0.10.1-rc.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b0edac20df328ac12501c528944f1720f9c266ff88849be9fbcbc1cd78c65a3"
+checksum = "50f998610163c5bd139e8db7e0db6b4e4b9704e3e00aca9f860b6a06344a3a1a"
 dependencies = [
  "quote",
  "syn 2.0.116",
@@ -237,18 +237,18 @@ dependencies = [
 
 [[package]]
 name = "calimero-sys"
-version = "0.10.1-rc.37"
+version = "0.10.1-rc.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14083a4fdc95718341ea4f04c86823e10d9d2d71d6025fd006015a061d8f86d4"
+checksum = "132f5faa57aca0be376367da54cf6e2eb8dc6449abc49226d916e858473617d6"
 dependencies = [
  "cfg-if",
 ]
 
 [[package]]
 name = "calimero-wasm-abi"
-version = "0.10.1-rc.37"
+version = "0.10.1-rc.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e89d4c352f98844b5a86da226d35ee9ccddc72d4af329b4d49c2aee67b25a0c"
+checksum = "afca25e598071e1a9a48343ff350ecdfc08754feeea25726fec8a5db54608b47"
 dependencies = [
  "proc-macro2",
  "serde",

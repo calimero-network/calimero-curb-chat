@@ -4,6 +4,7 @@ import DMHeader from "./DMHeader";
 import UserList from "./UserList";
 import type { DMContextInfo } from "../../hooks/useDMs";
 import type { CreateContextResult } from "../popups/StartDMPopup";
+import type { ContextUnread } from "../../hooks/useUnreadCounts";
 
 const DMContainer = styled.div`
   background-color: #0e0e10;
@@ -21,6 +22,7 @@ interface DMSideSelectorProps {
   privateDMs: DMContextInfo[];
   isCollapsed?: boolean;
   onFetchDmMembers?: () => Promise<void>;
+  unreadCounts?: Map<string, ContextUnread>;
 }
 
 function DMSideSelector({
@@ -31,6 +33,7 @@ function DMSideSelector({
   privateDMs,
   isCollapsed,
   onFetchDmMembers,
+  unreadCounts,
 }: DMSideSelectorProps) {
   return (
     <DMContainer>
@@ -47,6 +50,7 @@ function DMSideSelector({
         onDMSelected={onDMSelected}
         privateDMs={privateDMs}
         isCollapsed={isCollapsed}
+        unreadCounts={unreadCounts}
       />
     </DMContainer>
   );
