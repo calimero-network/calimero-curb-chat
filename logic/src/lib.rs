@@ -450,6 +450,10 @@ pub struct MeroChat {
     /// Per-user last-read timestamp. Enables cross-device unread tracking
     /// without localStorage — the CRDT replicates read position to all nodes.
     read_receipts: UnorderedMap<UserId, LwwRegister<u64>>,
+    /// Authoritative set of soft-deleted message IDs.
+    /// Written by delete_message regardless of AuthoredVector ownership, so
+    /// admins/mods can delete messages they didn't author.
+    deleted_messages: UnorderedSet<String>,
 }
 
 #[app::logic]
@@ -495,6 +499,7 @@ impl MeroChat {
             profiles,
             roles,
             read_receipts: UnorderedMap::new(),
+            deleted_messages: UnorderedSet::new(),
         }
     }
 
@@ -554,7 +559,8 @@ impl MeroChat {
                 if msg.sender == caller {
                     continue;
                 }
-                let deleted = msg.deleted.as_ref().map(|r| **r).unwrap_or(false);
+                let deleted = msg.deleted.as_ref().map(|r| **r).unwrap_or(false)
+                    || self.deleted_messages.contains(msg.id.get()).unwrap_or(false);
                 if deleted {
                     continue;
                 }
@@ -585,7 +591,8 @@ impl MeroChat {
                 if msg.sender == caller {
                     continue;
                 }
-                let deleted = msg.deleted.as_ref().map(|r| **r).unwrap_or(false);
+                let deleted = msg.deleted.as_ref().map(|r| **r).unwrap_or(false)
+                    || self.deleted_messages.contains(msg.id.get()).unwrap_or(false);
                 if deleted {
                     continue;
                 }
@@ -989,18 +996,30 @@ impl MeroChat {
                         Vec::new()
                     };
 
+                let msg_id = message.id.get().clone();
+                let is_deleted = message.deleted.as_ref().map(|r| **r).unwrap_or(false)
+                    || self
+                        .deleted_messages
+                        .contains(&msg_id)
+                        .unwrap_or(false);
+                let text = if is_deleted {
+                    String::new()
+                } else {
+                    message.text.get().clone()
+                };
+
                 result.push(MessageWithReactions {
                     timestamp: *message.timestamp,
                     sender: message.sender,
                     sender_username: message.sender_username.get().clone(),
-                    id: message.id.get().clone(),
-                    text: message.text.get().clone(),
+                    id: msg_id,
+                    text,
                     mentions: mentions_vec,
                     mentions_usernames: mentions_usernames_vec,
                     files: attachments_vector_to_public(&message.files),
                     images: attachments_vector_to_public(&message.images),
                     reactions,
-                    deleted: message.deleted.as_ref().map(|r| **r),
+                    deleted: if is_deleted { Some(true) } else { message.deleted.as_ref().map(|r| **r) },
                     edited_on: message.edited_on.as_ref().map(|r| **r),
                     thread_count,
                     thread_last_timestamp,
@@ -1221,6 +1240,7 @@ impl MeroChat {
             };
 
             Self::find_and_delete(&mut thread_messages, &message_id, &executor_id, actor_role)?;
+            let _ = self.deleted_messages.insert(message_id.clone());
             let _ = self.reactions.remove(&message_id);
             let _ = self.threads.insert(parent_message_id, thread_messages);
 
@@ -1230,6 +1250,7 @@ impl MeroChat {
             Ok("Thread message deleted successfully".to_string())
         } else {
             Self::find_and_delete(&mut self.messages, &message_id, &executor_id, actor_role)?;
+            let _ = self.deleted_messages.insert(message_id.clone());
             let _ = self.reactions.remove(&message_id);
 
             app::emit!(Event::MessageSent(MessageSentEvent {
