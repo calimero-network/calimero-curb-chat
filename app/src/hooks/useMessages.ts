@@ -222,7 +222,6 @@ export function useMessages() {
         };
       }
 
-      const isDM = activeChat.type === "direct_message";
       const effectiveOffset = shouldReset
         ? 0
         : offsetOverride ?? searchOffset;

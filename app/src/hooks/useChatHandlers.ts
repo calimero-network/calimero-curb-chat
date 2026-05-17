@@ -96,10 +96,6 @@ export function useChatHandlers(
   // Track if we're already fetching messages to prevent concurrent calls
   const isFetchingMessagesRef = useRef(false);
   const isFetchingThreadMessagesRef = useRef(false);
-  const lastReadMessageRef = useRef<{ chatId: string; timestamp: number }>({
-    chatId: "",
-    timestamp: 0,
-  });
 
   /**
    * Handle message updates from websocket events
@@ -123,8 +119,6 @@ export function useChatHandlers(
       // Prevent concurrent message fetches
       if (isFetchingMessagesRef.current) return;
 
-      // Removed throttling to allow real-time message updates
-      const now = Date.now();
       try {
         isFetchingMessagesRef.current = true;
         const newMessages = await refs.mainMessages.current.checkForNewMessages(

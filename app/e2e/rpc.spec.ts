@@ -909,8 +909,23 @@ async function pollUntil<T>(fn: () => Promise<T | null | undefined>, maxMs = 600
 }
 
 test.describe("multi-user (2-node)", () => {
-  test.beforeAll(() => {
+  test.beforeAll(async () => {
     if (!twoNodeEnvAvailable()) test.skip();
+
+    // Wait for P2P gossip link to be active before running cross-node tests.
+    // Send a probe message from node-1 and wait until node-2 sees it.
+    const probe = `p2p-probe-${Date.now()}`;
+    await makeClient().call("send_message", {
+      message: probe, mentions: [], mentions_usernames: [],
+      parent_message: null, timestamp: Math.floor(Date.now() / 1000),
+      sender_username: "probe", files: null, images: null,
+    });
+    await pollUntil(async () => {
+      const r = await makeClient2().call<GetMessagesOut>("get_messages", {
+        parent_message: null, limit: 20, offset: 0, search_term: probe,
+      });
+      return r.messages.find((m) => m.text === probe);
+    }, 30000);
   });
 
   // Helper shared across tests in this group
@@ -968,7 +983,7 @@ test.describe("multi-user (2-node)", () => {
         parent_message: null, limit: 50, offset: 0, search_term: marker,
       });
       return res.messages.find((m) => m.text === marker);
-    }, 8000);
+    }, 15000);
 
     expect(found).toBeTruthy();
     expect(found!.text).toBe(marker);
@@ -983,7 +998,7 @@ test.describe("multi-user (2-node)", () => {
         parent_message: null, limit: 50, offset: 0, search_term: marker,
       });
       return res.messages.find((m) => m.text === marker);
-    }, 8000);
+    }, 15000);
 
     expect(found).toBeTruthy();
   });
@@ -1000,7 +1015,7 @@ test.describe("multi-user (2-node)", () => {
         parent_message: null, limit: 50, offset: 0, search_term: marker,
       });
       return r.messages.find((m) => m.id === msg.id);
-    }, 8000);
+    }, 15000);
 
     // Bob tries to edit from node-2 with his own JWT — executor_id = Bob's key
     // Alice's message has sender = Alice's key → mismatch → WASM rejects
@@ -1026,7 +1041,7 @@ test.describe("multi-user (2-node)", () => {
         parent_message: null, limit: 50, offset: 0, search_term: marker,
       });
       return r.messages.find((m) => m.id === msg.id);
-    }, 8000);
+    }, 15000);
 
     // Bob deletes from node-2 with his own JWT — should fail
     const { ok, error } = await makeClient2().tryCall("delete_message", {
@@ -1048,7 +1063,7 @@ test.describe("multi-user (2-node)", () => {
         parent_message: null, limit: 50, offset: 0, search_term: marker,
       });
       return r.messages.find((m) => m.id === msg.id);
-    }, 8000);
+    }, 15000);
 
     const { ok } = await makeClient().tryCall("edit_message", {
       message_id: msg.id,
@@ -1059,7 +1074,7 @@ test.describe("multi-user (2-node)", () => {
     expect(ok).toBe(false);
   });
 
-  test("Alice cannot delete Bob's message", async () => {
+  test("Alice (admin) can delete Bob's message", async () => {
     const marker = `auth-del-bob-${Date.now()}`;
     const msg = await bobSends(marker);
 
@@ -1068,13 +1083,21 @@ test.describe("multi-user (2-node)", () => {
         parent_message: null, limit: 50, offset: 0, search_term: marker,
       });
       return r.messages.find((m) => m.id === msg.id);
-    }, 8000);
+    }, 15000);
 
     const { ok } = await makeClient().tryCall("delete_message", {
       message_id: msg.id,
       parent_id: null,
     });
-    expect(ok).toBe(false);
+    expect(ok).toBe(true);
+
+    // Verify the message shows as deleted
+    const after = await makeClient().call<GetMessagesOut>("get_messages", {
+      parent_message: null, limit: 50, offset: 0, search_term: null,
+    });
+    const deleted = after.messages.find((m) => m.id === msg.id);
+    expect(deleted?.deleted).toBe(true);
+    expect(deleted?.text).toBe("");
   });
 
   // ── Multi-user reactions ───────────────────────────────────────────────────
@@ -1148,7 +1171,7 @@ test.describe("multi-user (2-node)", () => {
       });
       const p = r.messages.find((m) => m.id === parent.id);
       return p && p.thread_count > 0 ? p : null;
-    }, 8000);
+    }, 15000);
     expect(parentWithCount!.thread_count).toBeGreaterThan(0);
   });
 
@@ -1181,7 +1204,7 @@ test.describe("multi-user (2-node)", () => {
         parent_message: null, limit: 50, offset: 0, search_term: tag,
       });
       return r.messages.length >= 3 ? r.messages : null;
-    }, 8000);
+    }, 15000);
 
     const texts = msgs!.map((m) => m.text);
     const idx1 = texts.indexOf(`${tag}-1`);

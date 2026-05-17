@@ -193,7 +193,7 @@ function sendMessageArgs(message: string) {
     mentions: [],
     mentions_usernames: [],
     parent_message: null,
-    timestamp: Date.now(),
+    timestamp: Math.floor(Date.now() / 1000),
     sender_username: "sse-tester",
     files: null,
     images: null,

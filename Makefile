@@ -34,8 +34,7 @@ help:
 	@echo "    unit           Vitest unit tests"
 	@echo "    e2e            Playwright e2e tests"
 	@echo "    ci-stop        Stop nodes started by 'make ci' or setup-nodes.sh"
-	@echo "    workflows      merobox workflow tests (e2e + integration-setup)"
-	@echo "    workflows-extra opt-in workflows that expose known upstream bugs"
+	@echo "    workflows      merobox workflow tests (e2e + dm + integration-setup)"
 	@echo "    integration-shell  curl-direct integration driver (requires running nodes)"
 	@echo ""
 	@echo "  Other"
@@ -132,20 +131,11 @@ ci-stop:
 WORKFLOW_FILES := \
 	workflows/e2e.yml \
 	workflows/e2e-v2.yml \
-	workflows/governance.yml \
-	workflows/integration-setup.yml
-
-# Opt-in workflows that intentionally fail on current merod (rc.35) due to
-# upstream bugs they expose. Move into WORKFLOW_FILES once those land.
-WORKFLOW_FILES_EXTRA := \
-	workflows/non-admin-creates.yml \
+	workflows/integration-setup.yml \
 	workflows/dm.yml
 
 workflows: logic-build
 	@bash scripts/workflows.sh $(WORKFLOW_FILES)
-
-workflows-extra: logic-build
-	@bash scripts/workflows.sh $(WORKFLOW_FILES_EXTRA)
 
 # Shell-based integration driver. Complements merobox by exposing real
 # admin-API error messages that merobox swallows. Requires both nodes

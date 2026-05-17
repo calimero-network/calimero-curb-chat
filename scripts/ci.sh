@@ -81,20 +81,14 @@ step "Ensuring frontend dependencies"
 (cd "$APP_DIR" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install)
 green "Dependencies ready"
 
-# ── 4. Run RPC tests (headless — no browser/Vite needed) ─────────────────────
+# ── 4. Run all tests (Playwright starts Vite for mocked; rpc/rpc-admin headless) ─
 
-step "Running RPC + admin tests (headless)"
+step "Running RPC + admin + mocked tests"
 cd "$APP_DIR"
 
-SKIP_DEV_SERVER=1 pnpm exec playwright test \
+pnpm exec playwright test \
   --project=rpc \
   --project=rpc-admin \
-  "${PLAYWRIGHT_EXTRA_ARGS[@]:-}"
-
-# ── 5. Run mocked browser tests (Playwright starts Vite automatically) ────────
-
-step "Running mocked browser tests"
-pnpm exec playwright test \
   --project=mocked \
   "${PLAYWRIGHT_EXTRA_ARGS[@]:-}"
 
