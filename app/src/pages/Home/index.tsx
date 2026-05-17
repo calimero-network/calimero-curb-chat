@@ -261,6 +261,24 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       void clearUnread(resolvedChat.contextId, resolvedChat.contextIdentity);
     }
 
+    // Bootstrap WASM admin role for namespace admins. set_member_role allows
+    // a self-promotion to Admin when no admin exists in the WASM roles map yet.
+    // After the first call this is a no-op (Admin → Admin is idempotent).
+    if (
+      currentGroupPermissions.isAdmin &&
+      resolvedChat.contextId &&
+      resolvedChat.contextIdentity
+    ) {
+      new ClientApiDataSource()
+        .setMemberRole({
+          contextId: resolvedChat.contextId,
+          executorPublicKey: resolvedChat.contextIdentity,
+          target: resolvedChat.contextIdentity,
+          role: "Admin",
+        })
+        .catch(() => {});
+    }
+
     const chatId = resolvedChat.id || resolvedChat.name;
     if (lastSelectedChatIdRef.current !== chatId) {
       lastSelectedChatIdRef.current = chatId;
@@ -439,6 +457,11 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   );
   onUnreadRefreshRef.current = refreshUnread;
 
+  const onUnreadClearRef = useRef<(contextId: string, contextIdentity: string) => Promise<void>>(
+    async () => {},
+  );
+  onUnreadClearRef.current = clearUnread;
+
   const chatHandlersRefs = useRef({
     mainMessages: mainMessagesRef,
     threadMessages: threadMessagesRef,
@@ -459,6 +482,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     contextNameMap: contextNameMapRef,
     dmContextIds: dmContextIdsRef,
     onUnreadRefresh: onUnreadRefreshRef,
+    onUnreadClear: onUnreadClearRef,
   }).current;
 
   const updateSelectedActiveChatRef = useRef(updateSelectedActiveChat);

@@ -83,6 +83,7 @@ interface ChatHandlersRefs {
   contextNameMap: React.MutableRefObject<Map<string, string>>;
   dmContextIds: React.MutableRefObject<Set<string>>;
   onUnreadRefresh: React.MutableRefObject<(contextId: string, contextIdentity: string) => Promise<void>>;
+  onUnreadClear: React.MutableRefObject<(contextId: string, contextIdentity: string) => Promise<void>>;
 }
 
 export function useChatHandlers(
@@ -212,35 +213,15 @@ export function useChatHandlers(
           if (messagesBelongToActiveChat) {
             refs.mainMessages.current.addIncoming(newMessages);
 
-            const chatId =
-              activeChatRef.current.id || activeChatRef.current.name;
-            const shouldMarkAsRead =
-              lastReadMessageRef.current.chatId !== chatId ||
-              now - lastReadMessageRef.current.timestamp > 2000;
-
-            if (shouldMarkAsRead) {
-              lastReadMessageRef.current = { chatId, timestamp: now };
-
-              if (activeChat?.type === "channel") {
-                const lastMessage = newMessages[newMessages.length - 1];
-                if (lastMessage?.timestamp) {
-                  new ClientApiDataSource()
-                    .readMessage({
-                      channel: { name: activeChat?.name },
-                      timestamp: lastMessage.timestamp,
-                    })
-                    .catch(() => {});
-                }
-              }
-
-              // Refresh unread count immediately so the sidebar badge clears
-              // without requiring a channel re-click.
-              if (activeChatRef.current?.contextId && activeChatRef.current?.contextIdentity) {
-                void refs.onUnreadRefresh.current(
-                  activeChatRef.current.contextId,
-                  activeChatRef.current.contextIdentity,
-                );
-              }
+            // Mark the channel as read and clear the badge whenever new messages
+            // arrive while it's open. clearOne calls mark_as_read (the real WASM
+            // function that get_unread_count reads from) and immediately zeroes
+            // the React badge without waiting for a re-fetch.
+            if (activeChatRef.current?.contextId && activeChatRef.current?.contextIdentity) {
+              void refs.onUnreadClear.current(
+                activeChatRef.current.contextId,
+                activeChatRef.current.contextIdentity,
+              );
             }
           }
         }

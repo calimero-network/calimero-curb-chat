@@ -723,6 +723,7 @@ impl MeroChat {
     /// - `Mod`   may only flip a `User` to `Banned` (or back).
     /// - `User`/`Banned` may not call this.
     /// An admin cannot demote themselves below `Admin` (lockout-prevention).
+    /// Bootstrap: if no admin exists yet, any member may claim Admin for themselves.
     pub fn set_member_role(
         &mut self,
         target: UserId,
@@ -732,10 +733,17 @@ impl MeroChat {
         let actor_role = self.role_of(&me);
         let target_role = self.role_of(&target);
 
+        // Bootstrap: no admin exists yet → anyone may set themselves to Admin.
+        let no_admin_exists = match self.roles.entries() {
+            Ok(mut entries) => !entries.any(|(_, r)| *r.get() == Role::Admin),
+            Err(_) => true,
+        };
+        let is_bootstrap = no_admin_exists && me == target && role == Role::Admin;
+
         if me == target && actor_role == Role::Admin && role != Role::Admin {
             return Err("An admin cannot demote themselves below Admin".to_string());
         }
-        if !Self::can_change_role(actor_role, target_role, role) {
+        if !is_bootstrap && !Self::can_change_role(actor_role, target_role, role) {
             return Err("You don't have permission to change this member's role".to_string());
         }
 
