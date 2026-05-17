@@ -334,6 +334,7 @@ pub struct MessageWithReactions {
     pub deleted: Option<bool>,
     pub thread_count: u32,
     pub thread_last_timestamp: u64,
+    pub parent_message_id: Option<String>,
 }
 
 fn attachments_vector_to_public(vector: &Vector<Attachment>) -> Vec<AttachmentPublic> {
@@ -921,6 +922,32 @@ impl MeroChat {
         Ok(Self::paginate(filtered, limit, offset))
     }
 
+    pub fn search_all_messages(
+        &self,
+        search_term: String,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> app::Result<FullMessageResponse, String> {
+        let normalized = search_term.to_lowercase();
+        let term = normalized.as_str();
+
+        let mut all = self.collect_messages_with_reactions(&self.messages, Some(term), false);
+
+        if let Ok(entries) = self.threads.entries() {
+            for (parent_id, thread) in entries {
+                let mut thread_results =
+                    self.collect_messages_with_reactions(&thread, Some(term), false);
+                for msg in thread_results.iter_mut() {
+                    msg.parent_message_id = Some(parent_id.clone());
+                }
+                all.extend(thread_results);
+            }
+        }
+
+        all.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        Ok(Self::paginate(all, limit, offset))
+    }
+
     fn collect_messages_with_reactions(
         &self,
         messages: &AuthoredVector<Message>,
@@ -969,6 +996,7 @@ impl MeroChat {
                     edited_on: message.edited_on.as_ref().map(|r| **r),
                     thread_count,
                     thread_last_timestamp,
+                    parent_message_id: None,
                 });
             }
         }
@@ -1176,6 +1204,7 @@ impl MeroChat {
     ) -> app::Result<String, String> {
         self.require_not_banned()?;
         let executor_id = Self::executor_id();
+        let actor_role = self.role_of(&executor_id);
 
         if let Some(parent_message_id) = parent_id {
             let mut thread_messages = match self.threads.get(&parent_message_id) {
@@ -1183,7 +1212,7 @@ impl MeroChat {
                 _ => return Err("Thread not found".to_string()),
             };
 
-            Self::find_and_delete(&mut thread_messages, &message_id, &executor_id)?;
+            Self::find_and_delete(&mut thread_messages, &message_id, &executor_id, actor_role)?;
             let _ = self.reactions.remove(&message_id);
             let _ = self.threads.insert(parent_message_id, thread_messages);
 
@@ -1192,7 +1221,7 @@ impl MeroChat {
             }));
             Ok("Thread message deleted successfully".to_string())
         } else {
-            Self::find_and_delete(&mut self.messages, &message_id, &executor_id)?;
+            Self::find_and_delete(&mut self.messages, &message_id, &executor_id, actor_role)?;
             let _ = self.reactions.remove(&message_id);
 
             app::emit!(Event::MessageSent(MessageSentEvent {
@@ -1206,13 +1235,18 @@ impl MeroChat {
         messages: &mut AuthoredVector<Message>,
         message_id: &str,
         executor_id: &UserId,
+        actor_role: Role,
     ) -> Result<(), String> {
         let mut target_index: Option<usize> = None;
 
         if let Ok(iter) = messages.iter() {
             for (index, message) in iter.enumerate() {
                 if *message.id == *message_id {
-                    if message.sender != *executor_id {
+                    // Admins and Mods can delete any message; regular users only their own.
+                    let can_delete = message.sender == *executor_id
+                        || actor_role == Role::Admin
+                        || actor_role == Role::Mod;
+                    if !can_delete {
                         return Err("You don't have permission to delete this message".to_string());
                     }
                     target_index = Some(index);
@@ -1239,7 +1273,47 @@ impl MeroChat {
 
 #[cfg(test)]
 mod tests {
-    use super::{encode_blob_id_base58, parse_blob_id_base58, BLOB_ID_SIZE};
+    use super::{encode_blob_id_base58, parse_blob_id_base58, Role, BLOB_ID_SIZE};
+
+    // ── Role-based delete permission logic ─────────────────────────────────────
+
+    fn can_delete(sender: [u8; 32], executor: [u8; 32], actor_role: Role) -> bool {
+        sender == executor || actor_role == Role::Admin || actor_role == Role::Mod
+    }
+
+    #[test]
+    fn user_can_delete_own_message() {
+        let identity = [1u8; 32];
+        assert!(can_delete(identity, identity, Role::User));
+    }
+
+    #[test]
+    fn user_cannot_delete_others_message() {
+        let sender = [1u8; 32];
+        let other = [2u8; 32];
+        assert!(!can_delete(sender, other, Role::User));
+    }
+
+    #[test]
+    fn admin_can_delete_any_message() {
+        let sender = [1u8; 32];
+        let admin = [2u8; 32];
+        assert!(can_delete(sender, admin, Role::Admin));
+    }
+
+    #[test]
+    fn mod_can_delete_any_message() {
+        let sender = [1u8; 32];
+        let moderator = [2u8; 32];
+        assert!(can_delete(sender, moderator, Role::Mod));
+    }
+
+    #[test]
+    fn banned_user_cannot_delete_others_message() {
+        let sender = [1u8; 32];
+        let banned = [2u8; 32];
+        assert!(!can_delete(sender, banned, Role::Banned));
+    }
 
     #[test]
     fn blob_id_roundtrip_typical() {

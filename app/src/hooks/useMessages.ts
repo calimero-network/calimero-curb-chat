@@ -232,13 +232,10 @@ export function useMessages() {
 
       try {
         const response: ResponseData<FullMessageResponse> =
-          await new ClientApiDataSource().getMessages({
-            group: { name: (isDM ? "private_dm" : activeChat.name) || "" },
+          await new ClientApiDataSource().searchAllMessages({
+            search_term: normalizedQuery,
             limit: MESSAGE_PAGE_SIZE,
             offset: effectiveOffset,
-            is_dm: isDM,
-            dm_identity: activeChat.contextIdentity,
-            search_term: normalizedQuery,
           });
 
         if (response.data) {

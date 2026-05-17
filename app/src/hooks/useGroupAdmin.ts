@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { GroupApiDataSource } from "../api/dataSource/groupApiDataSource";
+import { ClientApiDataSource } from "../api/dataSource/clientApiDataSource";
 import type {
   GroupInfo,
   GroupMember,
@@ -9,6 +10,7 @@ import type {
   VisibilityMode,
 } from "../api/groupApi";
 import { log } from "../utils/logger";
+import { getGroupMemberIdentity } from "../constants/config";
 
 export interface GroupAdminState {
   group: GroupInfo | null;
@@ -72,6 +74,30 @@ export function useGroupAdmin() {
         setMembers((prev) =>
           prev.filter((m) => m.identity !== memberIdentity),
         );
+
+        // Ban the kicked member in all group contexts so WASM rejects their writes.
+        void (async () => {
+          try {
+            const contextsResp = await api.listGroupContexts(groupId);
+            if (!contextsResp.data || contextsResp.data.length === 0) return;
+            const myExecutorKey = getGroupMemberIdentity(groupId);
+            if (!myExecutorKey) return;
+            const clientApi = new ClientApiDataSource();
+            await Promise.allSettled(
+              contextsResp.data.map((ctx) =>
+                clientApi.setMemberRole({
+                  contextId: ctx.contextId,
+                  executorPublicKey: myExecutorKey,
+                  target: memberIdentity,
+                  role: "Banned",
+                }),
+              ),
+            );
+          } catch (banErr) {
+            log.warn("useGroupAdmin", "Cross-context ban after removeMember failed (non-fatal)", banErr);
+          }
+        })();
+
         return true;
       } catch (err) {
         log.error("useGroupAdmin", "Failed to remove member", err);

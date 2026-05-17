@@ -308,9 +308,10 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
 
   // App-level moderation role for THIS channel. `Banned` users are blocked
   // from posting via the MessageInput banner below; the rest of the chat
-  // still renders so they can read.
+  // still renders so they can read. Admins and Mods can delete anyone's messages.
   const myChannelRole = useMyChannelRole(resolvedContextId, accountId);
   const isBanned = myChannelRole === "Banned";
+  const canDeleteAny = myChannelRole === "Admin" || myChannelRole === "Mod";
 
   const renderMessage = (message: CurbMessage, prevMessage?: CurbMessage) => {
     const params: MessageRendererProps = {
@@ -329,10 +330,11 @@ const ChatDisplaySplit = memo(function ChatDisplaySplit({
           ? activeChat.contextIdentity || getExecutorPublicKey()
           : getExecutorPublicKey()),
       deleteable: (message: CurbMessage) =>
+        canDeleteAny ||
         message.sender ===
-        (activeChat.type === "direct_message"
-          ? activeChat.contextIdentity || getExecutorPublicKey()
-          : getExecutorPublicKey()),
+          (activeChat.type === "direct_message"
+            ? activeChat.contextIdentity || getExecutorPublicKey()
+            : getExecutorPublicKey()),
       onEditModeRequested: (message: CurbMessage) =>
         onEditModeRequested(message, isThread),
       onEditModeCancelled: (message: CurbMessage) =>

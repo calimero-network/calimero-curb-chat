@@ -59,6 +59,14 @@ export interface GetMessagesProps {
   search_term?: string;
 }
 
+export interface SearchAllMessagesProps {
+  search_term: string;
+  limit?: number;
+  offset?: number;
+  contextId?: string;
+  executorPublicKey?: string;
+}
+
 export interface Message {
   id: string;
   sender: string;
@@ -73,6 +81,7 @@ export interface Message {
   group?: string;
   files?: AttachmentResponse[];
   images?: AttachmentResponse[];
+  parent_message_id?: string;
 }
 
 export interface MessageWithReactions extends Message {
@@ -277,6 +286,7 @@ export enum ClientMethod {
   MARK_AS_READ = "mark_as_read",
   GET_UNREAD_COUNT = "get_unread_count",
   GET_UNREAD_MENTIONS = "get_unread_mentions",
+  SEARCH_ALL_MESSAGES = "search_all_messages",
 }
 
 /// Per-context moderation role. Mirrors the Rust `Role` enum.
@@ -322,6 +332,7 @@ export interface ClientApi {
   joinChannel(props: JoinChannelProps): ApiResponse<string>;
   leaveChannel(props: LeaveChannelProps): ApiResponse<string>;
   getMessages(props: GetMessagesProps): ApiResponse<FullMessageResponse>;
+  searchAllMessages(props: SearchAllMessagesProps): ApiResponse<FullMessageResponse>;
   sendMessage(props: SendMessageProps): ApiResponse<Message>;
   getDms(): ApiResponse<DMChatInfo[]>;
   getChatMembers(props: GetChatMembersProps): ApiResponse<Map<string, string>>;

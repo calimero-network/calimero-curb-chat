@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { styled, keyframes } from "styled-components";
 import { useNavigate } from "react-router-dom";
 import BaseModal from "../common/popups/BaseModal";
-import { useMero } from "@calimero-network/mero-react";
+import { useMero, getContextIdentity as getExecutorPublicKey } from "@calimero-network/mero-react";
 import {
   clearStoredSession,
   clearSessionActivity,
@@ -13,7 +13,7 @@ import {
   getGroupId,
   getStoredGroupAlias,
 } from "../../constants/config";
-import { clearMessengerDisplayName } from "../../utils/messengerName";
+import { clearMessengerDisplayName, getMessengerDisplayName } from "../../utils/messengerName";
 import { useCurrentGroupPermissions } from "../../hooks/useCurrentGroupPermissions";
 import { GroupApiDataSource } from "../../api/dataSource/groupApiDataSource";
 import { useToast } from "../../contexts/ToastContext";
@@ -146,6 +146,92 @@ const RoleBadge = styled.span<{ $admin: boolean; $mod?: boolean }>`
     $admin ? "rgba(165, 255, 17, 0.3)" : $mod ? "rgba(124, 58, 237, 0.35)" : "rgba(255, 255, 255, 0.12)"};
   color: ${({ $admin, $mod }) =>
     $admin ? "#a5ff11" : $mod ? "#a78bfa" : "rgba(255, 255, 255, 0.55)"};
+`;
+
+// ─── Profile section ────────────────────────────────────────────────────────
+
+const ProfileCard = styled.div`
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+`;
+
+const ProfileAvatar = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(87, 101, 242, 0.5) 0%, rgba(165, 255, 17, 0.2) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  text-transform: uppercase;
+`;
+
+const ProfileInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+`;
+
+const ProfileLabel = styled.span`
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+`;
+
+const ProfileUsername = styled.span`
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const IdentityRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+`;
+
+const IdentityText = styled.span`
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+`;
+
+const CopyButton = styled.button`
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.65);
+  }
 `;
 
 // ─── Danger zone ────────────────────────────────────────────────────────────
@@ -297,12 +383,32 @@ export default function SettingsPopup({
   const { isAdmin, isModerator } = useCurrentGroupPermissions(groupId);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const username = getMessengerDisplayName() || "";
+  const identity = getExecutorPublicKey() || "";
+  const identityShort = identity.length > 16
+    ? `${identity.slice(0, 8)}…${identity.slice(-6)}`
+    : identity;
+  const avatarInitial = username ? username[0] : identity[0] || "?";
+
+  const handleCopyIdentity = useCallback(async () => {
+    if (!identity) return;
+    try {
+      await navigator.clipboard.writeText(identity);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }, [identity]);
 
   // ── Session handlers ────────────────────────────────────────────────────────
 
   const handleChangeWorkspace = () => {
     clearWorkspaceSelection();
     clearNamespaceReady();
+    clearMessengerDisplayName();
     setIsOpen(false);
     navigate("/login");
   };
@@ -365,6 +471,32 @@ export default function SettingsPopup({
           </svg>
         </CloseButton>
       </Header>
+
+      {/* Profile */}
+      <ProfileCard>
+        <ProfileAvatar>{avatarInitial}</ProfileAvatar>
+        <ProfileInfo>
+          <ProfileLabel>Profile</ProfileLabel>
+          {username && <ProfileUsername>{username}</ProfileUsername>}
+          {identity && (
+            <IdentityRow>
+              <IdentityText title={identity}>{identityShort}</IdentityText>
+              <CopyButton onClick={handleCopyIdentity} aria-label="Copy identity">
+                {copied ? (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a5ff11" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                )}
+              </CopyButton>
+            </IdentityRow>
+          )}
+        </ProfileInfo>
+      </ProfileCard>
 
       {/* Workspace info */}
       <WorkspaceCard>

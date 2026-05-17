@@ -105,6 +105,16 @@ const Message = styled.div<{ type?: "success" | "error" | "info" }>`
           : "#b8b8d1"};
 `;
 
+const NewUsernameBanner = styled.div`
+  font-size: 0.68rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  color: rgba(147, 197, 253, 0.85);
+  line-height: 1.45;
+`;
+
 interface ChatTabProps {
   isAuthenticated: boolean;
   isConfigSet: boolean;
@@ -132,7 +142,9 @@ export default function ChatTab({
   const [fetchingGroups, setFetchingGroups] = useState(false);
   const [openingWorkspace, setOpeningWorkspace] = useState(false);
   const [error, setError] = useState("");
+  const [hasExistingAlias, setHasExistingAlias] = useState(true);
   const hasNamespaces = availableGroups.length > 0;
+  const isNewUsername = !hasExistingAlias && messengerName.trim().length > 0;
 
   const resolveWorkspaceMember = useCallback(async (groupId: string) => {
     const identityResponse = await new GroupApiDataSource().resolveCurrentMemberIdentity(
@@ -207,8 +219,12 @@ export default function ChatTab({
         if (cancelled) return;
         setGroupMemberIdentity(selectedGroupId, memberIdentity);
         setMessengerName(memberAlias || getMessengerDisplayName());
+        setHasExistingAlias(!!memberAlias);
       } catch {
-        if (!cancelled) setMessengerName(getMessengerDisplayName());
+        if (!cancelled) {
+          setMessengerName(getMessengerDisplayName());
+          setHasExistingAlias(false);
+        }
       }
     })();
 
@@ -322,6 +338,12 @@ export default function ChatTab({
               disabled={openingWorkspace}
             />
           </InputGroup>
+        )}
+
+        {isNewUsername && (
+          <NewUsernameBanner>
+            "{messengerName.trim()}" is a new name for this workspace — once you join, it will be locked to your identity.
+          </NewUsernameBanner>
         )}
 
         {hasNamespaces && (

@@ -45,6 +45,7 @@ import {
   type UpdateNewIdentityProps,
   type UpdateReactionProps,
   type UserId,
+  type SearchAllMessagesProps,
 } from "../clientApi";
 import { getMessengerDisplayName } from "../../utils/messengerName";
 
@@ -555,6 +556,57 @@ export class ClientApiDataSource implements ClientApi {
           code: 500,
           message: errorMessage,
         },
+      };
+    }
+  }
+
+  async searchAllMessages(props: SearchAllMessagesProps): ApiResponse<FullMessageResponse> {
+    try {
+      const contextId = props.contextId ?? getContextId() ?? "";
+      const executorPublicKey = props.executorPublicKey ?? getExecutorPublicKey() ?? "";
+      const response = await getJsonRpcClient().execute<
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        any,
+        FullMessageResponse
+      >(
+        {
+          contextId,
+          method: ClientMethod.SEARCH_ALL_MESSAGES,
+          argsJson: {
+            search_term: props.search_term,
+            ...(props.limit !== undefined ? { limit: props.limit } : {}),
+            ...(props.offset !== undefined ? { offset: props.offset } : {}),
+          },
+          executorPublicKey,
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: 10000,
+        },
+      );
+      if (response?.error) {
+        return {
+          data: null,
+          error: {
+            code: response?.error.code,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            message: (response?.error.error.cause.info as any).message,
+          },
+        };
+      }
+      return {
+        data: response?.result.output as FullMessageResponse,
+        error: null,
+      };
+    } catch (error) {
+      let errorMessage = "An unexpected error occurred during searchAllMessages";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+      return {
+        error: { code: 500, message: errorMessage },
       };
     }
   }

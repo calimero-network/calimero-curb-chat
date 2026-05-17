@@ -106,6 +106,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     notifyMessage,
     notifyDM,
     notifyChannel,
+    notifyThread,
     playSoundForMessage,
     playSound,
   } = useAppNotifications(activeChat?.id);
@@ -403,6 +404,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   const notifyMessageRef = useRef(notifyMessage);
   const notifyDMRef = useRef(notifyDM);
   const notifyChannelRef = useRef(notifyChannel);
+  const notifyThreadRef = useRef(notifyThread);
   const onDMSelectedRef = useRef<
     (dm: DMContextInfo) => void
   >(() => {});
@@ -413,6 +415,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   notifyMessageRef.current = notifyMessage;
   notifyDMRef.current = notifyDM;
   notifyChannelRef.current = notifyChannel;
+  notifyThreadRef.current = notifyThread;
 
   const onLeftChannelRef = useRef<(contextId: string) => void>(() => {});
   const subscribeToContextRef = useRef<(contextId: string) => void>(() => {});
@@ -427,6 +430,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
   // message handlers can resolve contextId → identity / display name.
   const contextIdentityMapRef = useRef<Map<string, string>>(new Map());
   const contextNameMapRef = useRef<Map<string, string>>(new Map());
+  // Set of context IDs that are DMs. Used in background message handlers to
+  // correctly classify a context as DM vs channel even when event bytes fail to
+  // parse (which would otherwise leave isDM = false for every context).
+  const dmContextIdsRef = useRef<Set<string>>(new Set());
   const onUnreadRefreshRef = useRef<(contextId: string, contextIdentity: string) => Promise<void>>(
     async () => {},
   );
@@ -439,6 +446,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     notifyMessage: notifyMessageRef,
     notifyDM: notifyDMRef,
     notifyChannel: notifyChannelRef,
+    notifyThread: notifyThreadRef,
     fetchDms: fetchDmsRef,
     onDMSelected: onDMSelectedRef,
     fetchChannels: { current: debouncedFetchChannels },
@@ -449,6 +457,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
     subscribeToContext: subscribeToContextRef,
     contextIdentityMap: contextIdentityMapRef,
     contextNameMap: contextNameMapRef,
+    dmContextIds: dmContextIdsRef,
     onUnreadRefresh: onUnreadRefreshRef,
   }).current;
 
@@ -693,8 +702,10 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
       nameMap.set(ch.contextId, name);
     });
 
+    const dmIds = new Set<string>();
     privateDMs.forEach((dm) => {
       if (!dm.contextId) return;
+      dmIds.add(dm.contextId);
       if (dm.contextIdentity) {
         identityMap.set(dm.contextId, dm.contextIdentity);
         forUnread.push({ contextId: dm.contextId, contextIdentity: dm.contextIdentity });
@@ -705,6 +716,7 @@ export default function Home({ isConfigSet }: { isConfigSet: boolean }) {
 
     contextIdentityMapRef.current = identityMap;
     contextNameMapRef.current = nameMap;
+    dmContextIdsRef.current = dmIds;
     allContextsForUnreadRef.current = forUnread;
   }, [groupContextsHook.channels, privateDMs]);
 
