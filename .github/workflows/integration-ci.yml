@@ -86,15 +86,20 @@ jobs:
           ADMIN_USER="${E2E_ADMIN_USER:-admin}"
           ADMIN_PASS="${E2E_ADMIN_PASS:-calimero1234}"
 
+          echo "Running containers:"
+          docker ps -a 2>/dev/null || true
           echo "Waiting for both nodes to be healthy…"
-          for i in $(seq 1 30); do
+          for i in $(seq 1 90); do
             if curl -sf "${NODE_1_URL}/admin-api/health" >/dev/null 2>&1 && \
                curl -sf "${NODE_2_URL}/admin-api/health" >/dev/null 2>&1; then
               echo "Both nodes healthy (attempt ${i})"
               break
             fi
-            if [ "$i" -eq 30 ]; then
-              echo "Nodes not healthy after 60 s — dumping logs"
+            if [ "$i" -eq 90 ]; then
+              echo "Nodes not healthy after 180 s — dumping logs"
+              docker ps -a 2>/dev/null || true
+              docker logs calimero-node-1 2>/dev/null | tail -30 || true
+              docker logs calimero-node-2 2>/dev/null | tail -30 || true
               exit 1
             fi
             sleep 2

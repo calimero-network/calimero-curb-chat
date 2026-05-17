@@ -169,7 +169,7 @@ interface MessageOut {
   mentions_usernames: string[];
   files: AttachmentOut[];
   images: AttachmentOut[];
-  deleted: number | null;
+  deleted: boolean | null;
   edited_on: number | null;
   reactions: Record<string, string[]> | null;
   thread_count: number;
