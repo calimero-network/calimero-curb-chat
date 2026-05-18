@@ -837,12 +837,10 @@ export default function NamespaceEntryPopup({ isAuthenticated, isConfigSet, onLo
               type="button"
               variant="secondary"
               style={{ width: "100%", marginTop: "0.5rem" }}
-              onClick={() => { setError(""); setStep(namespaces.length > 0 ? "select" : "no-workspace"); }}
+              onClick={() => { setError(""); setJoinInviteInput(""); setStep(namespaces.length > 0 ? "select" : "no-workspace"); }}
             >
-              ← Back
+              ← Back to workspace selection
             </Button>
-            <Divider />
-            <LogoutBtn onClick={onLogout}>Disconnect node</LogoutBtn>
           </>
         )}
 
