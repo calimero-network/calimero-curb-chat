@@ -35,9 +35,6 @@ jobs:
 
       # ── Build curb WASM ───────────────────────────────────────────────────────
 
-      - name: Checkout calimero/core (Cargo path deps)
-        run: git clone --depth 1 https://github.com/calimero-network/core.git "${GITHUB_WORKSPACE}/../core"
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
